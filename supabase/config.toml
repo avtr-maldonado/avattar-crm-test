@@ -1,0 +1,51 @@
+# Configuración de la CLI de Supabase.
+#
+# El proyecto de trabajo es el de la nube (cjwahoscedjnjgalmyzu), no un stack
+# local: el SSO de Entra ID está configurado allá. Este archivo existe para que
+# la CLI pueda aplicar migraciones contra él con `db push --db-url`.
+
+project_id = "avattar-crm"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+# Verificado contra el proyecto real el 1-sep-2026: PostgreSQL 17.6.
+# El scaffold decía 16, que era incorrecto.
+#
+# Ojo: `npx supabase` resuelve a una copia obsoleta en caché (2.20.12) que solo
+# acepta major_version 15 y falla con 16 o 17. Usa la CLI global (2.109.1), que
+# es la que está en el PATH, o el MCP de Supabase.
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/**"]
+jwt_expiry = 3600
+# El alta de usuarios es un acto administrativo: se da de alta la fila en
+# public.users y el usuario entra por Entra ID. Sin autoregistro.
+enable_signup = false
+
+# SSO con Entra ID (Microsoft). Pendiente de credenciales reales.
+# El proveedor ya está configurado en el proyecto de la nube; este bloque solo
+# haría falta para levantar un stack local, que hoy no se usa.
+# [auth.external.azure]
+# enabled = true
+# client_id = ""
+# secret = ""
+# url = "https://login.microsoftonline.com/<tenant-id>/v2.0"
+
+[storage]
+enabled = true
+# Documentos de hasta 50 MB (requisito no funcional §13 del catálogo v2).
+file_size_limit = "50MiB"

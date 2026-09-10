@@ -1,0 +1,43 @@
+packages:
+  - '.'
+
+# Repo de un solo paquete. Este archivo existe porque en pnpm 11 es el hogar de
+# toda la configuración: ni package.json#pnpm ni .npmrc se leen ya para esto.
+ignoreWorkspaceRootCheck: true
+confirmModulesPurge: false
+nodeLinker: hoisted
+strictPeerDependencies: false
+
+# --- Endurecimiento de la cadena de suministro -----------------------------
+# react-doctor/require-pnpm-hardening. Requiere pnpm >= 10.16 y >= 10.18; por
+# eso packageManager quedó fijado en pnpm 11 y no en el 10.4.1 que traía la
+# máquina, donde ambos ajustes se ignoraban en silencio.
+
+# Una versión recién publicada puede traer malware que se detecta y se
+# despublica en horas. Esperar una semana evita instalar justo esa ventana.
+# Este es el control que de verdad ataja el patrón real: publicar, infectar,
+# despublicar antes de que nadie mire.
+minimumReleaseAge: 10080 # 7 días, en minutos
+
+# Señala paquetes cuya evidencia de confianza (procedencia, firmas) se debilita
+# entre versiones.
+#
+# En `no-downgrade` bloquea la instalación, y con eso encontró dos casos reales:
+# tailwind-merge@2.6.1 (resuelto subiendo a 3.6.0) y undici-types@6.21.0, que
+# llega como dependencia transitiva de @types/node@22. Ese segundo no tiene
+# salida limpia: los tipos deben seguir el mayor de Node, que aquí es 22, así
+# que subir a @types/node@26 sería incorrecto.
+#
+# Queda en `warn`: sigue reportando la señal en cada instalación, sin bloquear
+# por un paquete de tipos sin attestation, que es el caso común y casi nunca un
+# incidente. Volver a `no-downgrade` cuando @types/node@22 recupere procedencia.
+trustPolicy: warn
+
+# pnpm bloquea los scripts de instalación por omisión. Estos son los que el
+# proyecto sí necesita: los motores de Prisma y los binarios de esbuild.
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  prisma: true
+  esbuild: true
+  unrs-resolver: true

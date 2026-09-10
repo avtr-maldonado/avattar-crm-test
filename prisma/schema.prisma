@@ -1,0 +1,887 @@
+// ═══════════════════════════════════════════════════════════════════════════
+// CRM Avattar · fuente del modelo de datos
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Deriva de docs/CRM-AVTR-SPEC.md §6.2, con la decisión de monomoneda (D-A)
+// aplicada. El SQL se genera desde aquí con `pnpm db:diff` y se aplica al
+// proyecto de Supabase: el schema es la fuente, Supabase lleva el historial.
+//
+// Convenciones (§4.1): identificadores en inglés, valores de negocio en
+// español. snake_case en Postgres vía @map, camelCase en el cliente, modelos
+// PascalCase singular.
+//
+// Invariantes que este archivo hace cumplir:
+//   INV-03  todo importe es Decimal(18,4); los porcentajes son fracción
+//   INV-12  el folio es único e inmutable, consecutivo por año
+//   INV-13  las etapas son tabla, no enum
+//   INV-15  borrado lógico con deletedAt en las entidades de negocio
+// ═══════════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooler en modo transacción (6543)
+  directUrl = env("DIRECT_URL") // pooler en modo sesión (5432), migraciones
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Enums · valores de negocio en español (§4.1)
+// ───────────────────────────────────────────────────────────────────────────
+
+/// Cinco roles. Q-12 cerrada: Finanzas y Marketing no son roles; si necesitan
+/// acceso, entran como permisos sobre los existentes.
+enum Role {
+  VENDEDOR
+  GERENTE_PAIS
+  DIRECCION
+  ADMINISTRADOR
+  PREVENTA
+}
+
+enum CountryCode {
+  MX
+  CO
+  CL
+}
+
+/// D-A · monomoneda. Se conserva el enum para que reintroducir moneda local
+/// sea agregar valores, no repintar cinco tablas.
+enum Currency {
+  USD
+}
+
+enum OrganizationType {
+  CLIENTE
+  PROSPECTO
+  PARTNER
+  FABRICANTE
+  PROVEEDOR
+}
+
+/// RN-12 · tres estados. Solo ABIERTA cuenta en pipeline, ponderado y cobertura.
+enum OpportunityStatus {
+  ABIERTA
+  GANADA
+  PERDIDA
+}
+
+enum ForecastCategory {
+  PIPELINE
+  MEJOR_CASO
+  COMPROMISO
+  OMITIDA
+}
+
+enum BusinessType {
+  NUEVO
+  EXPANSION
+  RENOVACION
+}
+
+enum PriceModel {
+  PRECIO_FIJO
+  TIEMPO_Y_MATERIALES
+  RECURRENTE
+  RECURRENTE_ANUAL
+  POR_CONSUMO
+}
+
+enum QuoteStatus {
+  BORRADOR
+  CONGELADA
+  REEMPLAZADA
+}
+
+enum MilestoneStatus {
+  PENDIENTE
+  CUMPLIDO
+}
+
+enum MeddicComponent {
+  METRICAS
+  DECISOR_ECONOMICO
+  CRITERIOS_DECISION
+  PROCESO_DECISION
+  DOLOR_IDENTIFICADO
+  CAMPEON
+}
+
+enum MeddicStatus {
+  NO_EVALUADO
+  AUSENTE
+  PARCIAL
+  CONFIRMADO
+}
+
+enum ApprovalLevel {
+  GERENCIA
+  DIRECCION
+}
+
+enum ApprovalStatus {
+  PENDIENTE
+  AUTORIZADA
+  RECHAZADA
+  VENCIDA
+}
+
+enum ObjectivePeriod {
+  ANUAL
+  TRIMESTRAL
+}
+
+enum StageGateMode {
+  ADVERTENCIA
+  BLOQUEANTE
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Identidad y configuración
+// ───────────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String        @id @default(cuid())
+  /// SSO con Entra ID vía Supabase Auth. Nulo hasta el primer inicio de sesión.
+  entraObjectId String?       @unique @map("entra_object_id")
+  email         String        @unique
+  name          String
+  /// Avatar del prototipo.
+  initials      String        @db.VarChar(3)
+  role          Role
+  /// Un gerente puede llevar más de un país.
+  countryCodes  CountryCode[] @map("country_codes")
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  deletedAt     DateTime?     @map("deleted_at")
+
+  ownedOpportunities   Opportunity[]               @relation("OpportunityOwner")
+  createdOpportunities Opportunity[]               @relation("OpportunityCreator")
+  ownedOrganizations   Organization[]              @relation("OrganizationOwner")
+  supportAssignments   OpportunitySupport[]
+  stageTransitions     StageTransition[]
+  meddicUpdates        MeddicComponentAssessment[]
+  frozenQuotes         Quote[]                     @relation("QuoteFrozenBy")
+  requestedApprovals   DiscountApprovalRequest[]   @relation("ApprovalRequester")
+  resolvedApprovals    DiscountApprovalRequest[]   @relation("ApprovalResolver")
+  activities           Activity[]
+  uploadedDocuments    Document[]
+  objectives           Objective[]
+  auditEntries         AuditLog[]
+  savedViews           SavedView[]
+
+  @@index([role, active])
+  @@map("users")
+}
+
+model Country {
+  code                 CountryCode @id
+  name                 String
+  currency             Currency    @default(USD)
+  /// INV-05 · fracción, no porcentaje. Nunca un 0.16 literal en el código.
+  taxRate              Decimal     @map("tax_rate") @db.Decimal(7, 4)
+  taxLabel             String      @map("tax_label")
+  timezone             String
+  /// Q-02 · año fiscal = año calendario por omisión.
+  fiscalYearStartMonth Int         @default(1) @map("fiscal_year_start_month")
+
+  commercialPolicy CommercialPolicy?
+  pipelines        Pipeline[]
+  organizations    Organization[]
+  opportunities    Opportunity[]
+  objectives       Objective[]
+
+  @@map("countries")
+}
+
+/// INV-05 · todo umbral del sistema se lee de aquí. Uno por país.
+model CommercialPolicy {
+  id                    String      @id @default(cuid())
+  countryCode           CountryCode @unique @map("country_code")
+  /// Piso de margen global. 0.2000 = 20 %.
+  marginFloor           Decimal     @map("margin_floor") @db.Decimal(7, 4)
+  /// Piso de margen por línea. Se señala aunque el total cumpla (RN-05).
+  lineMarginFloor       Decimal     @map("line_margin_floor") @db.Decimal(7, 4)
+  /// Sobre este descuento autoriza Gerencia (RN-04).
+  discountThresholdMgmt Decimal     @map("discount_threshold_mgmt") @db.Decimal(7, 4)
+  /// Sobre este descuento autoriza Dirección (RN-04).
+  discountThresholdDir  Decimal     @map("discount_threshold_dir") @db.Decimal(7, 4)
+  /// Q-09 · horas hábiles (RN-21).
+  approvalSlaHours      Int         @default(24) @map("approval_sla_hours")
+  meddicMinToClosing    Int         @default(70) @map("meddic_min_to_closing")
+  meddicMinToWin        Int         @default(80) @map("meddic_min_to_win")
+  meddicMinToCommit     Int         @default(70) @map("meddic_min_to_commit")
+  /// RN-25 · cobertura sana de pipeline.
+  healthyCoverageMin    Decimal     @default(3.00) @map("healthy_coverage_min") @db.Decimal(4, 2)
+
+  country Country @relation(fields: [countryCode], references: [code])
+
+  @@map("commercial_policies")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Pipeline y etapas
+// ───────────────────────────────────────────────────────────────────────────
+
+model Pipeline {
+  id          String      @id @default(cuid())
+  name        String
+  countryCode CountryCode @map("country_code")
+  currency    Currency    @default(USD)
+  isRenewal   Boolean     @default(false) @map("is_renewal")
+  active      Boolean     @default(true)
+
+  country       Country        @relation(fields: [countryCode], references: [code])
+  stages        Stage[]
+  opportunities Opportunity[]
+  meddicWeights MeddicWeight[]
+
+  @@index([countryCode, active])
+  @@map("pipelines")
+}
+
+/// INV-13 · las etapas son datos, no enum. Un switch por nombre es un defecto.
+model Stage {
+  id             String        @id @default(cuid())
+  pipelineId     String        @map("pipeline_id")
+  name           String
+  position       Int
+  /// RN-01 · fracción. 0.7500 = 75 %. Es lo único que determina el ponderado.
+  probability    Decimal       @db.Decimal(5, 4)
+  /// RN-03 · días sin cambiar de etapa antes de marcarse estancada.
+  staleAfterDays Int           @map("stale_after_days")
+  /// Recomendación de arranque: ADVERTENCIA el primer trimestre.
+  gateMode       StageGateMode @default(ADVERTENCIA) @map("gate_mode")
+  /// RN-02 · requisitos declarativos de entrada. Ver GateRequirement en §8.3.
+  gateRequires   String[]      @map("gate_requires")
+  isClosing      Boolean       @default(false) @map("is_closing")
+
+  pipeline        Pipeline          @relation(fields: [pipelineId], references: [id])
+  opportunities   Opportunity[]
+  transitionsFrom StageTransition[] @relation("StageTransitionFrom")
+  transitionsTo   StageTransition[] @relation("StageTransitionTo")
+
+  @@unique([pipelineId, position])
+  @@index([pipelineId])
+  @@map("stages")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Cuentas y personas
+// ───────────────────────────────────────────────────────────────────────────
+
+model Organization {
+  id          String           @id @default(cuid())
+  name        String
+  legalName   String?          @map("legal_name")
+  /// RFC en México, NIT en Colombia, RUT en Chile.
+  taxId       String?          @map("tax_id")
+  type        OrganizationType
+  industry    String?
+  city        String?
+  countryCode CountryCode      @map("country_code")
+  employees   Int?
+  creditDays  Int?             @map("credit_days")
+  /// Jerarquía matriz-filial. Fase 2; la columna existe para no migrar después.
+  parentId    String?          @map("parent_id")
+  ownerId     String           @map("owner_id")
+  isStrategic Boolean          @default(false) @map("is_strategic")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  deletedAt   DateTime?        @map("deleted_at")
+
+  country       Country        @relation(fields: [countryCode], references: [code])
+  owner         User           @relation("OrganizationOwner", fields: [ownerId], references: [id])
+  parent        Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
+  children      Organization[] @relation("OrganizationHierarchy")
+  people        Person[]
+  opportunities Opportunity[]
+  activities    Activity[]
+  documents     Document[]
+
+  @@index([countryCode, type])
+  @@index([ownerId])
+  @@index([parentId])
+  @@map("organizations")
+}
+
+/// Q-11 cerrada: datos de contacto profesional de personas vinculadas a
+/// empresas, tratados en su calidad de representantes de una organización. Sin
+/// captura de consentimiento. El derecho de supresión lo cubre deletedAt.
+model Person {
+  id              String    @id @default(cuid())
+  organizationId  String    @map("organization_id")
+  name            String
+  initials        String    @db.VarChar(3)
+  jobTitle        String?   @map("job_title")
+  /// Rol en el comité de compra. Es la misma información que MEDDIC ancla (§2.1).
+  committeeRoleId String?   @map("committee_role_id")
+  email           String?
+  phone           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  organization      Organization                @relation(fields: [organizationId], references: [id])
+  committeeRole     CommitteeRole?              @relation(fields: [committeeRoleId], references: [id])
+  primaryFor        Opportunity[]
+  meddicAssessments MeddicComponentAssessment[]
+
+  @@index([organizationId])
+  @@index([committeeRoleId])
+  @@map("people")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Oportunidad
+// ───────────────────────────────────────────────────────────────────────────
+
+model Opportunity {
+  id    String @id @default(cuid())
+  /// INV-12 · formato OPP-AAAA-NNNNN, consecutivo por año. Inmutable, incluso
+  /// al reabrir. Se genera con FolioCounter, nunca con count()+1 (RN-20).
+  folio String @unique
+  name  String
+
+  organizationId  String      @map("organization_id")
+  /// Opcional a propósito: exigirlo pelea contra la captura rápida.
+  primaryPersonId String?     @map("primary_person_id")
+  pipelineId      String      @map("pipeline_id")
+  stageId         String      @map("stage_id")
+  countryCode     CountryCode @map("country_code")
+  currency        Currency    @default(USD)
+
+  /// Valor mientras no hay cotización; después lo reemplaza el neto de la activa.
+  estimatedAmount Decimal  @map("estimated_amount") @db.Decimal(18, 4)
+  /// Neto vigente. Espejo de la cotización activa, actualizado en la misma
+  /// transacción, para que el kanban no tenga que unir contra quotes.
+  amount          Decimal  @db.Decimal(18, 4)
+  /// Derivado y cacheado. Fracción.
+  grossMargin     Decimal? @map("gross_margin") @db.Decimal(7, 4)
+
+  status           OpportunityStatus @default(ABIERTA)
+  /// RN-15 · juicio del vendedor, con el límite de RN-29.
+  forecastCategory ForecastCategory  @default(PIPELINE) @map("forecast_category")
+  businessType     BusinessType      @map("business_type")
+  sourceId         String?           @map("source_id")
+  partnerName      String?           @map("partner_name")
+
+  expectedCloseDate DateTime  @map("expected_close_date") @db.Date
+  actualCloseDate   DateTime? @map("actual_close_date") @db.Date
+  lossReasonId      String?   @map("loss_reason_id")
+  lossCompetitor    String?   @map("loss_competitor")
+
+  /// §7.2 · desnormalizado para filtrar y ordenar sin recalcular. Se recalcula
+  /// en la misma transacción en que cambia un componente. Nunca se edita a mano.
+  meddicScore Int? @map("meddic_score")
+
+  /// §2.3 · la visibilidad del vendedor cuelga de este campo, no de createdById.
+  ownerId        String    @map("owner_id")
+  createdById    String    @map("created_by_id")
+  /// RN-03 · se sella en cada transición. Base del cálculo de estancamiento.
+  stageEnteredAt DateTime  @map("stage_entered_at")
+  lastActivityAt DateTime? @map("last_activity_at")
+  nextActivityAt DateTime? @map("next_activity_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  organization  Organization       @relation(fields: [organizationId], references: [id])
+  primaryPerson Person?            @relation(fields: [primaryPersonId], references: [id])
+  pipeline      Pipeline           @relation(fields: [pipelineId], references: [id])
+  stage         Stage              @relation(fields: [stageId], references: [id])
+  country       Country            @relation(fields: [countryCode], references: [code])
+  owner         User               @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  createdBy     User               @relation("OpportunityCreator", fields: [createdById], references: [id])
+  lossReason    LossReason?        @relation(fields: [lossReasonId], references: [id])
+  source        OpportunitySource? @relation(fields: [sourceId], references: [id])
+
+  quotes       Quote[]
+  milestones   Milestone[]
+  activities   Activity[]
+  documents    Document[]
+  meddic       MeddicComponentAssessment[]
+  approvals    DiscountApprovalRequest[]
+  stageHistory StageTransition[]
+  supportUsers OpportunitySupport[]
+
+  @@index([ownerId, status])
+  @@index([countryCode, status, expectedCloseDate])
+  @@index([pipelineId, stageId])
+  @@index([organizationId])
+  @@index([status, actualCloseDate])
+  @@map("opportunities")
+}
+
+/// RN-20 · consecutivo por año. Se opera con UPDATE … RETURNING dentro de la
+/// transacción de alta. NUNCA con count()+1: dos altas simultáneas colisionan.
+/// El esquema anterior usaba una secuencia global, que no reinicia en enero.
+model FolioCounter {
+  year       Int @id
+  lastNumber Int @default(0) @map("last_number")
+
+  @@map("folio_counters")
+}
+
+/// Historial de etapas, incluidos los retrocesos. Base del ciclo de venta y de
+/// la conversión por etapa.
+model StageTransition {
+  id            String   @id @default(cuid())
+  opportunityId String   @map("opportunity_id")
+  fromStageId   String?  @map("from_stage_id")
+  toStageId     String   @map("to_stage_id")
+  atDate        DateTime @default(now()) @map("at_date")
+  byUserId      String   @map("by_user_id")
+  /// Avanzó pese a una compuerta en ADVERTENCIA. Alimenta el reporte semanal
+  /// de incumplimiento (§8.3).
+  gateOverride  Boolean  @default(false) @map("gate_override")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  fromStage   Stage?      @relation("StageTransitionFrom", fields: [fromStageId], references: [id])
+  toStage     Stage       @relation("StageTransitionTo", fields: [toStageId], references: [id])
+  byUser      User        @relation(fields: [byUserId], references: [id])
+
+  @@index([opportunityId, atDate])
+  @@map("stage_transitions")
+}
+
+/// Q-03 · preventa asignada como apoyo técnico. Determina su alcance (§5.3).
+model OpportunitySupport {
+  opportunityId String   @map("opportunity_id")
+  userId        String   @map("user_id")
+  assignedAt    DateTime @default(now()) @map("assigned_at")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+
+  @@id([opportunityId, userId])
+  @@index([userId])
+  @@map("opportunity_support")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// MEDDIC · §7
+// ───────────────────────────────────────────────────────────────────────────
+
+model MeddicComponentAssessment {
+  id            String          @id @default(cuid())
+  opportunityId String          @map("opportunity_id")
+  component     MeddicComponent
+  status        MeddicStatus    @default(NO_EVALUADO)
+  /// RN-30 · obligatoria cuando status es PARCIAL o CONFIRMADO.
+  evidence      String?
+  /// §2.1 · solo para DECISOR_ECONOMICO y CAMPEON. Apunta a una persona real
+  /// del comité de compra, no a texto libre. Obligatorio para CONFIRMADO.
+  personId      String?         @map("person_id")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  updatedById   String          @map("updated_by_id")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  person      Person?     @relation(fields: [personId], references: [id])
+  updatedBy   User        @relation(fields: [updatedById], references: [id])
+
+  @@unique([opportunityId, component])
+  @@index([personId])
+  @@map("meddic_assessments")
+}
+
+/// Q-08 · pesos por pipeline. Suman 100. Editable desde P-11 sin desplegar.
+model MeddicWeight {
+  pipelineId String          @map("pipeline_id")
+  component  MeddicComponent
+  weight     Int
+
+  pipeline Pipeline @relation(fields: [pipelineId], references: [id])
+
+  @@id([pipelineId, component])
+  @@map("meddic_weights")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Productos y precios
+// ───────────────────────────────────────────────────────────────────────────
+
+model Product {
+  id            String     @id @default(cuid())
+  sku           String     @unique
+  name          String
+  description   String?
+  familyId      String     @map("family_id")
+  /// "día", "mes", "usuario", "pieza", "GB".
+  unit          String
+  priceModel    PriceModel @map("price_model")
+  active        Boolean    @default(true)
+  /// Q-05 · mientras Defontana esté fuera, siempre CARGA_MASIVA.
+  costSource    String     @default("CARGA_MASIVA") @map("cost_source")
+  /// P-06 marca en ámbar los SKU con costo de más de 60 días.
+  costUpdatedAt DateTime?  @map("cost_updated_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  family     ProductFamily    @relation(fields: [familyId], references: [id])
+  prices     PriceListEntry[]
+  quoteLines QuoteLine[]
+
+  @@index([familyId, active])
+  @@map("products")
+}
+
+model ProductFamily {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  active   Boolean   @default(true)
+  products Product[]
+
+  @@map("product_families")
+}
+
+/// D-A · lista ÚNICA y global, en USD. Sin dimensión de país ni de moneda.
+/// RN-26 · se cotiza con la vigente a la fecha; cambiarla no altera cotizaciones
+/// congeladas, porque la cotización copia precio y costo a la línea.
+model PriceListEntry {
+  id           String   @id @default(cuid())
+  productId    String   @map("product_id")
+  listPrice    Decimal  @map("list_price") @db.Decimal(18, 4)
+  /// RN-08 · piso duro. Un descuento que baje de aquí no se guarda.
+  minPrice     Decimal  @map("min_price") @db.Decimal(18, 4)
+  standardCost Decimal  @map("standard_cost") @db.Decimal(18, 4)
+  validFrom    DateTime @map("valid_from") @db.Date
+  validTo      DateTime @map("valid_to") @db.Date
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([productId, validFrom])
+  @@index([productId, validFrom, validTo])
+  @@map("price_list_entries")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Cotización
+// ───────────────────────────────────────────────────────────────────────────
+
+model Quote {
+  id            String      @id @default(cuid())
+  opportunityId String      @map("opportunity_id")
+  version       Int
+  status        QuoteStatus @default(BORRADOR)
+  currency      Currency    @default(USD)
+
+  /// Totales persistidos, no calculados en vista: hay que poder congelarlos.
+  /// Se recalculan mientras el estatus es BORRADOR.
+  grossSubtotal Decimal @map("gross_subtotal") @db.Decimal(18, 4)
+  netSubtotal   Decimal @map("net_subtotal") @db.Decimal(18, 4)
+  discountRate  Decimal @map("discount_rate") @db.Decimal(7, 4)
+  /// RN-24 · copiada de Country.taxRate al crear, para que un cambio de tasa
+  /// no altere cotizaciones históricas.
+  taxRate       Decimal @map("tax_rate") @db.Decimal(7, 4)
+  taxAmount     Decimal @map("tax_amount") @db.Decimal(18, 4)
+  total         Decimal @db.Decimal(18, 4)
+  /// INV-02 · estos tres no se serializan sin VER_COSTO.
+  totalCost     Decimal @map("total_cost") @db.Decimal(18, 4)
+  grossProfit   Decimal @map("gross_profit") @db.Decimal(18, 4)
+  grossMargin   Decimal @map("gross_margin") @db.Decimal(7, 4)
+
+  /// INV-06 · a partir de aquí es inmutable. Editar crea la versión siguiente.
+  frozenAt   DateTime? @map("frozen_at")
+  frozenById String?   @map("frozen_by_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  opportunity Opportunity               @relation(fields: [opportunityId], references: [id])
+  frozenBy    User?                     @relation("QuoteFrozenBy", fields: [frozenById], references: [id])
+  lines       QuoteLine[]
+  approvals   DiscountApprovalRequest[]
+
+  @@unique([opportunityId, version])
+  @@index([opportunityId, status])
+  @@map("quotes")
+}
+
+model QuoteLine {
+  id           String  @id @default(cuid())
+  quoteId      String  @map("quote_id")
+  position     Int
+  /// Q-07 · nulo = concepto libre, con costo obligatorio.
+  productId    String? @map("product_id")
+  description  String
+  unit         String
+  quantity     Decimal @db.Decimal(18, 4)
+  unitPrice    Decimal @map("unit_price") @db.Decimal(18, 4)
+  discountRate Decimal @map("discount_rate") @db.Decimal(7, 4)
+  /// INV-02 · no sale del servidor sin VER_COSTO. El selector lo omite; no se
+  /// oculta en el componente.
+  unitCost     Decimal @map("unit_cost") @db.Decimal(18, 4)
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@unique([quoteId, position])
+  @@index([productId])
+  @@map("quote_lines")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Hitos de facturación
+// ───────────────────────────────────────────────────────────────────────────
+
+/// §6.3 · siempre monto, nunca porcentaje. La captura permite alternar % y
+/// monto, pero lo almacenado es monto: así, si la cotización cambia, el sistema
+/// avisa que el calendario dejó de cuadrar en vez de recalcular en silencio.
+model Milestone {
+  id            String          @id @default(cuid())
+  opportunityId String          @map("opportunity_id")
+  position      Int
+  description   String
+  dueDate       DateTime        @map("due_date") @db.Date
+  amount        Decimal         @db.Decimal(18, 4)
+  status        MilestoneStatus @default(PENDIENTE)
+  completedAt   DateTime?       @map("completed_at")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([opportunityId, position])
+  @@index([dueDate, status])
+  @@map("milestones")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Autorizaciones
+// ───────────────────────────────────────────────────────────────────────────
+
+model DiscountApprovalRequest {
+  id              String         @id @default(cuid())
+  opportunityId   String         @map("opportunity_id")
+  quoteId         String         @map("quote_id")
+  requestedById   String         @map("requested_by_id")
+  /// RN-04 · el nivel lo determina el umbral, no el usuario.
+  level           ApprovalLevel
+  status          ApprovalStatus @default(PENDIENTE)
+  discountRate    Decimal        @map("discount_rate") @db.Decimal(7, 4)
+  resultingMargin Decimal        @map("resulting_margin") @db.Decimal(7, 4)
+  justification   String
+  /// RN-21 · createdAt más approvalSlaHours, en horas hábiles.
+  dueAt           DateTime       @map("due_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  resolvedById      String?   @map("resolved_by_id")
+  resolvedAt        DateTime? @map("resolved_at")
+  /// RN-17 · obligatorio al resolver, autorice o rechace.
+  resolutionComment String?   @map("resolution_comment")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  quote       Quote       @relation(fields: [quoteId], references: [id])
+  requestedBy User        @relation("ApprovalRequester", fields: [requestedById], references: [id])
+  resolvedBy  User?       @relation("ApprovalResolver", fields: [resolvedById], references: [id])
+
+  @@index([status, dueAt])
+  @@index([opportunityId])
+  @@map("discount_approval_requests")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Actividades y documentos
+// ───────────────────────────────────────────────────────────────────────────
+
+model Activity {
+  id          String    @id @default(cuid())
+  typeId      String    @map("type_id")
+  subject     String
+  notes       String?
+  startsAt    DateTime  @map("starts_at")
+  durationMin Int?      @map("duration_min")
+  completedAt DateTime? @map("completed_at")
+  outcome     String?
+
+  organizationId String? @map("organization_id")
+  opportunityId  String? @map("opportunity_id")
+  userId         String  @map("user_id")
+
+  /// F-605 · sincronía con el calendario de M365.
+  externalEventId String?   @map("external_event_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  type         ActivityType  @relation(fields: [typeId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id])
+
+  @@index([userId, startsAt])
+  @@index([opportunityId])
+  @@index([organizationId])
+  @@map("activities")
+}
+
+model Document {
+  id         String @id @default(cuid())
+  typeId     String @map("type_id")
+  name       String
+  version    Int    @default(1)
+  /// Ruta en Supabase Storage.
+  storageKey String @map("storage_key")
+  sizeBytes  Int    @map("size_bytes")
+  mimeType   String @map("mime_type")
+
+  organizationId String?  @map("organization_id")
+  opportunityId  String?  @map("opportunity_id")
+  uploadedById   String   @map("uploaded_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  type         DocumentType  @relation(fields: [typeId], references: [id])
+  organization Organization? @relation(fields: [organizationId], references: [id])
+  opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id])
+  uploadedBy   User          @relation(fields: [uploadedById], references: [id])
+
+  @@index([opportunityId])
+  @@index([organizationId])
+  @@map("documents")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Catálogos · dedicados, no una tabla genérica: tienen comportamiento propio
+// ───────────────────────────────────────────────────────────────────────────
+
+model ActivityType {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  active     Boolean    @default(true)
+  activities Activity[]
+
+  @@map("activity_types")
+}
+
+model DocumentType {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  active     Boolean    @default(true)
+  /// Comportamiento, no solo nombre: satisface la compuerta CONTRATO_O_OC_CARGADO.
+  isContract Boolean    @default(false) @map("is_contract")
+  documents  Document[]
+
+  @@map("document_types")
+}
+
+model LossReason {
+  id                 String        @id @default(cuid())
+  name               String        @unique
+  active             Boolean       @default(true)
+  /// RN-16 · si es true, perder exige también nombrar al competidor.
+  requiresCompetitor Boolean       @default(false) @map("requires_competitor")
+  opportunities      Opportunity[]
+
+  @@map("loss_reasons")
+}
+
+model CommitteeRole {
+  id     String   @id @default(cuid())
+  name   String   @unique
+  active Boolean  @default(true)
+  people Person[]
+
+  @@map("committee_roles")
+}
+
+model OpportunitySource {
+  id            String        @id @default(cuid())
+  name          String        @unique
+  active        Boolean       @default(true)
+  opportunities Opportunity[]
+
+  @@map("opportunity_sources")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Objetivos · §10
+// ───────────────────────────────────────────────────────────────────────────
+
+model Objective {
+  id          String          @id @default(cuid())
+  userId      String          @map("user_id")
+  countryCode CountryCode     @map("country_code")
+  fiscalYear  Int             @map("fiscal_year")
+  periodType  ObjectivePeriod @map("period_type")
+  /// 1..4 para TRIMESTRAL, nulo para ANUAL.
+  quarter     Int?
+
+  /// §10.2 · el avance de ingreso se mide con actualCloseDate; la cobertura,
+  /// con expectedCloseDate. Mezclarlas produce coberturas absurdas.
+  revenueQuota     Decimal  @map("revenue_quota") @db.Decimal(18, 4)
+  grossProfitQuota Decimal  @map("gross_profit_quota") @db.Decimal(18, 4)
+  currency         Currency @default(USD)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  country Country @relation(fields: [countryCode], references: [code])
+
+  @@unique([userId, fiscalYear, periodType, quarter])
+  @@index([countryCode, fiscalYear])
+  @@map("objectives")
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Transversales
+// ───────────────────────────────────────────────────────────────────────────
+
+/// INV-09 · se escribe en la MISMA transacción que el cambio. Si el log falla,
+/// la operación falla. La firma de writeAudit(tx, …) lo hace estructural.
+model AuditLog {
+  id       String   @id @default(cuid())
+  entity   String
+  entityId String   @map("entity_id")
+  action   String
+  byUserId String   @map("by_user_id")
+  at       DateTime @default(now())
+  before   Json?
+  after    Json?
+  ip       String?
+
+  byUser User @relation(fields: [byUserId], references: [id])
+
+  @@index([entity, entityId, at])
+  @@index([byUserId, at])
+  @@map("audit_logs")
+}
+
+/// §9.5 · vistas de filtros guardadas. No se comparten entre usuarios en el MVP.
+model SavedView {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  screen    String
+  name      String
+  /// Los searchParams serializados. INV-10.
+  query     Json
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, screen, name])
+  @@index([userId, screen])
+  @@map("saved_views")
+}
+
+model Permission {
+  id              String           @id @default(cuid())
+  code            String           @unique
+  name            String
+  description     String?
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+/// §5.2 · la matriz de permisos como datos, no como condicionales dispersos.
+/// Editable desde Administración (F-1005).
+model RolePermission {
+  role         Role
+  permissionId String   @map("permission_id")
+  granted      Boolean  @default(false)
+  /// Para permisos con tope, como autorizar descuento hasta 0.30 (RN-04).
+  limitValue   Decimal? @map("limit_value") @db.Decimal(7, 4)
+
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([role, permissionId])
+  @@map("role_permissions")
+}

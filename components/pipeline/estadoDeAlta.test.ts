@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vitest";
+import {
+  ESTADO_INICIAL,
+  nombreEsSugerido,
+  reducir,
+  type EstadoDeAlta,
+} from "./estadoDeAlta";
+
+const ACEROS = { tipo: "EXISTENTE", id: "o1", nombre: "Aceros del Norte" } as const;
+const HIDRO = { tipo: "EXISTENTE", id: "o2", nombre: "Hidrosistemas del Valle" } as const;
+const NUEVA = { tipo: "NUEVA", nombre: "Prueba Industrial" } as const;
+
+function con(parcial: Partial<EstadoDeAlta>): EstadoDeAlta {
+  return { ...ESTADO_INICIAL, ...parcial };
+}
+
+describe("el nombre se sugiere a partir de la organización", () => {
+  it("elegir organización prellena «Nombre · »", () => {
+    const e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    expect(e.nombre).toBe("Aceros del Norte · ");
+    expect(nombreEsSugerido(e)).toBe(true);
+  });
+
+  it("una organización nueva sugiere igual que una existente", () => {
+    const e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: NUEVA });
+    expect(e.nombre).toBe("Prueba Industrial · ");
+  });
+});
+
+describe("lo que el usuario escribió no se pisa", () => {
+  it("cambiar de organización corrige el prefijo y conserva la descripción", () => {
+    // Este es el caso que importa: alguien eligió mal la empresa, ya escribió
+    // el servicio, y la corrige. Perder lo tecleado ahí es lo que hace que un
+    // formulario se use una sola vez.
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "ESCRIBIR_NOMBRE", nombre: "Aceros del Norte · Servicios administrados" });
+    e = reducir(e, { tipo: "ELEGIR_ORGANIZACION", eleccion: HIDRO });
+
+    expect(e.nombre).toBe("Hidrosistemas del Valle · Servicios administrados");
+  });
+
+  it("si el nombre no lleva el prefijo anterior, se deja intacto", () => {
+    // Alguien borró todo y escribió algo propio. Reescribirle el prefijo sería
+    // devolverle una decisión que ya había descartado.
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "ESCRIBIR_NOMBRE", nombre: "Renovación anual 2027" });
+    e = reducir(e, { tipo: "ELEGIR_ORGANIZACION", eleccion: HIDRO });
+
+    expect(e.nombre).toBe("Renovación anual 2027");
+  });
+
+  it("mientras no lo toquen, el prefijo se reemplaza entero", () => {
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "ELEGIR_ORGANIZACION", eleccion: HIDRO });
+
+    expect(e.nombre).toBe("Hidrosistemas del Valle · ");
+    expect(e.nombreTocado).toBe(false);
+  });
+
+  it("escribir marca el nombre como tocado, aunque coincida con el sugerido", () => {
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "ESCRIBIR_NOMBRE", nombre: "Aceros del Norte · " });
+    expect(e.nombreTocado).toBe(true);
+  });
+});
+
+describe("la persona cuelga de la organización", () => {
+  it("cambiar de organización limpia la persona elegida", () => {
+    // Sin esto quedaría ligado un contacto que no trabaja en esa empresa, y la
+    // compuerta PERSONA_CON_ROL_DECLARADO se satisfaría con datos de otra.
+    let e: EstadoDeAlta = con({ organizacion: ACEROS });
+    e = reducir(e, {
+      tipo: "ELEGIR_PERSONA",
+      eleccion: { tipo: "EXISTENTE", id: "p1", nombre: "Luis Cantú" },
+    });
+    expect(e.persona.tipo).toBe("EXISTENTE");
+
+    e = reducir(e, { tipo: "ELEGIR_ORGANIZACION", eleccion: HIDRO });
+    expect(e.persona).toEqual({ tipo: "VACIA" });
+  });
+});
+
+describe("limpiar", () => {
+  it("devuelve el formulario a como estaba", () => {
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "ESCRIBIR_NOMBRE", nombre: "Algo" });
+    expect(reducir(e, { tipo: "LIMPIAR" })).toEqual(ESTADO_INICIAL);
+  });
+});

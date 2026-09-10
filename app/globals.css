@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Sistema de diseño · §13
+   Tokens del manual de normas gráficas de Avattar, copiados TEXTUALMENTE.
+   No se sustituyen por la paleta por omisión de ninguna librería.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Marca — el azul domina, el navy lo acompaña */
+  --avattar-blue: #62a8e5;    /* Pantone 292 U · primario */
+  --avattar-navy: #375172;    /* Pantone 295 U · secundario */
+  --avattar-magenta: #c724b1; /* complementario, uso mínimo */
+  --avattar-lime: #d0df00;    /* complementario, uso mínimo */
+  --avattar-coral: #ff585d;   /* complementario, uso mínimo */
+
+  /* Rampa azul */
+  --blue-50: #eff6fd;  --blue-100: #dbebfa; --blue-200: #bdd9f3;
+  --blue-300: #93c1ea; --blue-400: #62a8e5; --blue-500: #4790d4;
+  --blue-600: #3577bd; --blue-700: #2c609a; --blue-800: #29517d;
+  --blue-900: #274568;
+
+  /* Rampa navy */
+  --navy-50: #f2f5f8;  --navy-100: #e2e9f0; --navy-200: #c6d3e0;
+  --navy-300: #9fb2c8; --navy-400: #6f8aab; --navy-500: #4f6b8d;
+  --navy-600: #375172; --navy-700: #30455f; --navy-800: #263749;
+  --navy-900: #0e1726; --navy-950: #08101c;
+
+  /* Neutros */
+  --gray-05: #f7f8fa; --gray-10: #eceef1; --gray-20: #d9dde2;
+  --gray-40: #adb4bd; --gray-50: #808a96; --gray-70: #4d5661;
+  --gray-90: #22282f;
+
+  /* Estado. NO usar como color decorativo: si algo es rojo, requiere atención */
+  --status-success: #2f9e6d;
+  --status-warning: #d0df00;
+  --status-danger: #ff585d;
+  --status-info: #62a8e5;
+
+  /* Alias semánticos — los componentes usan estos, no los hex */
+  --text-heading: var(--navy-600);
+  --text-body: var(--navy-700);
+  --text-muted: var(--gray-50);
+  --surface-page: #fff;
+  --surface-subtle: var(--navy-50);
+  --surface-card: #fff;
+  --surface-tint: var(--blue-50);
+  --border: var(--gray-20);
+  --border-strong: var(--navy-200);
+  --accent: var(--avattar-blue);
+  --accent-hover: var(--blue-500);
+  --accent-active: var(--blue-600);
+  --on-accent: #fff;
+  --focus-ring: var(--blue-400);
+
+  /* Tipografía */
+  --fs-h1: 3rem;      --fs-h2: 2.25rem;   --fs-h3: 1.625rem;
+  --fs-h4: 1.25rem;   --fs-lg: 1.125rem;  --fs-body: 1rem;
+  --fs-sm: 0.875rem;  --fs-xs: 0.75rem;   --fs-eyebrow: 0.8125rem;
+  --lh-tight: 1.05;   --lh-heading: 1.15; --lh-snug: 1.35; --lh-body: 1.6;
+  --ls-heading: -0.01em; --ls-eyebrow: 0.14em;
+
+  /* Espacio · rejilla base 4px */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
+
+  --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px;
+  --radius-lg: 18px; --radius-pill: 999px;
+
+  --shadow-xs: 0 1px 2px rgba(14, 23, 38, 0.06);
+  --shadow-sm: 0 2px 8px rgba(14, 23, 38, 0.06);
+  --shadow-md: 0 8px 24px rgba(14, 23, 38, 0.08);
+  --ring: 0 0 0 3px rgba(98, 168, 229, 0.45);
+
+  --ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+}
+
+@layer base {
+  body {
+    background: var(--surface-page);
+    color: var(--text-body);
+    font-size: var(--fs-sm);
+    line-height: var(--lh-body);
+  }
+
+  h1, h2, h3, h4 {
+    color: var(--text-heading);
+    letter-spacing: var(--ls-heading);
+    line-height: var(--lh-heading);
+  }
+
+  /* Foco siempre visible: es una aplicación de trabajo, se usa con teclado. */
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--ring);
+    border-radius: var(--radius-xs);
+  }
+}
+
+@layer utilities {
+  /* §13.2 · toda cifra en columna. Sin esto las tablas de importes se ven
+     torcidas, porque los dígitos tienen anchos distintos. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* §13.2 · etiquetas en versalitas */
+  .eyebrow {
+    font-size: var(--fs-eyebrow);
+    letter-spacing: var(--ls-eyebrow);
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

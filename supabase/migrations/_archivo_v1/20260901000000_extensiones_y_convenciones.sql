@@ -1,0 +1,52 @@
+-- ============================================================================
+-- CRM AVATTAR · ESQUEMA SUPABASE (POSTGRES) · v1
+-- ============================================================================
+-- Derivado de:
+--   - §01 Modelo de datos (ERD) y reglas MD-01 a MD-05 de la especificación
+--     funcional original.
+--   - Catálogo de funcionalidades v2 (listado-funcionalidades-mvp-v2.md),
+--     incluyendo el módulo nuevo de Prospectos (§10b).
+--   - Reglas de negocio referenciadas por código: RN-xx (oportunidades),
+--     HF-xx (hitos), SEG-xx (permisos), MIG-xx (migración), PR-xx (prospectos).
+--
+-- CONVENCIONES GLOBALES (MD-01 a MD-05):
+--   - Toda tabla principal lleva auditoría: creado_por/creado_en,
+--     modificado_por/modificado_en.
+--   - Nada se borra físicamente: se usa borrado_logico (tablas transaccionales)
+--     o activo (catálogos y tablas de configuración).
+--   - custom_fields JSONB permite campos por cliente sin migrar esquema.
+--
+-- ⚠ ARQUITECTURA DE MONEDA (v2 de este esquema): TODOS los montos se
+-- capturan y almacenan únicamente en USD. No existe captura en moneda local
+-- (MXN/COP/CLP), ni tablas de moneda/tipo de cambio, ni congelamiento de tipo
+-- de cambio al ganar. Esto es monomoneda, no multimoneda — por decisión
+-- explícita, porque la operación real de Avattar en los tres países ya
+-- cotiza y opera en dólares hoy en día. No es una simplificación que
+-- sacrifique información: es que el supuesto de "multimoneda" de los
+-- documentos anteriores no correspondía a cómo opera el negocio.
+--
+-- NOTA SOBRE DOCUMENTACIÓN PREVIA (ref. C-08): alcance-mvp.md dice
+-- "multimoneda, listas por país, consolidado en USD", y la especificación
+-- original trae RN-13b (congelar tipo de cambio al ganar). Ambos asumían que
+-- la captura era en moneda local — ese supuesto queda corregido aquí, no en
+-- conflicto real con el negocio. Vale la pena actualizar esos dos documentos
+-- para que no quede como una contradicción abierta sin resolver.
+--
+-- IMPLICACIÓN A FUTURO (Fase 2, integración Defontana): facturar en México,
+-- Colombia y Chile normalmente exige el monto en moneda local para
+-- SAT/DIAN/SII. Esa conversión NO vive en este esquema — cuando se integre
+-- Defontana habrá que resolverla en esa capa (o reintroducir aquí una tabla
+-- de tipo de cambio en ese momento). No es un problema para el MVP, pero no
+-- hay que descubrirlo tarde. Vale la pena confirmar con el Director de
+-- México si Avattar factura hoy en USD también, o si la factura local sí
+-- sale en moneda local aunque la cotización/CRM viva en USD — son cosas
+-- distintas y esto último cambiaría el alcance de esa integración futura.
+--
+-- PENDIENTE: este esquema NO incluye políticas RLS todavía (se dejó para una
+-- siguiente entrega). RLS está habilitado en cada tabla pero sin políticas,
+-- lo que en Supabase equivale a "nadie puede leer/escribir" hasta que se
+-- agreguen — es intencional, para no dejar tablas abiertas por omisión.
+-- ============================================================================
+
+create extension if not exists "pgcrypto";      -- gen_random_uuid()
+create extension if not exists "citext";        -- correos case-insensitive

@@ -1,0 +1,166 @@
+import type { MeddicComponent, MeddicStatus } from "@prisma/client";
+
+/**
+ * MEDDIC · §7.
+ *
+ * Seis componentes con estado y evidencia. El puntaje **gatea, no pondera**: no
+ * toca la fórmula del ponderado, que sigue siendo `amount × probabilidad de
+ * etapa` (RN-01). Dos mecanismos moviendo el pronóstico al mismo tiempo hacen
+ * imposible explicar un número en el comité comercial.
+ *
+ * Funciones puras. Los pesos y los mínimos entran por parámetro (INV-05).
+ */
+
+export type MeddicAssessment = {
+  component: MeddicComponent;
+  status: MeddicStatus;
+  evidence?: string | null;
+  personId?: string | null;
+};
+
+export type MeddicWeights = Record<MeddicComponent, number>;
+
+/** §7.1 · puntos por estado. AUSENTE vale 0 igual que NO_EVALUADO, pero informa. */
+const PUNTOS: Record<MeddicStatus, number> = {
+  NO_EVALUADO: 0,
+  AUSENTE: 0,
+  PARCIAL: 1,
+  CONFIRMADO: 2,
+};
+
+/** Q-08 · cinco a 17 y el dolor a 15, para que sumen exactamente 100. */
+export const PESOS_POR_OMISION: MeddicWeights = {
+  METRICAS: 17,
+  DECISOR_ECONOMICO: 17,
+  CRITERIOS_DECISION: 17,
+  PROCESO_DECISION: 17,
+  DOLOR_IDENTIFICADO: 15,
+  CAMPEON: 17,
+};
+
+/** Nombres visibles. INV-14: la UI siempre en español. */
+export const NOMBRE_COMPONENTE: Record<MeddicComponent, string> = {
+  METRICAS: "Métricas",
+  DECISOR_ECONOMICO: "Decisor económico",
+  CRITERIOS_DECISION: "Criterios de decisión",
+  PROCESO_DECISION: "Proceso de decisión",
+  DOLOR_IDENTIFICADO: "Dolor identificado",
+  CAMPEON: "Campeón",
+};
+
+export const NOMBRE_ESTADO: Record<MeddicStatus, string> = {
+  NO_EVALUADO: "No evaluado",
+  AUSENTE: "Ausente",
+  PARCIAL: "Parcial",
+  CONFIRMADO: "Confirmado",
+};
+
+/**
+ * Los dos componentes que se anclan a una persona real de la organización
+ * (§2.1), no a texto libre. Así el comité de compra de la ficha de cuenta y
+ * MEDDIC son la misma información, no dos capturas.
+ */
+const ANCLADOS_A_PERSONA: MeddicComponent[] = ["DECISOR_ECONOMICO", "CAMPEON"];
+
+/**
+ * Los tres que RN-28 exige `CONFIRMADO` para ganar, sin importar el puntaje.
+ * Se puede llegar a 80 puntos con buenas métricas y sin campeón, y eso no es
+ * una venta cerrable.
+ */
+const OBLIGATORIOS_PARA_GANAR: MeddicComponent[] = [
+  "DECISOR_ECONOMICO",
+  "DOLOR_IDENTIFICADO",
+  "CAMPEON",
+];
+
+/** §7.2 · puntaje de 0 a 100. Con los seis confirmados y pesos que suman 100, da 100. */
+export function computeMeddicScore(
+  assessments: Pick<MeddicAssessment, "component" | "status">[],
+  weights: MeddicWeights,
+): number {
+  const total = assessments.reduce(
+    (acc, a) => acc + PUNTOS[a.status] * (weights[a.component] ?? 0),
+    0,
+  );
+  // 2 = puntos máximos por componente.
+  return Math.round(total / 2);
+}
+
+export type ResultadoValidacion = { ok: true } | { ok: false; motivo: string };
+
+/**
+ * RN-30 · un componente en `PARCIAL` o `CONFIRMADO` exige evidencia no vacía, y
+ * el decisor económico y el campeón en `CONFIRMADO` exigen además una persona.
+ *
+ * La evidencia no es burocracia: sin ella el puntaje es una opinión, y el gate
+ * de «Compromiso» deja de significar algo.
+ */
+export function validarComponente(a: MeddicAssessment): ResultadoValidacion {
+  const requiereEvidencia = a.status === "PARCIAL" || a.status === "CONFIRMADO";
+  if (requiereEvidencia && !a.evidence?.trim()) {
+    return {
+      ok: false,
+      motivo: `${NOMBRE_COMPONENTE[a.component]} en ${NOMBRE_ESTADO[a.status]} necesita evidencia. Escribe en qué te basas.`,
+    };
+  }
+
+  if (a.status === "CONFIRMADO" && ANCLADOS_A_PERSONA.includes(a.component) && !a.personId) {
+    return {
+      ok: false,
+      motivo: `${NOMBRE_COMPONENTE[a.component]} confirmado necesita una persona del comité de compra ligada. Elige a quién te refieres.`,
+    };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * RN-28, AC-14 · qué falta para poder ganar.
+ *
+ * Devuelve mensajes que nombran el componente y el estado al que tiene que
+ * llegar. Nunca un «no se puede» genérico: §7.4 lo pide explícitamente, y es la
+ * diferencia entre una validación que enseña y una que frustra.
+ */
+export function componentesFaltantesParaGanar(
+  assessments: Pick<MeddicAssessment, "component" | "status">[],
+  meddicScore: number,
+  minimos: { meddicMinToWin: number },
+): string[] {
+  const faltantes: string[] = [];
+
+  if (meddicScore < minimos.meddicMinToWin) {
+    faltantes.push(
+      `El puntaje MEDDIC es ${meddicScore} y se necesitan ${minimos.meddicMinToWin} para marcar ganada.`,
+    );
+  }
+
+  const porComponente = new Map(assessments.map((a) => [a.component, a.status]));
+  for (const componente of OBLIGATORIOS_PARA_GANAR) {
+    const estado = porComponente.get(componente) ?? "NO_EVALUADO";
+    if (estado !== "CONFIRMADO") {
+      faltantes.push(
+        `${NOMBRE_COMPONENTE[componente]} está en ${NOMBRE_ESTADO[estado]} y debe estar Confirmado para poder ganar.`,
+      );
+    }
+  }
+
+  return faltantes;
+}
+
+/**
+ * RN-29 · la categoría «Compromiso» exige el mínimo. Es el gate que más le
+ * importa a Dirección: nadie mete un negocio al compromiso del trimestre sin
+ * MEDDIC. Es la diferencia entre un pronóstico y un deseo.
+ */
+export function puedeSerCompromiso(
+  meddicScore: number,
+  minimos: { meddicMinToCommit: number },
+): ResultadoValidacion {
+  if (meddicScore < minimos.meddicMinToCommit) {
+    return {
+      ok: false,
+      motivo: `El puntaje MEDDIC es ${meddicScore} y se necesitan ${minimos.meddicMinToCommit} para la categoría Compromiso.`,
+    };
+  }
+  return { ok: true };
+}
