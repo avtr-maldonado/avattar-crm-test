@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
+import { ContadorRubro } from "./ContadorRubro";
 
 /**
  * Los rubros de la barra lateral, con el estado activo.
@@ -27,8 +28,11 @@ import { clsx } from "clsx";
 export type Rubro = {
   href: string;
   etiqueta: string;
-  /** Pendientes que piden acción. Un cero no se pinta: sería ruido. */
-  contador?: number;
+  /**
+   * Pendientes que piden acción. Un cero no se pinta: sería ruido. Llega como
+   * promesa para que la barra no espere al conteo (`ContadorRubro`).
+   */
+  contador?: Promise<number>;
   /** Coral en vez de neutro. Para lo que tiene reloj corriendo. */
   urgente?: boolean;
 };
@@ -68,8 +72,9 @@ export function RubrosNavegacion({ rubros }: { rubros: Rubro[] }) {
 
               <span className="truncate">{r.etiqueta}</span>
 
-              {r.contador !== undefined && r.contador > 0 && (
-                <span
+              {r.contador && (
+                <ContadorRubro
+                  valor={r.contador}
                   className={clsx(
                     "tabular ml-auto rounded-pill px-1.5 py-0.5 text-xs font-semibold leading-none",
                     r.urgente
@@ -78,9 +83,7 @@ export function RubrosNavegacion({ rubros }: { rubros: Rubro[] }) {
                         ? "bg-acento/20 text-blue-200"
                         : "bg-navy-800 text-navy-300",
                   )}
-                >
-                  {r.contador}
-                </span>
+                />
               )}
             </Link>
           </li>

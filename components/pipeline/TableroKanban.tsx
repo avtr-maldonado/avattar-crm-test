@@ -137,9 +137,23 @@ export function TableroKanban({
 
   return (
     <>
-      {/* Un solo scroll horizontal para todo el tablero: si cada columna
-          tuviera el suyo, arrastrar una tarjeta entre etapas sería imposible. */}
-      <div className="flex gap-4 overflow-x-auto pb-4">
+      {/*
+        Todas las etapas caben en el ancho disponible, sin scroll horizontal:
+        una rejilla con tantas columnas iguales como etapas. Cada columna es un
+        contenedor de consulta CSS (`container-name: columna`) y la tarjeta se
+        compacta según el ancho que le toca —variante `col-angosta` en
+        tailwind.config.ts—, así que da igual si el pipeline tiene cinco etapas
+        o siete, o si la barra lateral está o no.
+
+        Bajo `lg` no hay ancho para leer cinco columnas lado a lado: las etapas
+        se apilan como franjas, en el mismo orden del proceso, y dentro de cada
+        franja las tarjetas fluyen en una rejilla. El arrastre entre franjas es
+        el mismo: son los mismos `section` con los mismos eventos.
+      */}
+      <div
+        className="grid gap-3 pb-4 lg:grid-cols-[repeat(var(--etapas),minmax(0,1fr))] xl:gap-4"
+        style={{ "--etapas": columnas.length } as React.CSSProperties}
+      >
         {columnas.map((c) => (
           <section
             key={c.etapaId}
@@ -158,22 +172,28 @@ export function TableroKanban({
               soltarEn(c);
             }}
             className={clsx(
-              "flex w-72 shrink-0 flex-col rounded-md transition-colors duration-rapido ease-estandar",
+              "flex flex-col rounded-md transition-colors duration-rapido ease-estandar",
+              "[container-name:columna] [container-type:inline-size]",
               sobre === c.etapaId && arrastrada?.etapaId !== c.etapaId
                 ? "bg-superficie-tinte ring-2 ring-acento"
                 : "bg-superficie-sutil",
             )}
           >
-            <header className="border-b border-borde px-3 py-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <h2 className="text-sm font-semibold text-texto-titulo">{c.nombre}</h2>
-                <span className="tabular text-xs text-texto-tenue">
+            {/* Lo que no cabe en una línea baja a la siguiente, en vez de
+                empujar el ancho de la columna: el conteo debajo del nombre, el
+                ponderado debajo del total. */}
+            <header className="border-b border-borde px-3 py-3 col-angosta:px-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                <h2 className="text-sm font-semibold leading-snug text-texto-titulo">{c.nombre}</h2>
+                <span className="tabular whitespace-nowrap text-xs text-texto-tenue">
                   {c.oportunidades.length} · {c.probabilidad}
                 </span>
               </div>
-              <div className="mt-1 flex items-baseline gap-2">
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
                 <span className="tabular text-sm font-semibold text-texto-titulo">{c.total}</span>
-                <span className="tabular text-xs text-texto-tenue">pond. {c.ponderado}</span>
+                <span className="tabular whitespace-nowrap text-xs text-texto-tenue">
+                  pond. {c.ponderado}
+                </span>
               </div>
               {/* La etapa de cierre se marca: es donde el gate es más exigente. */}
               <div
@@ -181,7 +201,9 @@ export function TableroKanban({
               />
             </header>
 
-            <div className="flex min-h-24 flex-col gap-2 p-2">
+            {/* En franja (bajo `lg`) las tarjetas fluyen en rejilla; en columna,
+                una debajo de otra. */}
+            <div className="grid min-h-24 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 p-2 lg:grid-cols-1 col-angosta:p-1.5">
               {c.oportunidades.map((o) => {
                 const moviendose = enviando && detenida?.tarjeta.id === o.id;
                 return (
@@ -212,7 +234,7 @@ export function TableroKanban({
               })}
 
               {c.oportunidades.length === 0 && (
-                <p className="px-2 py-6 text-center text-xs text-texto-tenue">
+                <p className="col-span-full px-2 py-6 text-center text-xs text-texto-tenue">
                   {sobre === c.etapaId ? "Soltar aquí" : "Sin oportunidades en esta etapa"}
                 </p>
               )}

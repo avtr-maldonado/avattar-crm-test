@@ -84,7 +84,8 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     riskFlags, folio. Servicios con transacción: opportunity, activity, contact,
                     product, quoteService, milestoneService, meddicService, document
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
-lib/auth/           session (getSessionResult con React.cache, requireSession) · permissions (can)
+lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
+                    permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission) · permissions (can)
 lib/policy/         lectura de CommercialPolicy y Country → INV-05
 lib/money/          Decimal y formateo → INV-03
 lib/filters/        definición y parseo de filtros → INV-10
@@ -213,6 +214,7 @@ Los demás lugares donde vive el contexto, y para quién:
 - `docs/decisiones-pendientes.md` — supuestos, y qué cuesta cambiarlos.
 - `.claude/skills/` y `.agents/skills/` — copias idénticas de skills de terceros, gestionadas por
   `skills-lock.json`. Se actualizan con el instalador (`npx skills check` / `update`), no a mano.
+  No se versionan (`.gitignore`): en un clon nuevo se reinstalan desde el lock.
 
 Latencia: la del servidor de desarrollo en `docs/latencia-dev.md`; la de la red hacia Supabase en
 `docs/latencia.md`.

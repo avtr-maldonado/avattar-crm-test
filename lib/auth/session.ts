@@ -27,17 +27,31 @@ export type ResultadoSesion =
  *
  * `cache` de React lo resuelve **una vez por request**. Sin eso, cada Server
  * Component que pregunta por la sesión abre dos consultas propias.
+ *
+ * ## Lo que cuesta
+ *
+ * Un solo viaje a la base: el perfil. La identidad se verifica en local
+ * (`getClaims`, abajo) y la matriz de permisos viene de la caché de proceso
+ * (`permisosDelRol`). Antes eran cuatro viajes en serie por request —
+ * ~1.1 s desde México — antes de tocar el negocio (docs/latencia-dev.md, §4).
  */
 export const getSessionResult = cache(async (): Promise<ResultadoSesion> => {
   const supabase = await createClient();
 
-  // getUser, no getSession: valida el token contra el servidor de autenticación
-  // en vez de confiar en la cookie, que el navegador puede haber alterado.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims, no getUser: verifica la firma del token en local con la clave
+  // pública del proyecto (ES256; el JWKS se trae una vez por proceso) en vez de
+  // viajar al servidor de autenticación en cada request. Sigue sin confiar en
+  // la cookie a ciegas: un token alterado no pasa la verificación. Si el token
+  // expiró lo renueva por dentro, y si la clave fuera simétrica cae a
+  // `getUser` por su cuenta.
+  const { data } = await supabase.auth.getClaims();
+  const claims = data?.claims;
 
-  if (!user) return { ok: false, causa: "NO_AUTENTICADO" };
+  if (!claims) return { ok: false, causa: "NO_AUTENTICADO" };
+
+  // `sub` es el id de `auth.users`; el correo viene en el token de Supabase.
+  const entraUserId = claims.sub;
+  const correo = typeof claims.email === "string" ? claims.email : undefined;
 
   // El vínculo es el object id de Entra, no el correo: un correo puede
   // reasignarse a otra persona, el object id no.
@@ -46,10 +60,10 @@ export const getSessionResult = cache(async (): Promise<ResultadoSesion> => {
       deletedAt: null,
       active: true,
       OR: [
-        { entraObjectId: user.id },
+        { entraObjectId: entraUserId },
         // Primer inicio de sesión: la fila se dio de alta con el correo, y el
         // object id se vincula en `vincularEntraObjectId`.
-        { entraObjectId: null, email: user.email ?? "__sin_correo__" },
+        { entraObjectId: null, email: correo ?? "__sin_correo__" },
       ],
     },
     select: {
@@ -63,13 +77,10 @@ export const getSessionResult = cache(async (): Promise<ResultadoSesion> => {
   });
 
   if (!perfil) {
-    return { ok: false, causa: "SIN_PERFIL", email: user.email ?? undefined };
+    return { ok: false, causa: "SIN_PERFIL", email: correo };
   }
 
-  const permisos = await prisma.rolePermission.findMany({
-    where: { role: perfil.role, granted: true },
-    select: { limitValue: true, permission: { select: { code: true } } },
-  });
+  const permisos = await permisosDelRol(perfil.role);
 
   return {
     ok: true,
@@ -79,13 +90,55 @@ export const getSessionResult = cache(async (): Promise<ResultadoSesion> => {
       name: perfil.name,
       role: perfil.role,
       countryCodes: perfil.countryCodes,
-      permissions: new Set(permisos.map((p) => p.permission.code)),
-      limits: Object.fromEntries(
-        permisos.map((p) => [p.permission.code, p.limitValue?.toString() ?? null]),
-      ),
+      permissions: new Set(permisos.map((p) => p.code)),
+      limits: Object.fromEntries(permisos.map((p) => [p.code, p.limitValue])),
     },
   };
 });
+
+/**
+ * Matriz de permisos por rol, en caché de proceso.
+ *
+ * La matriz cambia cuando Administración edita catálogos —casi nunca— y se
+ * leía en cada request: un viaje de ~440 ms desde México, en serie después del
+ * perfil (docs/latencia-dev.md, 4c). Se guarda por rol durante un minuto.
+ *
+ * El minuto no es un umbral de negocio (INV-05): es cuánto tarda en verse un
+ * cambio de permisos, que hoy ni siquiera tiene pantalla. Cuando la tenga, la
+ * acción que edite `RolePermission` debe llamar a `invalidarPermisosEnCache()`
+ * para que el cambio se vea en el acto en ese proceso.
+ *
+ * Es un `Map` a nivel de módulo: vive lo que vive el proceso de Node. Se cachea
+ * la lista plana y cada sesión arma su propio `Set`, para que ningún request
+ * comparta objetos mutables con otro.
+ */
+type PermisoConcedido = { code: string; limitValue: string | null };
+
+const PERMISOS_TTL_MS = 60_000;
+const permisosPorRol = new Map<Session["role"], { vigenteHasta: number; permisos: PermisoConcedido[] }>();
+
+async function permisosDelRol(role: Session["role"]): Promise<PermisoConcedido[]> {
+  const ahora = Date.now();
+  const enCache = permisosPorRol.get(role);
+  if (enCache && enCache.vigenteHasta > ahora) return enCache.permisos;
+
+  const filas = await prisma.rolePermission.findMany({
+    where: { role, granted: true },
+    select: { limitValue: true, permission: { select: { code: true } } },
+  });
+  const permisos = filas.map((p) => ({
+    code: p.permission.code,
+    limitValue: p.limitValue?.toString() ?? null,
+  }));
+
+  permisosPorRol.set(role, { vigenteHasta: ahora + PERMISOS_TTL_MS, permisos });
+  return permisos;
+}
+
+/** Vacía la caché de permisos. Llamar al editar `RolePermission`. */
+export function invalidarPermisosEnCache(): void {
+  permisosPorRol.clear();
+}
 
 /** La sesión, o `null`. Para cuando la ausencia es un caso válido. */
 export async function getSession(): Promise<Session | null> {

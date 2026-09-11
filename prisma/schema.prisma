@@ -18,7 +18,14 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // relationJoins · las relaciones anidadas viajan en UNA consulta (LATERAL
+  // JOIN con agregación JSON) en vez de una consulta por relación. El detalle
+  // de P-02 pedía once viajes, ~1.4 s de pura red desde México
+  // (docs/latencia.md, docs/latencia-dev.md 4d). Se activa al regenerar el
+  // cliente: `pnpm db:generate` con el dev apagado, porque el motor queda
+  // tomado mientras corre.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

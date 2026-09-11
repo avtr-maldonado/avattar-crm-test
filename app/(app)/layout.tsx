@@ -25,27 +25,32 @@ export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const session = await requireSession();
-  const contadores = await contadoresDeNavegacion(session);
+
+  // Sin `await`, a propósito: los contadores viajan como promesa hasta
+  // `ContadorRubro`, que los resuelve dentro de `Suspense`. Esperarlos aquí
+  // retrasaba toda la pantalla ~300 ms por la consulta, incluido el esqueleto
+  // de carga de la página (docs/latencia-dev.md, 4e).
+  const contadores = contadoresDeNavegacion(session);
 
   const comercial = [
     {
       href: "/oportunidades",
       etiqueta: "Oportunidades",
-      contador: contadores.oportunidades,
+      contador: contadores.then((c) => c.oportunidades),
     },
     { href: "/contactos", etiqueta: "Contactos" },
     { href: "/productos", etiqueta: "Productos" },
     {
       href: "/actividades",
       etiqueta: "Actividades",
-      contador: contadores.actividades,
+      contador: contadores.then((c) => c.actividades),
     },
     { href: "/objetivos", etiqueta: "Objetivos" },
     ...(can(session, "VER_ANALISIS") ? [{ href: "/analisis", etiqueta: "Análisis" }] : []),
     {
       href: "/autorizaciones",
       etiqueta: "Autorizaciones",
-      contador: contadores.autorizaciones,
+      contador: contadores.then((c) => c.autorizaciones),
       // Coral: tienen SLA corriendo (RN-21) y bloquean el avance a cierre.
       urgente: true,
     },

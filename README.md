@@ -120,7 +120,8 @@ sembrar; no es una regresión.
   hay que autorizarlo con `/mcp`) y `codebase-memory` (grafo del código y ADR;
   requiere el binario local, ver `docs/codebase-memory.md`).
 - `.claude/skills/` y `.agents/skills/` — copias idénticas de skills de terceros,
-  fijadas por `skills-lock.json`. Se actualizan con `npx skills`, no a mano.
+  fijadas por `skills-lock.json`. Se actualizan con `npx skills`, no a mano. No se
+  versionan: en un clon nuevo se reinstalan desde el lock con el mismo instalador.
 
 ## Decisiones que sorprenden si no se conocen
 

@@ -22,6 +22,14 @@ personas, pipeline, etapas, propietario, MEDDIC, cotizaciones, hitos,
 documentos, autorizaciones, historial—. Once viajes de ~130 ms explican el
 segundo y medio.
 
+**Corrección del 11 de septiembre de 2026.** Contadas con el log de consultas
+de Prisma, son **24**, no once: las relaciones anidadas dentro de otra
+—`committeeRole` en `people`, `fromStage`, `toStage` y `byUser` en
+`stageHistory`— suman la suya. Medido de nuevo contra la oportunidad con más
+relaciones, con el piso en 303 ms: **2 769 ms**. Con `relationJoins` activado
+en Prisma, 4 consultas y **327 ms**. El cómo y el estado de esa palanca están en
+`latencia-dev.md`, «Correcciones aplicadas».
+
 ## Qué NO hacer con esto
 
 No reestructurar la consulta persiguiendo este número. **En producción el

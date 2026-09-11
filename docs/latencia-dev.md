@@ -62,7 +62,8 @@ en el código.
 
 ### 2 · OneDrive está en la ruta de cada lectura — 7 veces más lento
 
-El repositorio vive en `C:\Users\…\OneDrive - AVATTAR\Escritorio\avattar-crm`.
+El repositorio vivía en `C:\Users\…\OneDrive - AVATTAR\Escritorio\avattar-crm`
+cuando se midió esto; el 10 de septiembre de 2026 se movió a `C:\dev\avattar-crm`.
 **Cada carpeta y cada archivo —incluidos `.next`, `node_modules` y `.git`—
 llevan el atributo `ReparsePoint`**: el controlador de archivos en la nube de
 OneDrive intercepta cada `stat`, `open` y `rename`. `node_modules` son 37 107
@@ -175,13 +176,72 @@ Supabase (con `getClaims` no cuesta red) y Storage sigue remoto por
 Por impacto sobre el tiempo que se pasa esperando, y por costo:
 
 1. **Mover el repo fuera de OneDrive** (causa 2). Cero código. Es lo que deja
-   sobrevivir la caché de webpack.
-2. **`--turbopack`** (causa 3). Una bandera.
-3. **`getClaims` + `matcher`** (4a, 4b). Dos líneas cada uno.
+   sobrevivir la caché de webpack. **Hecho el 10 de septiembre de 2026:** el repo
+   está en `C:\dev\avattar-crm`.
+2. **`--turbopack`** (causa 3). Una bandera. **Hecho el 11 de septiembre de 2026.**
+3. **`getClaims` + `matcher`** (4a, 4b). Dos líneas cada uno. **Hecho el 11 de
+   septiembre de 2026.**
 4. **Exclusiones de Bitdefender** (causa 1). Depende de TI; pedirlo hoy.
-5. **`relationJoins` y caché de permisos** (4c, 4d).
+5. **`relationJoins` y caché de permisos** (4c, 4d). **Hecho el 11 de septiembre
+   de 2026**; `relationJoins` queda escrito en el schema y se activa al correr
+   `pnpm db:generate` con el dev apagado. También 4e, los contadores en
+   `Suspense`, y la lista de P-01 en paralelo con las demás lecturas. Detalle en
+   «Correcciones aplicadas», abajo.
 6. **Base local** (4f) si después de lo anterior el piso de 287 ms sigue
    siendo el cuello. Casi seguro lo será para el detalle.
+
+## Correcciones aplicadas (11 de septiembre de 2026)
+
+Con el repo ya fuera de OneDrive se aplicaron las palancas de código de este
+documento. Ninguna cambia el comportamiento funcional; todas quitan viajes de
+red o esperas en serie.
+
+| | Cambio | Dónde |
+|---|---|---|
+| 3 | `next dev --turbopack` | `package.json` |
+| 4a | `getClaims()` en vez de `getUser()`: la firma ES256 se verifica en local con el JWKS (una clave EC P-256, traída una vez por proceso), sin viaje al servidor de autenticación. Si el token expiró lo renueva por dentro y las cookies salen por `setAll`, así que el middleware sigue haciendo su trabajo | `middleware.ts`, `lib/auth/session.ts` |
+| 4b | `matcher` que excluye `_next/` y `__nextjs` completos. Los prefetch `?_rsc=` siguen pasando, pero ya no cuestan red | `middleware.ts` |
+| 4c | Matriz de permisos por rol en caché de proceso, TTL 60 s. `invalidarPermisosEnCache()` queda para cuando exista el editor de `RolePermission` | `lib/auth/session.ts` |
+| 4d | `previewFeatures = ["relationJoins"]`. **Se activa al correr `pnpm db:generate` con el dev apagado**; hasta entonces el cliente sigue en `query` | `prisma/schema.prisma` |
+| 4e | Los contadores de la barra viajan como promesa y se resuelven dentro de `Suspense` (`ContadorRubro`); el layout ya no los espera | `app/(app)/layout.tsx`, `components/ui/` |
+| — | En P-01, `listOpportunities` se encadena solo a `getCountry` y corre en paralelo con las otras cuatro lecturas, en vez de después de las cinco | `app/(app)/oportunidades/page.tsx` |
+
+Lo que queda en la ruta crítica de cada request: **un** viaje a la base por el
+perfil (`prisma.user.findFirst`) más las lecturas de la propia pantalla. Antes
+eran cuatro en serie antes de tocar el negocio.
+
+### `relationJoins`, medido
+
+Contra la base real, con la oportunidad que más relaciones tiene
+(`OPP-2026-00490`) y la misma forma de `getOpportunityDetail`. Mediana con la
+conexión caliente: cinco corridas con `join`, diez con `query`. Piso de red ese
+día: 303 ms por viaje.
+
+| Estrategia | Consultas SQL | Detalle de P-02 |
+|---|---:|---:|
+| `query` (la de hoy) | 24 | **2 769 ms** |
+| `join` (`relationJoins`) | 4 | **327 ms** |
+
+No eran once viajes, eran veinticuatro: cada relación anidada dentro de otra
+—`committeeRole` dentro de `people`, `fromStage`, `toStage` y `byUser` dentro de
+`stageHistory`— suma la suya. Con `join` Postgres arma el JSON de su lado y el
+resultado viaja una vez.
+
+Se midió con un cliente generado aparte, fuera del repo, porque el dev tenía
+tomado el motor. Al correr `pnpm db:generate`, `pnpm test` debe pasar igual: la
+semántica es la misma, cambia el SQL.
+
+### Lo que sigue
+
+- **Exclusiones de Bitdefender** (causa 1). Depende de TI. Sin ellas cada
+  compilación sigue pagando 6.7 ms por archivo escrito.
+- **Base local** (4f). Con todo lo anterior, el piso de ~300 ms por viaje sigue
+  siendo el costo de cada lectura; una Postgres local lo baja a ~1 ms. Es un
+  cambio de entorno, no de código: `DATABASE_URL` y `DIRECT_URL` en
+  `.env.local`, aplicar `supabase/migrations/` y `pnpm db:seed`.
+- **Las recargas completas por «runtime error».** No se pueden diagnosticar sin
+  el servidor arriba. En la siguiente sesión de pruebas, guardar la consola del
+  navegador en la primera que aparezca: cada una vuelve a pagar la ruta entera.
 
 ## Reproducir
 

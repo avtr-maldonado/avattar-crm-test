@@ -42,13 +42,23 @@ export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
       // Los enlaces son arrastrables de nacimiento: sin esto el navegador
       // inicia su propio arrastre de la URL y pisa el del tablero.
       draggable={false}
-      className="block rounded-md border border-borde bg-superficie-tarjeta p-3 shadow-xs transition-shadow duration-rapido ease-estandar hover:shadow-sm"
+      // Tres líneas de nombre como máximo: en una columna angosta un nombre
+      // largo se comería la columna. El título completo queda en el `title`.
+      title={o.nombre}
+      className="block rounded-md border border-borde bg-superficie-tarjeta p-3 shadow-xs transition-shadow duration-rapido ease-estandar hover:shadow-sm col-angosta:p-2.5"
     >
-      <p className="text-sm font-medium leading-snug text-texto-titulo">{o.nombre}</p>
+      <p className="line-clamp-3 text-sm font-medium leading-snug text-texto-titulo col-angosta:text-xs">
+        {o.nombre}
+      </p>
       <p className="mt-0.5 truncate text-xs text-texto-tenue">{o.organizacion}</p>
 
-      <div className="mt-2 flex items-baseline justify-between gap-2">
-        <span className="tabular text-sm font-semibold text-texto-titulo">{o.importe}</span>
+      {/* Si importe y margen no caben juntos, el margen baja debajo del importe:
+          los dos siguen legibles y el color del margen sigue siendo lo primero
+          que se ve (§13.1). */}
+      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="tabular text-sm font-semibold text-texto-titulo col-angosta:text-xs">
+          {o.importe}
+        </span>
         {o.margen && (
           <span
             className={
@@ -62,8 +72,8 @@ export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-2">
-        <span className="tabular text-xs text-texto-tenue">{o.cierre}</span>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <span className="tabular whitespace-nowrap text-xs text-texto-tenue">{o.cierre}</span>
 
         <div className="ml-auto flex items-center gap-1.5">
           {o.meddicScore !== null && <PuntajeMeddic valor={o.meddicScore} />}

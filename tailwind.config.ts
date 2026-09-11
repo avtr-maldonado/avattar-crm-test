@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 /**
  * El tema **mapea** a las variables CSS de `app/globals.css`, no las duplica.
@@ -6,6 +7,19 @@ import type { Config } from "tailwindcss";
  * Los tokens del manual gráfico viven en un solo lugar (§13). Si aquí se
  * copiaran los hex, cambiar el manual obligaría a cambiar dos archivos y uno de
  * los dos se quedaría atrás.
+ *
+ * ## Variantes por ancho de contenedor
+ *
+ * `col-angosta:` aplica cuando la **columna del kanban** mide 171 px o menos,
+ * sin importar el viewport: con cinco etapas y la barra lateral, a 1024 px cada
+ * columna queda en ~130 px; a 1366, en ~200. Un breakpoint por viewport no
+ * sabría eso, porque el ancho real depende del número de etapas y de si la
+ * barra está. El contenedor lo declara `TableroKanban` con
+ * `[container-name:columna] [container-type:inline-size]`.
+ *
+ * El corte es donde el importe deja de caber a 14 px: 171 px de columna son
+ * ~131 px de contenido en la tarjeta, y «$2,850,000.00» en tabular pesa ~105.
+ * Debajo de eso la tarjeta baja a 12 px, que §13.2 admite en pantallas densas.
  */
 const config: Config = {
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
@@ -89,7 +103,11 @@ const config: Config = {
       transitionDuration: { rapido: "var(--dur-fast)", base: "var(--dur-base)" },
     },
   },
-  plugins: [],
+  plugins: [
+    plugin(({ addVariant }) => {
+      addVariant("col-angosta", "@container columna (max-width: 171px)");
+    }),
+  ],
 };
 
 export default config;

@@ -59,7 +59,9 @@ El índice es incremental: `index_repository` vuelve a leer solo lo que cambió.
 ## Recetas que sí funcionan
 
 El nombre del proyecto en el grafo es la ruta con guiones:
-`C-Users-MiguelMaldonado-OneDrive-AVATTAR-Escritorio-avattar-crm`. Las opciones
+`C-dev-avattar-crm` (hasta el 10 de septiembre de 2026, cuando el repo vivía en
+OneDrive, era `C-Users-MiguelMaldonado-OneDrive-AVATTAR-Escritorio-avattar-crm`).
+Las opciones
 de dirección son `inbound` (quién me llama), `outbound` (a quién llamo) y
 `both`; `callers`/`callees` no existen.
 

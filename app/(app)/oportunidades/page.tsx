@@ -71,15 +71,29 @@ export default async function PipelinePage({
   const paisActivo = session.countryCodes[0] ?? "MX";
 
   const puedeAsignar = can(session, "VER_OPORTUNIDADES_OFICINA");
+  const filtros = parseFilters(urlParams, session);
 
-  const [pipelines, politica, pais, catalogos, propietarios] = await Promise.all([
+  // El país arranca primero porque la lista lo necesita: `toWhere` traduce los
+  // preajustes de fecha con el mes de arranque del año fiscal. La lista se
+  // encadena a él y corre EN PARALELO con las demás lecturas, en vez de esperar
+  // a que terminen las cinco: un viaje menos en serie, ~650 ms desde México
+  // (docs/latencia-dev.md, §4).
+  const paisPromesa = getCountry(paisActivo);
+
+  const [pipelines, politica, pais, catalogos, propietarios, oportunidades] = await Promise.all([
     listPipelines(session),
     getCommercialPolicy(paisActivo),
-    getCountry(paisActivo),
+    paisPromesa,
     catalogosParaAlta(),
     // Solo si de verdad puede asignar: consultar usuarios para deshabilitar un
     // control sería pagar por una lista que nadie va a poder usar (Q-13).
     puedeAsignar ? destinatariosValidos(paisActivo) : Promise.resolve([]),
+    paisPromesa.then((p) =>
+      listOpportunities(session, {
+        where: toWhere(filtros, session, { fiscalYearStartMonth: p.fiscalYearStartMonth }),
+        orderBy: [{ amount: "desc" }],
+      }),
+    ),
   ]);
 
   /**
@@ -118,13 +132,6 @@ export default async function PipelinePage({
   // El mismo país que la política y el selector del encabezado. Pasarlo
   // explícitamente es lo que impide que el tablero y la política se separen.
   const pipeline = pipelinePorOmision(pipelines, session, paisActivo);
-  const filtros = parseFilters(urlParams, session);
-  const opciones = { fiscalYearStartMonth: pais.fiscalYearStartMonth };
-
-  const oportunidades = await listOpportunities(session, {
-    where: toWhere(filtros, session, opciones),
-    orderBy: [{ amount: "desc" }],
-  });
 
   const ahora = new Date();
   const conBanderas = oportunidades.map((o) => ({

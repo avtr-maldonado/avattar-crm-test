@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
+import { ContadorRubro } from "./ContadorRubro";
 import type { Rubro } from "./RubrosNavegacion";
 
 /**
@@ -63,15 +64,14 @@ export function NavegacionAngosta({ rubros }: { rubros: Rubro[] }) {
                     )}
                   />
                   {r.etiqueta}
-                  {r.contador !== undefined && r.contador > 0 && (
-                    <span
+                  {r.contador && (
+                    <ContadorRubro
+                      valor={r.contador}
                       className={clsx(
                         "tabular rounded-pill px-1.5 py-0.5 text-xs font-semibold leading-none",
                         r.urgente ? "bg-coral/20 text-coral" : "bg-navy-800 text-navy-300",
                       )}
-                    >
-                      {r.contador}
-                    </span>
+                    />
                   )}
                 </Link>
               </li>
