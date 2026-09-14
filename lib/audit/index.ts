@@ -52,7 +52,11 @@ export type AuditAction =
   | "CAMBIAR_PROPIETARIO"
   | "EDITAR_POLITICA_COMERCIAL"
   | "MARCAR_GANADA"
-  | "MARCAR_PERDIDA";
+  | "MARCAR_PERDIDA"
+  // Módulo de usuarios: quién puede entrar y con qué rol es tan sensible como
+  // cualquier otra de esta lista, aunque INV-09 no lo enumerara al escribirse.
+  | "CREAR_USUARIO"
+  | "EDITAR_USUARIO";
 
 export type AuditEntry = {
   /** El modelo, en singular y como lo llama Prisma: "Opportunity", "Quote". */

@@ -1,6 +1,6 @@
 import { forbidden } from "next/navigation";
 import { requireSession } from "@/lib/auth/session";
-import { can } from "@/lib/auth/permissions";
+import { can, type Session } from "@/lib/auth/permissions";
 import {
   configuracionDeCatalogos,
   configuracionDePermisos,
@@ -8,11 +8,14 @@ import {
   configuracionDePolitica,
   usuariosPorRol,
 } from "@/lib/scope/configuracion";
+import { autenticadosSinPerfil, listUsuarios } from "@/lib/scope/usuarios";
 import { formatPercent, toClient } from "@/lib/money";
 import { ETIQUETA_ROL, iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
-import { Pastilla } from "@/components/ui/primitivas";
+import { Avatar, Pastilla } from "@/components/ui/primitivas";
 import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
+import { FormularioDeUsuario } from "@/components/admin/FormularioDeUsuario";
+import { crearUsuarioAccion, darAccesoAccion, editarUsuarioAccion } from "./acciones";
 
 /**
  * P-11 · Administración.
@@ -31,11 +34,18 @@ import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
  * están marcados, para que revisarlos sea leer una pantalla en vez de perseguir
  * un documento.
  *
- * ## En E1 es de lectura
+ * ## Pipelines, catálogos y política siguen en lectura
  *
- * §17 asigna a E1 «P-11 pipelines y catálogos». Editar es una mutación con
+ * §17 asigna a E1 «P-11 pipelines y catálogos». Editarlos es una mutación con
  * bitácora en la misma transacción (INV-09) y llega con el resto de las
  * acciones. Mientras tanto, ver la configuración ya permite confirmarla.
+ *
+ * ## Usuarios sí se administran desde aquí
+ *
+ * El alta de usuarios es un acto administrativo (diseño §3.2): no hay
+ * autoaprovisionamiento. La pestaña Usuarios es ese acto, con permiso propio
+ * (`ADMINISTRAR_USUARIOS`): alta previa por correo, edición de rol y países, y
+ * acceso para quien ya entró con Microsoft y cayó en «sin acceso».
  */
 const PESTANAS_BASE = [
   { clave: "pipelines", etiqueta: "Pipelines y etapas" },
@@ -54,13 +64,15 @@ export default async function AdminPage({
 
   const puedeConfigurar = can(session, "EDITAR_CATALOGOS");
   const puedeVerPolitica = can(session, "EDITAR_POLITICA_COMERCIAL");
+  const puedeAdministrarUsuarios = can(session, "ADMINISTRAR_USUARIOS");
 
   // §11 · «Solo ADMINISTRADOR; la política comercial también para DIRECCION.»
   // 403 real, no una pantalla informativa con estatus 200 (AC-02).
-  if (!puedeConfigurar && !puedeVerPolitica) forbidden();
+  if (!puedeConfigurar && !puedeVerPolitica && !puedeAdministrarUsuarios) forbidden();
 
   const pestanas: Pestana[] = [
     ...(puedeConfigurar ? PESTANAS_BASE.map((p) => ({ ...p })) : []),
+    ...(puedeAdministrarUsuarios ? [{ clave: "usuarios", etiqueta: "Usuarios" }] : []),
     ...(puedeVerPolitica ? [{ clave: "politica", etiqueta: "Política comercial" }] : []),
   ];
 
@@ -85,13 +97,16 @@ export default async function AdminPage({
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="rounded-md border border-blue-200 bg-superficie-tinte px-4 py-3 text-sm text-texto-cuerpo">
-          En este incremento la configuración es de <strong>solo lectura</strong>.
-          Editarla escribe en la bitácora de auditoría dentro de la misma
-          transacción, y llega con las acciones de escritura.
-        </div>
+        {activa !== "usuarios" && (
+          <div className="rounded-md border border-blue-200 bg-superficie-tinte px-4 py-3 text-sm text-texto-cuerpo">
+            Pipelines, catálogos y política comercial son de <strong>solo lectura</strong> en
+            este incremento. Editarlos escribe en la bitácora dentro de la misma
+            transacción, y llega con las acciones de escritura. Los usuarios ya se
+            administran desde su pestaña.
+          </div>
+        )}
 
-        <div className="mt-6">
+        <div className={activa === "usuarios" ? undefined : "mt-6"}>
           <Pestanas
             pestanas={pestanas}
             activa={activa}
@@ -103,6 +118,7 @@ export default async function AdminPage({
           {activa === "pipelines" && <TabPipelines />}
           {activa === "catalogos" && <TabCatalogos />}
           {activa === "permisos" && <TabPermisos />}
+          {activa === "usuarios" && <TabUsuarios session={session} />}
           {activa === "politica" && <TabPolitica />}
         </div>
       </div>
@@ -378,6 +394,159 @@ async function TabPermisos() {
     </section>
   );
 }
+
+// ─────────────────────────────────────────────────────────────── Usuarios
+
+/**
+ * Quién puede entrar y con qué alcance.
+ *
+ * Primero lo que pide acción: quienes ya entraron con Microsoft y no tienen
+ * perfil. Cayeron en «sin acceso» y están esperando a que alguien los vea. Si
+ * no hay ninguno, la sección no aparece: un bloque vacío que dice «no hay
+ * pendientes» es ruido en una pantalla que se abre poco.
+ */
+async function TabUsuarios({ session }: { session: Session }) {
+  const [usuarios, pendientes] = await Promise.all([
+    listUsuarios(session),
+    autenticadosSinPerfil(session),
+  ]);
+
+  return (
+    <div className="space-y-6">
+      {pendientes.length > 0 && (
+        <section className="rounded-md border border-borde bg-superficie-tarjeta p-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-texto-titulo">
+              Entraron con Microsoft y no tienen perfil
+            </h2>
+            <Pastilla tono="alerta">
+              {pendientes.length} {pendientes.length === 1 ? "pendiente" : "pendientes"}
+            </Pastilla>
+          </div>
+          <p className="mt-0.5 text-xs text-texto-tenue">
+            Vieron la pantalla de «sin acceso». Al darles rol y país quedan vinculados y su
+            siguiente ingreso ya entra.
+          </p>
+
+          <ul className="mt-3 divide-y divide-borde">
+            {pendientes.map((p) => (
+              <li key={p.authUserId} className="flex flex-wrap items-center gap-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-texto-titulo">
+                    {p.name ?? p.email}
+                  </p>
+                  <p className="truncate text-xs text-texto-tenue">
+                    {p.email}
+                    {p.lastSignInAt && ` · entró ${FECHA.format(p.lastSignInAt)}`}
+                  </p>
+                </div>
+                <FormularioDeUsuario
+                  modo="acceso"
+                  pendiente={{ authUserId: p.authUserId, email: p.email, name: p.name }}
+                  accion={darAccesoAccion}
+                  variante="primario"
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="rounded-md border border-borde bg-superficie-tarjeta">
+        <div className="flex flex-wrap items-center gap-3 border-b border-borde px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-texto-titulo">Usuarios</h2>
+            <p className="mt-0.5 text-xs text-texto-tenue">
+              El alta es administrativa: nadie entra sin un perfil creado aquí. El vínculo con
+              Microsoft se hace solo en el primer ingreso.
+            </p>
+          </div>
+          <FormularioDeUsuario modo="alta" accion={crearUsuarioAccion} />
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead className="bg-superficie-sutil">
+              <tr className="text-left">
+                <Th>Usuario</Th>
+                <Th>Rol</Th>
+                <Th>Países</Th>
+                <Th>Microsoft</Th>
+                <Th>Estado</Th>
+                <Th alineacion="derecha">&nbsp;</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {usuarios.map((u) => (
+                <tr key={u.id} className="border-t border-borde">
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <Avatar iniciales={u.initials} titulo={u.name} />
+                      <div className="min-w-0">
+                        <p className={`truncate font-medium ${u.active ? "text-texto-titulo" : "text-texto-tenue"}`}>
+                          {u.name}
+                          {u.id === session.userId && (
+                            <span className="ml-2 text-xs font-normal text-texto-tenue">tú</span>
+                          )}
+                        </p>
+                        <p className="truncate text-xs text-texto-tenue">{u.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">{ETIQUETA_ROL[u.role]}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex flex-wrap gap-1">
+                      {u.countryCodes.map((p) => (
+                        <Pastilla key={p}>{p}</Pastilla>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {u.vinculado ? (
+                      <Pastilla tono="exito">Vinculado</Pastilla>
+                    ) : (
+                      <span className="text-xs text-texto-tenue">Pendiente de primer ingreso</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    {u.active ? (
+                      <span className="text-xs text-texto-cuerpo">Con acceso</span>
+                    ) : (
+                      <Pastilla tono="peligro">Sin acceso</Pastilla>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <FormularioDeUsuario
+                      modo="edicion"
+                      usuario={{
+                        id: u.id,
+                        email: u.email,
+                        name: u.name,
+                        role: u.role,
+                        countryCodes: u.countryCodes,
+                        active: u.active,
+                        esYo: u.id === session.userId,
+                      }}
+                      accion={editarUsuarioAccion}
+                      variante="fantasma"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const FECHA = new Intl.DateTimeFormat("es-MX", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
 
 // ─────────────────────────────────────────────────────── Política comercial
 

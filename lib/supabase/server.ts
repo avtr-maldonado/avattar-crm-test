@@ -1,6 +1,10 @@
 import { createServerClient, type SetAllCookies } from "@supabase/ssr";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+
+// El cliente con `service_role` vive en `./admin`, sin `next/headers`, para
+// que los lectores que lo usan se prueben fuera de Next. Se reexporta aquí
+// para no mover a quienes ya lo importaban de este módulo.
+export { createServiceRoleClient } from "./admin";
 
 /**
  * Cliente de Supabase para Server Components y Route Handlers.
@@ -32,21 +36,5 @@ export async function createClient() {
         }) satisfies SetAllCookies,
       },
     },
-  );
-}
-
-/**
- * Cliente con `service_role`. Bypassa RLS por completo.
- *
- * Solo para operaciones administrativas de Supabase que la clave `anon` no
- * puede hacer — por ejemplo firmar URLs de Storage o dar de alta un usuario.
- * NUNCA para leer datos de negocio: eso rompería INV-01 saltándose `lib/scope`.
- * Nunca importar desde un Client Component.
- */
-export function createServiceRoleClient() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } },
   );
 }

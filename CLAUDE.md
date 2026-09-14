@@ -79,10 +79,11 @@ singular.
 lib/db.ts           PrismaClient · SOLO lib/scope y lib/domain pueden importarlo
 lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un lector por pantalla:
                     opportunities, opportunityDetail, organizations, people, productos,
-                    cotizaciones, documentos, agenda, contadores, configuracion, pipelines
+                    cotizaciones, documentos, agenda, contadores, configuracion, pipelines,
+                    usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
                     riskFlags, folio. Servicios con transacción: opportunity, activity, contact,
-                    product, quoteService, milestoneService, meddicService, document
+                    product, quoteService, milestoneService, meddicService, document, usuario
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
 lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
                     permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission) · permissions (can)
@@ -93,7 +94,7 @@ lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cer
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
 components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
-components/{pipeline,oportunidad,contactos,productos,cotizacion}/   componentes por pantalla
+components/{pipeline,oportunidad,contactos,productos,cotizacion,admin}/   componentes por pantalla
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
 app/salud/          GET público de diagnóstico: ¿base alcanzable? ¿qué variables existen? (lib/domain/salud)

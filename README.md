@@ -173,7 +173,8 @@ que revisar cuando el inicio de sesión no entra, en este orden:
 
 - ✅ **E0** cimientos · **E1** núcleo comercial: kanban y tabla con arrastre,
   alta en modal, detalle con edición, cambio de etapa y actividades, contactos,
-  productos.
+  productos. Administración de usuarios: alta previa por correo, edición de rol y
+  países, y acceso para quien ya entró con Microsoft sin perfil.
 - ✅ De **E2**, el cotizador: líneas, congelar, versionar, alertas de política.
 - ✅ De **E3**, las pestañas MEDDIC, hitos y documentos.
 - ⬜ Barra de filtros de §9 (deuda de E0), marcar ganada/perdida, E4 medición,

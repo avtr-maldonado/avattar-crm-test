@@ -35,9 +35,9 @@ export default async function SinAccesoPage() {
         <div className="mt-6 rounded-sm bg-superficie-tinte p-4 text-sm">
           <p className="font-semibold text-texto-titulo">Qué hacer</p>
           <p className="mt-1 text-texto-cuerpo">
-            Pide a Administración que te den de alta con este correo y con tu rol
-            y país. En cuanto exista el perfil, vuelve a entrar y ya no verás
-            esta pantalla.
+            Administración ya puede verte en su lista de pendientes de acceso y
+            asignarte rol y país. Avísales; en cuanto lo hagan, vuelve a entrar y
+            ya no verás esta pantalla.
           </p>
         </div>
 
