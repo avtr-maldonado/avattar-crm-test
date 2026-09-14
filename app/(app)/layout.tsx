@@ -32,6 +32,11 @@ export default async function AppLayout({
   // de carga de la página (docs/latencia-dev.md, 4e).
   const contadores = contadoresDeNavegacion(session);
 
+  // Objetivos (P-08, E4) y Autorizaciones (P-10, fuera de este alcance) no
+  // están en la lista a propósito: sus rutas todavía no existen, y un rubro
+  // que lleva a un 404 enseña a desconfiar del menú. Al volver, Autorizaciones
+  // va con `contador: contadores.then((c) => c.autorizaciones)` y `urgente`,
+  // porque tienen SLA corriendo (RN-21); el lector ya calcula ese conteo.
   const comercial = [
     {
       href: "/oportunidades",
@@ -45,15 +50,7 @@ export default async function AppLayout({
       etiqueta: "Actividades",
       contador: contadores.then((c) => c.actividades),
     },
-    { href: "/objetivos", etiqueta: "Objetivos" },
     ...(can(session, "VER_ANALISIS") ? [{ href: "/analisis", etiqueta: "Análisis" }] : []),
-    {
-      href: "/autorizaciones",
-      etiqueta: "Autorizaciones",
-      contador: contadores.then((c) => c.autorizaciones),
-      // Coral: tienen SLA corriendo (RN-21) y bloquean el avance a cierre.
-      urgente: true,
-    },
   ];
 
   const sistema = can(session, "EDITAR_CATALOGOS")
