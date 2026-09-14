@@ -32,6 +32,7 @@ export default async function AnalisisPage() {
         subtitulo="Dirección · Rentabilidad · Facturación esperada"
         usuario={{
           nombre: session.name,
+          correo: session.email,
           iniciales: iniciales(session.name),
           rol: session.role,
           paises: session.countryCodes,

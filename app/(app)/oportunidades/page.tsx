@@ -215,6 +215,7 @@ export default async function PipelinePage({
         ].join(" · ")}
         usuario={{
           nombre: session.name,
+          correo: session.email,
           iniciales: iniciales(session.name),
           rol: session.role,
           paises: session.countryCodes,

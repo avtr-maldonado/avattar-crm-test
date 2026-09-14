@@ -609,3 +609,47 @@ cuadrado: son dos mensajes distintos en la pestaña, porque llevan a dos
 acciones distintas —congelar una cotización, o repartir lo que falta—.
 
 **Dónde vive:** `cuadreDeHitos` en `lib/domain/milestone.ts`.
+
+---
+
+## 14. Altas desde la pantalla de Contactos (11 de septiembre de 2026)
+
+P-03 ganó dos botones: «Nueva cuenta» en Organizaciones y «Agregar contacto» en
+Personas. Hasta entonces una organización solo nacía en línea dentro del alta
+de oportunidad, y una persona solo desde la ficha de su empresa o el detalle.
+Tres reglas se derivaron al construirlos; ninguna está en el spec.
+
+### El país de la cuenta nueva sale de la sesión
+
+Si quien la crea opera en un solo país, no se pregunta. Si opera en varios,
+elige entre los suyos y nada más. Es la misma regla del alta en línea de
+oportunidad, que ahí resuelve la ambigüedad con el país del pipeline; aquí no
+hay pipeline y se pregunta. El servicio vuelve a comprobarlo (`AC-05`).
+
+### El propietario es quien la crea
+
+«La empresa que un vendedor da de alta es suya: es quien la trabaja», igual que
+en el alta en línea. Reasignarla es de Gerencia (`Q-13`, `Q-14`) y se hace desde
+«Editar cuenta», que ya valida que el destinatario opere en ese país.
+
+### Un nombre repetido en el mismo país se rechaza, aunque no veas la existente
+
+`crearOrganizacion` compara el nombre sin distinguir mayúsculas contra todas
+las cuentas del país, **sin aplicar el alcance por rol**, y responde «Ya existe
+una cuenta llamada … en México». Revela que la cuenta existe aunque la sesión
+no la alcance. Es la misma decisión de §11.1 para el alta de oportunidad: el
+duplicado partiría el histórico de la cuenta para siempre y la fuga del nombre
+no cuesta nada comparable. Solo el nombre: nunca el propietario ni cifras.
+
+El mismo nombre en otro país sí se permite: son carteras distintas (`AC-05`).
+
+**Dónde vive:** `crearOrganizacion` en `lib/domain/contact.ts`.
+**Costo de cambiarlo:** quitar la consulta `homonima`, o pasarla por
+`withOrganizationScope` si se prefiere que solo detecte lo que la sesión ve.
+
+### Agregar contacto desde Personas elige la empresa entre las que alcanzas
+
+El formulario ofrece las cuentas que la sesión ya tiene en la otra pestaña,
+filtradas en el cliente. Agregar gente exige alcanzar la cuenta (`Q-15`), así
+que no tendría sentido ofrecer una que después el servidor va a rechazar. No se
+crea la empresa desde ahí: para eso está el otro botón.

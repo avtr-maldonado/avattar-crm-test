@@ -4,12 +4,13 @@ import { listOrganizationsConIndicadores } from "@/lib/scope/organizationIndicat
 import { listPersonas } from "@/lib/scope/people";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
 import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
-import { EditarPersona } from "@/components/contactos/EditarPersona";
-import { editarPersonaAccion } from "./acciones";
+import { EditarOrganizacion } from "@/components/contactos/EditarOrganizacion";
+import { EditarPersona, type CuentaElegible } from "@/components/contactos/EditarPersona";
+import { crearOrganizacionAccion, crearPersonaAccion, editarPersonaAccion } from "./acciones";
 import { formatUSD } from "@/lib/money";
 import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
-import { Avatar, Boton, EstadoVacio, Pastilla, StatTile } from "@/components/ui/primitivas";
+import { Avatar, EstadoVacio, Pastilla, StatTile } from "@/components/ui/primitivas";
 
 /**
  * P-03 · Contactos.
@@ -62,6 +63,32 @@ export default async function ContactosPage({
     esCuentaFria(o.indicadores.ultimaActividad, ahora),
   );
 
+  // Las cuentas entre las que se elige al agregar un contacto desde Personas.
+  // Son las que la sesión alcanza: agregar gente exige alcanzar la cuenta
+  // (Q-15), y la lista ya está cargada para la otra pestaña.
+  const cuentasParaElegir: CuentaElegible[] = organizaciones.map((o) => ({
+    id: o.id,
+    name: o.name,
+    detalle: [ETIQUETA_TIPO[o.type], o.city].filter(Boolean).join(" · "),
+  }));
+
+  // El alta de cada pestaña. Se pinta una sola vez: en la fila de herramientas
+  // cuando hay filas, y dentro del estado vacío cuando no las hay, porque el
+  // estado vacío propone la acción siguiente y no hace falta decirlo dos veces.
+  const botonDeAlta =
+    pestanaActiva === "personas" ? (
+      <EditarPersona
+        organizaciones={cuentasParaElegir}
+        rolesDeComite={catalogos.rolesComite}
+        accion={crearPersonaAccion}
+        variante="primario"
+      />
+    ) : (
+      <EditarOrganizacion paises={session.countryCodes} accion={crearOrganizacionAccion} />
+    );
+  const hayFilas =
+    pestanaActiva === "personas" ? personas.length > 0 : organizaciones.length > 0;
+
   return (
     <>
       <BarraSuperior
@@ -69,6 +96,7 @@ export default async function ContactosPage({
         subtitulo={`${organizaciones.length} cuentas · ${personas.length} personas · ${conPipeline.length} con pipeline abierto`}
         usuario={{
           nombre: session.name,
+          correo: session.email,
           iniciales: iniciales(session.name),
           rol: session.role,
           paises: session.countryCodes,
@@ -82,10 +110,13 @@ export default async function ContactosPage({
           hrefDe={(clave) => `/contactos?t=${clave}`}
         />
 
+        {hayFilas && <div className="mt-4 flex justify-end">{botonDeAlta}</div>}
+
         {pestanaActiva === "personas" ? (
           <TablaDePersonas
             personas={personas}
             rolesDeComite={catalogos.rolesComite}
+            accionVacia={botonDeAlta}
           />
         ) : (
         <>
@@ -118,12 +149,8 @@ export default async function ContactosPage({
           <div className="mt-6">
             <EstadoVacio
               titulo="No hay cuentas que puedas ver"
-              explicacion="Ves una cuenta si eres su propietario o si tienes al menos una oportunidad propia en ella. Si esperabas ver alguna, revisa a quién está asignada."
-              accion={
-                <Boton href="/oportunidades" variante="secundario">
-                  Ir al pipeline
-                </Boton>
-              }
+              explicacion="Ves una cuenta si eres su propietario o si tienes al menos una oportunidad propia en ella. Si esperabas ver alguna, revisa a quién está asignada; si es nueva, créala aquí."
+              accion={botonDeAlta}
             />
           </div>
         ) : (
@@ -215,21 +242,20 @@ export default async function ContactosPage({
 function TablaDePersonas({
   personas,
   rolesDeComite,
+  accionVacia,
 }: {
   personas: Awaited<ReturnType<typeof listPersonas>>;
   rolesDeComite: { id: string; name: string }[];
+  /** El alta, para que el estado vacío proponga la acción siguiente. */
+  accionVacia: React.ReactNode;
 }) {
   if (personas.length === 0) {
     return (
       <div className="mt-6">
         <EstadoVacio
           titulo="No hay personas capturadas"
-          explicacion="Los contactos se agregan desde la ficha de su empresa, o al dar de alta una oportunidad."
-          accion={
-            <Boton href="/contactos" variante="secundario">
-              Ver organizaciones
-            </Boton>
-          }
+          explicacion="Agrega el primer contacto desde aquí, desde la ficha de su empresa, o al dar de alta una oportunidad."
+          accion={accionVacia}
         />
       </div>
     );

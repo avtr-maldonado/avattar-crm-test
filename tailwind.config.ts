@@ -101,6 +101,16 @@ const config: Config = {
       },
       transitionTimingFunction: { estandar: "var(--ease-standard)" },
       transitionDuration: { rapido: "var(--dur-fast)", base: "var(--dur-base)" },
+      // Un panel que aparece en respuesta a un clic: cae 4 px y se hace visible
+      // en el tiempo «rápido». Es la única animación de entrada de la interfaz;
+      // `prefers-reduced-motion` la anula desde globals.css.
+      keyframes: {
+        aparecer: {
+          from: { opacity: "0", transform: "translateY(-4px)" },
+          to: { opacity: "1", transform: "none" },
+        },
+      },
+      animation: { aparecer: "aparecer var(--dur-fast) var(--ease-standard) both" },
     },
   },
   plugins: [
