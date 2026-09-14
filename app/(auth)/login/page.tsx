@@ -52,7 +52,10 @@ function BotonPlaceholder() {
 function BotonEntrar() {
   const searchParams = useSearchParams();
   const [entrando, setEntrando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // El callback y el proveedor devuelven aquí con `?error=`: el intercambio del
+  // código que falló, la base que no respondió. Si no se leyera, esas fallas se
+  // verían como una pantalla de login sin explicación.
+  const [error, setError] = useState<string | null>(() => searchParams.get("error"));
 
   // A dónde iba el usuario antes de que el middleware lo mandara aquí.
   const destino = searchParams.get("destino") ?? "/oportunidades";

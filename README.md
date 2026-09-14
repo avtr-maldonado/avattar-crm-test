@@ -97,6 +97,34 @@ Las pruebas de integración leen la base real. Si se vaciaron las oportunidades
 para probar el alta, unas 40 pruebas del escenario §15 fallan hasta volver a
 sembrar; no es una regresión.
 
+## Despliegue en Vercel
+
+El proyecto de prueba vive en `https://avattar-crm-test.vercel.app`. Lo que hay
+que revisar cuando el inicio de sesión no entra, en este orden:
+
+1. **`GET /salud`** en el despliegue. Es pública y responde si la base es
+   alcanzable desde la función y qué variables de entorno existen en **ese**
+   despliegue, sin sus valores. Un 503 con `Environment variable not found`
+   es una variable que no llegó; `Can't reach database server` es un host
+   equivocado, casi siempre la conexión directa `db.<ref>.supabase.co`, que es
+   solo IPv6 y las funciones de Vercel no la alcanzan; `could not locate the
+   Query Engine` es el motor de Prisma fuera del paquete.
+2. **Variables** en Settings → Environment Variables, para *Production* y
+   *Preview*: las cinco de `.env.example`. `DATABASE_URL` va al pooler en
+   6543 con `?pgbouncer=true`. Un cambio de variables **no aplica al despliegue
+   vigente**: hay que redesplegar.
+3. **Redirect URLs** en Supabase → Authentication → URL Configuration. El Site
+   URL es el dominio de producción; además hacen falta
+   `http://localhost:3000/**` para el desarrollo local y
+   `https://avattar-crm-test-*-miguel-maldonado.vercel.app/**` para las vistas
+   previa. Sin ellas Supabase manda el código al Site URL y la raíz lo descarta.
+4. Si el callback falla después del intercambio del código, ya no responde
+   500: manda a `/login?error=` con la causa, y la pantalla de login la muestra.
+   Los logs de autenticación de Supabase (`auth_logs`) muestran el
+   `POST /token grant_type=pkce`: un 200 seguido de un 404
+   `flow_state_not_found` segundos después es alguien recargando la página de
+   error con un código ya consumido.
+
 ## Documentos
 
 | | |
@@ -151,5 +179,6 @@ sembrar; no es una regresión.
 - ⬜ Barra de filtros de §9 (deuda de E0), marcar ganada/perdida, E4 medición,
   E5 regional. Autorizaciones de descuento fuera de este alcance.
 - ⚠️ El bucket `documentos` de Storage está en **público**; debe ser privado
-  (`Q-17`). El despliegue en Vercel devolvía 500 en el callback de login;
-  sospecha: falta `DIRECT_URL` en sus variables.
+  (`Q-17`). El despliegue en Vercel devolvía 500 en el callback de login porque
+  Prisma fallaba antes de conectar; `GET /salud` dice por qué (ver «Despliegue»).
+  No es por `DIRECT_URL`: sin ella el cliente funciona igual en tiempo de ejecución.
