@@ -62,8 +62,13 @@ export const getSessionResult = cache(async (): Promise<ResultadoSesion> => {
       OR: [
         { entraObjectId: entraUserId },
         // Primer inicio de sesión: la fila se dio de alta con el correo, y el
-        // object id se vincula en `vincularEntraObjectId`.
-        { entraObjectId: null, email: correo ?? "__sin_correo__" },
+        // object id se vincula en `vincularEntraObjectId`. Sin distinguir
+        // mayúsculas: Microsoft puede devolver el correo con otra capitalización
+        // que la capturada al dar de alta.
+        {
+          entraObjectId: null,
+          email: { equals: correo ?? "__sin_correo__", mode: "insensitive" },
+        },
       ],
     },
     select: {
@@ -169,7 +174,12 @@ export async function vincularEntraObjectId(
   entraObjectId: string,
 ): Promise<boolean> {
   const r = await prisma.user.updateMany({
-    where: { email, entraObjectId: null, deletedAt: null, active: true },
+    where: {
+      email: { equals: email, mode: "insensitive" },
+      entraObjectId: null,
+      deletedAt: null,
+      active: true,
+    },
     data: { entraObjectId },
   });
   return r.count === 1;

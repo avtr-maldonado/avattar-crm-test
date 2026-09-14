@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { estadoDeLaBase } from "@/lib/domain/salud";
+import { estadoDeLaBase, formaDeDatabaseUrl } from "@/lib/domain/salud";
 
 /**
  * `GET /salud` · diagnóstico del despliegue.
@@ -35,6 +35,8 @@ export async function GET() {
     {
       ok: base.alcanzable,
       base,
+      // Sin credenciales: protocolo, host, puerto y una pista si la forma está mal.
+      databaseUrl: formaDeDatabaseUrl(),
       variablesDefinidas: Object.fromEntries(VARIABLES.map((n) => [n, Boolean(process.env[n])])),
       entorno: {
         node: process.version,

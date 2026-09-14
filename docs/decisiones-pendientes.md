@@ -653,3 +653,48 @@ El formulario ofrece las cuentas que la sesión ya tiene en la otra pestaña,
 filtradas en el cliente. Agregar gente exige alcanzar la cuenta (`Q-15`), así
 que no tendría sentido ofrecer una que después el servidor va a rechazar. No se
 crea la empresa desde ahí: para eso está el otro botón.
+
+---
+
+## 15. Módulo de usuarios (14 de septiembre de 2026)
+
+Administración ganó la pestaña Usuarios: alta previa de perfiles por correo,
+edición de rol, países y estado, y acceso para quien ya entró con Microsoft y
+cayó en «sin acceso». Confirma la decisión del diseño §3.2 —el alta es un acto
+administrativo, no hay autoaprovisionamiento— y le da pantalla. Cuatro cosas se
+decidieron al construirlo.
+
+### Permiso nuevo: `ADMINISTRAR_USUARIOS`
+
+La tabla de §5.2 no tenía un permiso para esto y «editar catálogos» no lo
+describe: un catálogo se desactiva, un usuario entra o no entra al sistema. Se
+agregó a la matriz, concedido solo a `ADMINISTRADOR`, y se sembró en la base
+como dato. Está en la tabla de §5.2 del spec.
+
+### Nadie se quita a sí mismo el acceso ni el rol
+
+Quien administra no puede desactivarse ni cambiar su propio rol. Es una regla
+de seguridad operativa, no de negocio: evita que el último administrador se
+cierre la puerta por accidente. Otro administrador sí puede hacerlo.
+
+**Dónde vive:** `editarUsuario` en `lib/domain/usuario.ts`.
+
+### Los correos se comparan sin distinguir mayúsculas
+
+El vínculo del primer ingreso depende de que el correo del perfil y el que
+devuelve Microsoft coincidan. Se guardan en minúsculas y se comparan sin
+distinguir mayúsculas, en el alta y en `getSessionResult`.
+
+### `entraObjectId` guarda el id de Supabase Auth, no el `oid` de Entra
+
+Así estaba desde E0 y así sigue: es lo que `getSessionResult` compara con el
+`sub` del token. El `oid` real de Entra llega en `custom_claims.oid` y no se
+guarda. Renombrar la columna o guardar ambos es una decisión aparte; importa
+solo si se va a cruzar con Graph o con nómina por object id.
+
+**Dar acceso** a quien ya entró vincula ese id de una vez, y si ya existía un
+perfil con el mismo correo sin vincular, lo reutiliza en vez de duplicarlo.
+
+**Dónde vive:** `darAcceso` en `lib/domain/usuario.ts`; la lista de quienes
+entraron sin perfil se lee de `auth.users` con la clave de servicio en
+`lib/scope/usuarios.ts`.

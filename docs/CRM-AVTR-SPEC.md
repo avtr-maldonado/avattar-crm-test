@@ -277,6 +277,7 @@ el valor. La matriz es editable desde Administración (`F-1005`).
 | `VER_ANALISIS` | **no** | sí | sí | sí |
 | `VER_OBJETIVOS_EQUIPO` | **no** | sí | sí | sí |
 | `EDITAR_POLITICA_COMERCIAL` | no | no | sí | sí |
+| `ADMINISTRAR_USUARIOS` | no | no | no | sí |
 
 `VER_MARGEN` y `VER_COSTO` son permisos **independientes**: el vendedor conoce su margen sin
 conocer el costo unitario del proveedor (`RN-09`).

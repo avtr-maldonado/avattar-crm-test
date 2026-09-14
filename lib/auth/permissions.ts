@@ -24,9 +24,10 @@ export type PermissionCode =
   | "EXPORTAR_CON_COSTO"
   | "VER_ANALISIS"
   | "VER_OBJETIVOS_EQUIPO"
-  | "EDITAR_POLITICA_COMERCIAL";
+  | "EDITAR_POLITICA_COMERCIAL"
+  | "ADMINISTRAR_USUARIOS";
 
-/** Los once permisos, para sembrarlos y para recorrerlos en Administración. */
+/** Los doce permisos, para sembrarlos y para recorrerlos en Administración. */
 export const PERMISOS: readonly PermissionCode[] = [
   "VER_OPORTUNIDADES_PROPIAS",
   "VER_OPORTUNIDADES_OFICINA",
@@ -39,6 +40,7 @@ export const PERMISOS: readonly PermissionCode[] = [
   "VER_ANALISIS",
   "VER_OBJETIVOS_EQUIPO",
   "EDITAR_POLITICA_COMERCIAL",
+  "ADMINISTRAR_USUARIOS",
 ] as const;
 
 /**

@@ -43,14 +43,9 @@ export default async function AnalisisPage() {
         <EstadoVacio
           titulo="Los tableros llegan con el incremento de medición"
           explicacion="Ingreso y utilidad contra objetivo, rentabilidad por familia y facturación esperada por hitos. Varios dependen de historia que este sistema todavía no tiene: arrancó en limpio, sin migrar Pipedrive, así que mostrarán «sin datos suficientes» y no un cero durante los primeros trimestres."
-          accion={
-            <>
-              <Boton href="/objetivos" variante="secundario">
-                Ver objetivos
-              </Boton>
-              <Boton href="/oportunidades">Ir al pipeline</Boton>
-            </>
-          }
+          // «Ver objetivos» vuelve con P-08 (E4): hoy la ruta no existe y el
+          // botón llevaba a un 404. El menú lateral tampoco la ofrece.
+          accion={<Boton href="/oportunidades">Ir al pipeline</Boton>}
         />
       </div>
     </>
