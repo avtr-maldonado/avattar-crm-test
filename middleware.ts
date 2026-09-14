@@ -53,7 +53,9 @@ export async function middleware(request: NextRequest) {
   const esPublica =
     ruta.startsWith("/login") ||
     ruta.startsWith("/auth") ||
-    ruta.startsWith("/sin-acceso");
+    ruta.startsWith("/sin-acceso") ||
+    // Diagnóstico del despliegue: se consulta justo cuando nadie puede entrar.
+    ruta === "/salud";
 
   if (!autenticado && !esPublica) {
     const url = request.nextUrl.clone();

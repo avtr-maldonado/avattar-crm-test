@@ -96,6 +96,8 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
 components/{pipeline,oportunidad,contactos,productos,cotizacion}/   componentes por pantalla
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
+app/salud/          GET público de diagnóstico: ¿base alcanzable? ¿qué variables existen? (lib/domain/salud)
+app/error.tsx       lo que ve el usuario ante una excepción no atrapada: en español y con el digest
 middleware.ts       refresca la sesión de Supabase en cada request. NO autoriza
 tests/arquitectura  verifica INV-01 leyendo el código · tests/integracion corre contra la base
 ```
