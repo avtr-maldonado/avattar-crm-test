@@ -56,6 +56,8 @@ function BotonEntrar() {
 
   // A dónde iba el usuario antes de que el middleware lo mandara aquí.
   const destino = searchParams.get("destino") ?? "/oportunidades";
+  // Viene de «Cerrar sesión» (/auth/signout). Se confirma con el mismo verbo.
+  const cerroSesion = searchParams.get("salida") === "1";
 
   async function entrar() {
     setEntrando(true);
@@ -83,6 +85,12 @@ function BotonEntrar() {
 
   return (
     <>
+      {cerroSesion && (
+        <p role="status" className="mt-4 rounded-sm bg-superficie-tinte p-3 text-xs text-texto-cuerpo">
+          Cerraste sesión en el CRM.
+        </p>
+      )}
+
       <button
         type="button"
         onClick={entrar}

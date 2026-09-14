@@ -75,6 +75,7 @@ export default async function ProductosPage({
         subtitulo={`${productos.length} SKU activos · lista única en USD para los tres países`}
         usuario={{
           nombre: session.name,
+          correo: session.email,
           iniciales: iniciales(session.name),
           rol: session.role,
           paises: session.countryCodes,

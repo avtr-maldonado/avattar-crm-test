@@ -50,7 +50,7 @@ IPv4.
 
 ```
 app/
-  (auth)/                 login, callback de Entra ID, sin-acceso
+  (auth)/                 login, callback de Entra ID, sin-acceso, cierre de sesión (POST /auth/signout)
   (app)/                  pantallas; cada una con sus Server Actions en acciones.ts
     oportunidades/        P-01 kanban y tabla · [id]/ P-02 detalle con pestañas
     contactos/            organizaciones y personas · organizaciones/[id]/ ficha

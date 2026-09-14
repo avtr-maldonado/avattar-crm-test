@@ -70,6 +70,7 @@ export default async function ActividadesPage({
         }
         usuario={{
           nombre: session.name,
+          correo: session.email,
           iniciales: iniciales(session.name),
           rol: session.role,
           paises: session.countryCodes,

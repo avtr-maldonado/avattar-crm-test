@@ -151,31 +151,47 @@ export function EsqueletoDeTabla({
  */
 const TARJETAS_POR_COLUMNA = [3, 4, 2, 3, 2];
 
-/** El tablero kanban: columnas de ancho fijo con tarjetas de alto variable. */
+/**
+ * El tablero kanban.
+ *
+ * Misma rejilla que `TableroKanban`, y por la misma razón: si el esqueleto
+ * tuviera columnas fijas con scroll horizontal y el tablero real no, la
+ * pantalla cambiaría de forma al cargar. Desde `lg`, tantas columnas iguales
+ * como etapas; debajo, franjas apiladas con las tarjetas en rejilla. Las barras
+ * grises van en anchos proporcionales, no fijos, para que una columna angosta
+ * no las desborde.
+ */
 export function EsqueletoDeKanban({ columnas = 5 }: { columnas?: number }) {
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
+    <div
+      className="grid gap-3 pb-4 lg:grid-cols-[repeat(var(--etapas),minmax(0,1fr))] xl:gap-4"
+      style={{ "--etapas": columnas } as React.CSSProperties}
+    >
       {Array.from({ length: columnas }, (_, c) => (
-        <div key={c} className="flex w-72 shrink-0 flex-col rounded-md bg-superficie-sutil">
-          <header className="border-b border-borde px-3 py-3">
+        <div
+          key={c}
+          className="flex flex-col rounded-md bg-superficie-sutil [container-name:columna] [container-type:inline-size]"
+        >
+          <header className="border-b border-borde px-3 py-3 col-angosta:px-2">
             <div className="flex items-baseline justify-between gap-2">
-              <Esqueleto className="h-3.5 w-24" />
-              <Esqueleto className="h-2.5 w-6" />
+              <Esqueleto className="h-3.5 w-3/5" />
+              <Esqueleto className="h-2.5 w-1/6" />
             </div>
-            <Esqueleto className="mt-2 h-2.5 w-28" />
+            <Esqueleto className="mt-2 h-2.5 w-3/4" />
+            <div className="mt-2 h-0.5 rounded-pill bg-borde-fuerte" />
           </header>
 
-          <div className="flex flex-col gap-2 p-2">
+          <div className="grid min-h-24 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 p-2 lg:grid-cols-1 col-angosta:p-1.5">
             {Array.from({ length: TARJETAS_POR_COLUMNA[c % TARJETAS_POR_COLUMNA.length] }, (_, t) => (
               <div
                 key={t}
-                className="rounded-md border border-borde bg-superficie-tarjeta p-3 shadow-xs"
+                className="rounded-md border border-borde bg-superficie-tarjeta p-3 shadow-xs col-angosta:p-2.5"
               >
                 <Esqueleto className="h-3.5 w-full" />
                 <Esqueleto className="mt-1.5 h-2.5 w-2/3" />
                 <div className="mt-3 flex items-baseline justify-between gap-2">
-                  <Esqueleto className="h-3.5 w-20" />
-                  <Esqueleto className="h-3.5 w-12" />
+                  <Esqueleto className="h-3.5 w-1/2" />
+                  <Esqueleto className="h-3.5 w-1/4" />
                 </div>
               </div>
             ))}

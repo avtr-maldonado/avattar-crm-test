@@ -77,6 +77,7 @@ export default async function AdminPage({
         subtitulo="Configuración del sistema · sin código (INV-05)"
         usuario={{
           nombre: session.name,
+          correo: session.email,
           iniciales: iniciales(session.name),
           rol: session.role,
           paises: session.countryCodes,

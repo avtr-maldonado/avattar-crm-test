@@ -92,9 +92,10 @@ lib/filters/        definición y parseo de filtros → INV-10
 lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
 components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>) · avisos (Sileo)
+                    · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
 components/{pipeline,oportunidad,contactos,productos,cotizacion}/   componentes por pantalla
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado
-app/(auth)/         login, callback de Entra ID, sin-acceso
+app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
 middleware.ts       refresca la sesión de Supabase en cada request. NO autoriza
 tests/arquitectura  verifica INV-01 leyendo el código · tests/integracion corre contra la base
 ```

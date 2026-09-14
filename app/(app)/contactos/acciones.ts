@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { requireSession } from "@/lib/auth/session";
-import { crearPersona, editarOrganizacion, editarPersona } from "@/lib/domain/contact";
+import {
+  crearOrganizacion,
+  crearPersona,
+  editarOrganizacion,
+  editarPersona,
+} from "@/lib/domain/contact";
 import { getOrganization } from "@/lib/scope/organizations";
 import { getPersona } from "@/lib/scope/people";
 
@@ -76,7 +81,9 @@ export async function editarPersonaAccion(
 }
 
 const esquemaAlta = esquemaPersona.omit({ personId: true }).extend({
-  organizationId: z.string().min(1),
+  // Desde P-03 la empresa se elige en el formulario; desde la ficha o el
+  // detalle ya viene fija. El mensaje es para el primer caso.
+  organizationId: z.string().min(1, "Elige la empresa a la que pertenece."),
 });
 
 export async function crearPersonaAccion(
@@ -123,9 +130,9 @@ const esquemaOrganizacion = z.object({
 });
 
 export async function editarOrganizacionAccion(
-  _previo: ResultadoAccion | null,
+  _previo: ResultadoDeContacto | null,
   form: FormData,
-): Promise<ResultadoAccion> {
+): Promise<ResultadoDeContacto> {
   const datos = esquemaOrganizacion.safeParse(Object.fromEntries(form));
   if (!datos.success) return deZod(datos.error);
   const d = datos.data;
@@ -153,4 +160,52 @@ export async function editarOrganizacionAccion(
   revalidatePath("/contactos");
   revalidatePath(`/contactos/organizaciones/${d.organizationId}`);
   return ok(null);
+}
+
+const esquemaAltaDeOrganizacion = esquemaOrganizacion
+  .omit({ organizationId: true, ownerId: true })
+  .extend({
+    // Solo viaja cuando la sesión opera en más de un país; con uno, se deduce.
+    countryCode: z.enum(["MX", "CO", "CL"]).optional(),
+  });
+
+/**
+ * Da de alta una cuenta desde P-03.
+ *
+ * El país no lo decide el formulario: con un solo país se toma el de la sesión,
+ * y con varios el formulario ofrece únicamente los suyos. Aun así el servicio
+ * vuelve a comprobar que la sesión opere ahí (AC-05). El propietario es quien
+ * crea, siempre; reasignar es de Gerencia y se hace desde la ficha.
+ */
+export async function crearOrganizacionAccion(
+  _previo: ResultadoDeContacto | null,
+  form: FormData,
+): Promise<ResultadoDeContacto> {
+  const datos = esquemaAltaDeOrganizacion.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+  const d = datos.data;
+
+  const session = await requireSession();
+  const countryCode =
+    d.countryCode ?? (session.countryCodes.length === 1 ? session.countryCodes[0] : undefined);
+  if (!countryCode) {
+    return falla("VALIDACION", { campo: "countryCode", mensaje: "Elige el país de la cuenta." });
+  }
+
+  const r = await crearOrganizacion(session, {
+    name: d.name,
+    legalName: d.legalName ?? null,
+    taxId: d.taxId ?? null,
+    type: d.type,
+    industry: d.industry ?? null,
+    city: d.city ?? null,
+    employees: d.employees,
+    creditDays: d.creditDays,
+    isStrategic: d.isStrategic ?? false,
+    countryCode,
+  });
+  if (!r.ok) return r;
+
+  revalidatePath("/contactos");
+  return ok(r.datos);
 }

@@ -1,8 +1,8 @@
-import type { OrganizationType, Prisma } from "@prisma/client";
+import type { CountryCode, OrganizationType, Prisma } from "@prisma/client";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { iniciales } from "@/lib/etiquetas";
+import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import type { OrganizacionConGente } from "@/lib/scope/organizations";
 import type { PersonaEditable } from "@/lib/scope/people";
 
@@ -145,6 +145,151 @@ export type DatosDeOrganizacion = {
   ownerId?: string;
 };
 
+/** Los campos de la ficha que el alta y la edición validan igual. */
+type CamposDeOrganizacion = Partial<
+  Pick<
+    Prisma.OrganizationUncheckedCreateInput,
+    | "name"
+    | "legalName"
+    | "taxId"
+    | "type"
+    | "industry"
+    | "city"
+    | "employees"
+    | "creditDays"
+    | "isStrategic"
+  >
+>;
+
+/**
+ * Traduce los datos de la ficha, o devuelve el problema.
+ *
+ * Lo comparten el alta y la edición para que digan lo mismo ante el mismo dato:
+ * un nombre de una letra o un número negativo se rechazan igual entren por
+ * donde entren. Vacío significa «sin dato» y se guarda como `null`, no como una
+ * cadena de espacios.
+ */
+function camposDeOrganizacion(
+  entrada: Omit<DatosDeOrganizacion, "ownerId">,
+): { ok: true; campos: CamposDeOrganizacion } | { ok: false; campo: string; mensaje: string } {
+  const campos: CamposDeOrganizacion = {};
+
+  if (entrada.name !== undefined) {
+    const nombre = entrada.name.trim();
+    if (nombre.length < 2) {
+      return { ok: false, campo: "name", mensaje: "La cuenta necesita un nombre." };
+    }
+    campos.name = nombre;
+  }
+
+  if (entrada.legalName !== undefined) campos.legalName = entrada.legalName?.trim() || null;
+  if (entrada.taxId !== undefined) campos.taxId = entrada.taxId?.trim() || null;
+  if (entrada.type !== undefined) campos.type = entrada.type;
+  if (entrada.industry !== undefined) campos.industry = entrada.industry?.trim() || null;
+  if (entrada.city !== undefined) campos.city = entrada.city?.trim() || null;
+  if (entrada.isStrategic !== undefined) campos.isStrategic = entrada.isStrategic;
+
+  if (entrada.employees !== undefined) {
+    if (entrada.employees !== null && entrada.employees < 0) {
+      return {
+        ok: false,
+        campo: "employees",
+        mensaje: "El número de empleados no puede ser negativo.",
+      };
+    }
+    campos.employees = entrada.employees;
+  }
+
+  if (entrada.creditDays !== undefined) {
+    if (entrada.creditDays !== null && entrada.creditDays < 0) {
+      return {
+        ok: false,
+        campo: "creditDays",
+        mensaje: "Los días de crédito no pueden ser negativos.",
+      };
+    }
+    campos.creditDays = entrada.creditDays;
+  }
+
+  return { ok: true, campos };
+}
+
+export type DatosDeOrganizacionNueva = Omit<DatosDeOrganizacion, "ownerId" | "name" | "type"> & {
+  name: string;
+  type: OrganizationType;
+  countryCode: CountryCode;
+};
+
+/**
+ * Da de alta una cuenta desde P-03.
+ *
+ * ## El país sale de la sesión, nunca de un campo libre
+ *
+ * Una cuenta nace en un país donde quien la crea opera. Si opera en uno, no se
+ * pregunta; si opera en varios, elige entre los suyos. Que alguien pudiera
+ * elegir otro sería darle una llave a ese país por la puerta de atrás (AC-05).
+ * Es la misma regla del alta en línea de oportunidad, que ahí resuelve la
+ * ambigüedad con el país del pipeline; aquí no hay pipeline y se pregunta.
+ *
+ * ## El propietario es quien la crea
+ *
+ * «La empresa que un vendedor da de alta es suya: es quien la trabaja.»
+ * Reasignarla es de Gerencia (Q-13, Q-14) y se hace desde la ficha, donde ya
+ * se valida que el destinatario opere en ese país.
+ *
+ * ## Los duplicados se rechazan por nombre, sin mirar el alcance
+ *
+ * Si quien captura no ve que «Hidrosistemas del Valle» ya existe porque la
+ * ficha es de otro, va a crear «Hidrosistemas del Valle SA» y el histórico de
+ * esa cuenta queda partido en dos para siempre. El mensaje revela que la cuenta
+ * existe aunque la sesión no la alcance; es la misma decisión que
+ * decisiones-pendientes §11.1 tomó para el alta de oportunidad: el duplicado es
+ * daño permanente, la fuga del nombre no. Solo el nombre: nunca el propietario
+ * ni cifras. Regla derivada al construir, anotada en decisiones-pendientes §14.
+ */
+export async function crearOrganizacion(
+  session: Session,
+  entrada: DatosDeOrganizacionNueva,
+): Promise<ResultadoAccion<{ id: string }>> {
+  if (!session.countryCodes.includes(entrada.countryCode)) {
+    return falla("AUTORIZACION", `No operas en ${NOMBRE_PAIS[entrada.countryCode]}.`);
+  }
+
+  const traducido = camposDeOrganizacion(entrada);
+  if (!traducido.ok) {
+    return falla("VALIDACION", { campo: traducido.campo, mensaje: traducido.mensaje });
+  }
+  const nombre = entrada.name.trim();
+
+  const homonima = await prisma.organization.findFirst({
+    where: {
+      deletedAt: null,
+      countryCode: entrada.countryCode,
+      name: { equals: nombre, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+  if (homonima) {
+    return falla("VALIDACION", {
+      campo: "name",
+      mensaje: `Ya existe una cuenta llamada «${nombre}» en ${NOMBRE_PAIS[entrada.countryCode]}. Si es la misma empresa, pide que te asignen una oportunidad ahí; si es otra, distingue el nombre.`,
+    });
+  }
+
+  const creada = await prisma.organization.create({
+    data: {
+      ...traducido.campos,
+      name: nombre,
+      type: entrada.type,
+      countryCode: entrada.countryCode,
+      ownerId: session.userId,
+    },
+    select: { id: true },
+  });
+
+  return ok(creada);
+}
+
 /**
  * Edita la ficha de una cuenta.
  *
@@ -172,42 +317,11 @@ export async function editarOrganizacion(
     );
   }
 
-  const datos: Prisma.OrganizationUpdateInput = {};
-
-  if (entrada.name !== undefined) {
-    const nombre = entrada.name.trim();
-    if (nombre.length < 2) {
-      return falla("VALIDACION", { campo: "name", mensaje: "La cuenta necesita un nombre." });
-    }
-    datos.name = nombre;
+  const traducido = camposDeOrganizacion(entrada);
+  if (!traducido.ok) {
+    return falla("VALIDACION", { campo: traducido.campo, mensaje: traducido.mensaje });
   }
-
-  if (entrada.legalName !== undefined) datos.legalName = entrada.legalName?.trim() || null;
-  if (entrada.taxId !== undefined) datos.taxId = entrada.taxId?.trim() || null;
-  if (entrada.type !== undefined) datos.type = entrada.type;
-  if (entrada.industry !== undefined) datos.industry = entrada.industry?.trim() || null;
-  if (entrada.city !== undefined) datos.city = entrada.city?.trim() || null;
-  if (entrada.isStrategic !== undefined) datos.isStrategic = entrada.isStrategic;
-
-  if (entrada.employees !== undefined) {
-    if (entrada.employees !== null && entrada.employees < 0) {
-      return falla("VALIDACION", {
-        campo: "employees",
-        mensaje: "El número de empleados no puede ser negativo.",
-      });
-    }
-    datos.employees = entrada.employees;
-  }
-
-  if (entrada.creditDays !== undefined) {
-    if (entrada.creditDays !== null && entrada.creditDays < 0) {
-      return falla("VALIDACION", {
-        campo: "creditDays",
-        mensaje: "Los días de crédito no pueden ser negativos.",
-      });
-    }
-    datos.creditDays = entrada.creditDays;
-  }
+  const datos: Prisma.OrganizationUpdateInput = { ...traducido.campos };
 
   if (entrada.ownerId !== undefined && entrada.ownerId !== organizacion.owner.id) {
     if (!can(session, "VER_OPORTUNIDADES_OFICINA")) {

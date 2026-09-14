@@ -1,5 +1,6 @@
-import type { CountryCode, Role } from "@/lib/dto";
-import { ETIQUETA_ROL, NOMBRE_PAIS } from "@/lib/etiquetas";
+import type { CountryCode } from "@/lib/dto";
+import { NOMBRE_PAIS } from "@/lib/etiquetas";
+import { MenuDeUsuario, type UsuarioDeBarra } from "./MenuDeUsuario";
 
 /**
  * Encabezado de pantalla · §13.5.
@@ -25,7 +26,7 @@ export function BarraSuperior({
   titulo: string;
   /** Conteos y totales. Es lo que convierte un título en información. */
   subtitulo?: string;
-  usuario: { nombre: string; iniciales: string; rol: Role; paises: CountryCode[] };
+  usuario: UsuarioDeBarra;
   paisActivo?: CountryCode;
 }) {
   const activo = paisActivo ?? usuario.paises[0];
@@ -46,17 +47,10 @@ export function BarraSuperior({
           <SelectorDePais paises={usuario.paises} activo={activo} />
         )}
 
-        <div className="flex items-center gap-2 border-l border-borde pl-4">
-          <span
-            aria-hidden
-            className="grid h-8 w-8 place-items-center rounded-pill bg-navy-600 text-xs font-semibold text-white"
-          >
-            {usuario.iniciales}
-          </span>
-          <div className="hidden leading-tight sm:block">
-            <p className="text-sm font-medium text-texto-titulo">{usuario.nombre}</p>
-            <p className="text-xs text-texto-tenue">{ETIQUETA_ROL[usuario.rol]}</p>
-          </div>
+        {/* Quién opera y con qué alcance; al pulsarlo se abre la ficha con el
+            correo, el alcance completo y el cierre de sesión. */}
+        <div className="border-l border-borde pl-3">
+          <MenuDeUsuario usuario={usuario} />
         </div>
       </div>
     </header>
