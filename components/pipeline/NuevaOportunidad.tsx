@@ -131,8 +131,6 @@ export function NuevaOportunidad({
       );
     }
 
-    // Sin `setAbierto(false)`: navegar desmonta este componente y el modal se
-    // va con él. Cerrarlo antes solo provocaría un render de más.
     router.push(`/oportunidades/${resultado.datos.id}`);
   }, [resultado, router]);
 
@@ -144,6 +142,15 @@ export function NuevaOportunidad({
 
   const nombreDeOrganizacion =
     estado.organizacion.tipo === "VACIA" ? "" : estado.organizacion.nombre;
+
+  // El modal se cierra en cuanto la acción responde bien, y se cierra aquí,
+  // derivado, no con un `setAbierto(false)` dentro del efecto. Importa por el
+  // aviso: el `<dialog>` vive en la capa superior del navegador y los avisos
+  // se pintan debajo de ella, así que con el modal abierto «Oportunidad
+  // creada» pasaba sus cuatro segundos detrás del fondo oscurecido mientras la
+  // navegación al detalle tardaba en llegar. Creada, no hay nada que seguir
+  // editando: la pantalla siguiente es el detalle.
+  const panelAbierto = abierto && !resultado?.ok;
 
   return (
     <>
@@ -160,7 +167,7 @@ export function NuevaOportunidad({
             se asigna al crear · pipeline {pipeline?.name ?? "—"} · USD
           </>
         }
-        abierto={abierto}
+        abierto={panelAbierto}
         alCerrar={limpiar}
         ancho="lg"
         pie={

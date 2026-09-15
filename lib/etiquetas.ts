@@ -74,3 +74,51 @@ export function etiquetaDeTrimestre(iso: string): string | null {
   if (!anio || !mes) return null;
   return `T${Math.floor((mes - 1) / 3) + 1} ${anio}`;
 }
+
+/**
+ * La bandera de riesgo, escrita con el número que la justifica.
+ *
+ * §13: «Los errores dicen qué falta con el dato concreto: "faltan $200,000 por
+ * asignar en hitos", no "datos inválidos".» La cola de riesgo del embudo vive
+ * de esto: una lista que dice "Estancada" tres veces no ayuda a decidir cuál
+ * atender primero.
+ *
+ * El texto se arma aquí y no en `lib/domain/riskFlags`, que devuelve la
+ * evidencia como datos: así ese módulo se prueba sin presentación y el español
+ * de la interfaz queda en un solo lugar (INV-14).
+ *
+ * `margen` y `piso` llegan ya formateados desde el servidor, porque un
+ * `Decimal` no cruza a un componente cliente (INV-03).
+ */
+export type EvidenciaVisible =
+  | { flag: "SIN_ACTIVIDAD"; diasSinContacto: number | null }
+  | { flag: "ESTANCADA"; diasEnEtapa: number; limite: number }
+  | { flag: "MARGEN_BAJO"; margen: string; piso: string };
+
+export function fraseDeRiesgo(
+  evidencia: EvidenciaVisible,
+  contexto: { etapa: string },
+): string {
+  switch (evidencia.flag) {
+    case "SIN_ACTIVIDAD":
+      return evidencia.diasSinContacto === null
+        ? "Sin actividad futura programada · nunca se registró contacto"
+        : `Sin actividad futura programada · ${evidencia.diasSinContacto} días sin contacto`;
+    case "ESTANCADA":
+      return `Estancada ${evidencia.diasEnEtapa} días en ${contexto.etapa}`;
+    case "MARGEN_BAJO":
+      return `Margen ${evidencia.margen} bajo el piso de ${evidencia.piso}`;
+  }
+}
+
+/**
+ * El tono de la bandera · §13.1: «si algo es coral, requiere atención».
+ *
+ * Coral para lo que cuesta dinero o clientes —margen bajo el piso, un negocio
+ * sin siguiente paso—; lima para lo que todavía es un problema de proceso. La
+ * cola de riesgo se ordena por valor, así que el color es lo que separa «esto
+ * se está cayendo» de «esto va lento».
+ */
+export function tonoDeRiesgo(flag: RiskFlag): "peligro" | "alerta" {
+  return flag === "ESTANCADA" ? "alerta" : "peligro";
+}

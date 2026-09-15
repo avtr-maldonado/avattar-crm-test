@@ -9,6 +9,8 @@ export {
   CAMPO_PRISMA,
   ETIQUETA_CAMPO,
   ETIQUETA_PREAJUSTE,
+  rangoDeAnioFiscal,
+  rangoDeTrimestre,
   resolvePeriod,
   trimestreDe,
   type DateField,

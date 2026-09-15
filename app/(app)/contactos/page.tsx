@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireSession } from "@/lib/auth/session";
+import { oficinaActiva, requireSession } from "@/lib/auth/session";
 import { listOrganizationsConIndicadores } from "@/lib/scope/organizationIndicators";
 import { listPersonas } from "@/lib/scope/people";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
@@ -42,10 +42,14 @@ export default async function ContactosPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [session, sp] = await Promise.all([requireSession(), searchParams]);
+  const pais = await oficinaActiva(session);
 
+  // Cuentas y personas de la oficina activa. La oficina recorta dentro del
+  // alcance del rol, nunca lo amplía: para un vendedor de México con la
+  // oficina en Colombia, la lista queda vacía, no llena de cuentas ajenas.
   const [{ organizaciones, hayHistoricoDeCierres }, personas, catalogos] = await Promise.all([
-    listOrganizationsConIndicadores(session),
-    listPersonas(session),
+    listOrganizationsConIndicadores(session, { where: { countryCode: pais } }),
+    listPersonas(session, { organization: { countryCode: pais } }),
     catalogosParaAlta(),
   ]);
 

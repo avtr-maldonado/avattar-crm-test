@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import { ContadorRubro } from "./ContadorRubro";
+import { Icono } from "./iconos";
 import type { Rubro } from "./RubrosNavegacion";
 
 /**
@@ -56,12 +57,9 @@ export function NavegacionAngosta({ rubros }: { rubros: Rubro[] }) {
                       : "text-navy-200 hover:bg-navy-800/60",
                   )}
                 >
-                  <span
-                    aria-hidden
-                    className={clsx(
-                      "h-1.5 w-1.5 rounded-pill",
-                      activo ? "bg-acento" : "bg-navy-600",
-                    )}
+                  <Icono
+                    nombre={r.icono}
+                    className={clsx("size-4", activo ? "text-acento" : "text-navy-400")}
                   />
                   {r.etiqueta}
                   {r.contador && (

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireSession } from "@/lib/auth/session";
+import { oficinaActiva, requireSession } from "@/lib/auth/session";
 import { agendaSemanal, bandejaDeTrabajo } from "@/lib/scope/agenda";
 import { formatUSD } from "@/lib/money";
 import { iniciales } from "@/lib/etiquetas";
@@ -51,10 +51,13 @@ export default async function ActividadesPage({
   const [session, sp] = await Promise.all([requireSession(), searchParams]);
   const vista = sp.vista === "semana" ? "semana" : "bandeja";
 
+  // La oficina activa de la barra superior: la bandeja y la semana cuentan lo
+  // mismo que el contador de Actividades del menú.
+  const pais = await oficinaActiva(session);
   const ahora = new Date();
   const [bandeja, semana] = await Promise.all([
-    bandejaDeTrabajo(session, ahora),
-    agendaSemanal(session, ahora),
+    bandejaDeTrabajo(session, ahora, pais),
+    agendaSemanal(session, ahora, pais),
   ]);
 
   const pendientes = bandeja.vencidas.length + bandeja.hoy.length;

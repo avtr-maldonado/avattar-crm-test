@@ -70,11 +70,19 @@ export function pipelinePorOmision(
   pipelines: PipelineConEtapas[],
   session: Session,
   paisActivo: CountryCode,
+  /**
+   * El que el usuario eligió en la barra de filtros. Manda sobre todo lo demás
+   * —incluido el de renovaciones, que por omisión no se propone—, porque
+   * elegirlo a mano es una decisión explícita. Un id que no exista o que la
+   * sesión no alcance cae al camino normal, no a una pantalla vacía.
+   */
+  elegido?: string | null,
 ): PipelineConEtapas | undefined {
   const delUsuario = new Set<string>(session.countryCodes);
   const deVenta = pipelines.filter((p) => !p.isRenewal);
 
   return (
+    (elegido ? pipelines.find((p) => p.id === elegido) : undefined) ??
     deVenta.find((p) => p.countryCode === paisActivo) ??
     // El país activo puede no tener pipeline configurado todavía (CO y CL
     // llegan con E5). Antes de dejar la pantalla en blanco, uno de venta que

@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { CountryCode, Prisma } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 
@@ -80,4 +80,20 @@ export async function listActivities(
     orderBy: { startsAt: "desc" },
     take: options.take,
   });
+}
+
+/**
+ * Las actividades de una oficina. La oficina se lee de la oportunidad o de la
+ * cuenta a la que pertenece la actividad; una actividad suelta —sin ninguna de
+ * las dos— es del usuario y aparece en cualquier oficina. Va DESPUÉS del
+ * alcance, con AND: recorta, nunca amplía (AC-25).
+ */
+export function actividadEnOficina(pais: CountryCode): Prisma.ActivityWhereInput {
+  return {
+    OR: [
+      { opportunity: { countryCode: pais } },
+      { organization: { countryCode: pais } },
+      { opportunity: null, organization: null },
+    ],
+  };
 }

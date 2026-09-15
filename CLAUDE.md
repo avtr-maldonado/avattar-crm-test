@@ -49,7 +49,9 @@ improvisar. Detalle en `docs/CRM-AVTR-SPEC.md` §3.
    No se renumera: reintroducir multimoneda es reactivarlo.
 9. **INV-09** Las acciones sensibles escriben `AuditLog` en la misma transacción. Si el log falla,
    la operación falla.
-10. **INV-10** El estado de los filtros vive en la URL (`searchParams`).
+10. **INV-10** El estado de los filtros vive en la URL (`searchParams`). La **oficina activa** no es
+    un filtro: vive en la cookie `crm-oficina` y recorta dentro del alcance, nunca lo amplía
+    (`decisiones-pendientes.md` §16).
 11. **INV-11** Las banderas de riesgo se calculan, no se capturan.
 12. **INV-12** El folio es inmutable, incluso al reabrir. Consecutivo **por año**.
 13. **INV-13** Las etapas son datos, no `enum`. Un `switch` por nombre de etapa es un defecto.
@@ -79,14 +81,20 @@ singular.
 lib/db.ts           PrismaClient · SOLO lib/scope y lib/domain pueden importarlo
 lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un lector por pantalla:
                     opportunities, opportunityDetail, organizations, people, productos,
-                    cotizaciones, documentos, agenda, contadores, configuracion, pipelines,
+                    cotizaciones, documentos, agenda, contadores (acotados a la oficina activa),
+                    configuracion, pipelines, busqueda (buscador global: todo el alcance, no la oficina),
+                    funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline),
                     usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
-                    riskFlags, folio. Servicios con transacción: opportunity, activity, contact,
-                    product, quoteService, milestoneService, meddicService, document, usuario
+                    riskFlags (banderas + evidencia con su número), folio, funnel (embudo y tasa de
+                    paso), objectives (avance acumulado → decisiones §17). Servicios con transacción:
+                    opportunity, activity, contact, product, quoteService, milestoneService,
+                    meddicService, document, usuario, objetivo (fijar cuota)
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
 lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
-                    permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission) · permissions (can)
+                    permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission;
+                    oficinaActiva y menuColapsado leen las cookies de preferencia) · permissions (can)
+lib/preferencias.ts nombres y valores de las cookies crm-oficina y crm-menu (puro; lo importa también el cliente)
 lib/policy/         lectura de CommercialPolicy y Country → INV-05
 lib/money/          Decimal y formateo → INV-03
 lib/filters/        definición y parseo de filtros → INV-10
@@ -94,8 +102,14 @@ lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cer
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
 components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
-components/{pipeline,oportunidad,contactos,productos,cotizacion,admin}/   componentes por pantalla
-app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado
+                    · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
+                    acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
+                    contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo)
+components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos}/   por pantalla
+                    pipeline: TableroKanban · TablaOportunidades · Embudo · BarraDeFiltros (§9)
+                    objetivos: PanelDeAvance · TiraDeTrimestres · TablaDeEquipo · FijarObjetivo
+app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
+                    del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
 app/salud/          GET público de diagnóstico: ¿base alcanzable? ¿qué variables existen? (lib/domain/salud)
 app/error.tsx       lo que ve el usuario ante una excepción no atrapada: en español y con el digest
@@ -130,7 +144,12 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
 - **Avance de cuota con `actualCloseDate`; cobertura con `expectedCloseDate`.** Mezclarlas produce
   coberturas absurdas a fin de trimestre.
 - **Un filtro nunca amplía el alcance.** Primero el alcance por rol, después los filtros del
-  usuario.
+  usuario. La única excepción de forma —no de fondo— es `atRisk`, que se aplica en memoria porque
+  las banderas se calculan (`INV-11`) y no hay columna que consultar; se recorta **después** del
+  alcance, así que sigue sin ampliar nada.
+- **Los objetivos se miden acumulados** (decisiones §17, regla nueva que no está en el spec): la
+  cuota del T1 al trimestre en curso contra lo ganado en ese mismo tramo. Un trimestre bueno paga
+  la deuda del anterior. `computeCumulativeTrack` en `lib/domain/objectives.ts`.
 
 ## Sistema de diseño
 
@@ -151,15 +170,16 @@ textualmente; no se sustituyen por la paleta por omisión de ninguna librería.
 `E4` medición → `E5` regional. **E1 antes que E2, sin excepción.** Detalle y criterios de
 aceptación por incremento en §17.
 
-**Dónde está (10 de septiembre de 2026).** E0 y E1 completos: P-01 en kanban y tabla con arrastre
-entre etapas, alta en modal con alta en línea de organización, P-02 con edición, cambio de etapa y
-registro de actividades, contactos en dos pestañas con edición, productos con precio versionado
-(RN-26). De E2, el cotizador: líneas, congelar, versionar, alertas de política. De E3, las
-pestañas MEDDIC, hitos y documentos. **Pendiente y visible:** la barra de filtros de §9 (deuda de
-E0: P-01 abre sin filtros y sin decirlo, AC-23), marcar ganada/perdida, y las autorizaciones de
-descuento, fuera de este alcance por decisión del negocio. Hay plan escrito para E0 y para las
-mutaciones de E1 en `docs/superpowers/plans/`; E2 y E3 se construyeron pestaña por pestaña, sin
-plan propio.
+**Dónde está (14 de septiembre de 2026).** E0 y E1 completos: P-01 en kanban, tabla y **embudo**,
+con arrastre entre etapas, alta en modal con alta en línea de organización, P-02 con edición,
+cambio de etapa y registro de actividades, contactos en dos pestañas con edición, productos con
+precio versionado (RN-26). La **barra de filtros de §9** ya existe (cliente, vendedor, lapso,
+pipeline y «solo en riesgo»), con lo que se salda `AC-23`. De E2, el cotizador: líneas, congelar,
+versionar, alertas de política. De E3, las pestañas MEDDIC, hitos y documentos. De E4, **P-08
+objetivos**, con medición acumulada (decisiones §17). **Pendiente y visible:** marcar
+ganada/perdida, P-09 análisis, y las autorizaciones de descuento, fuera de este alcance por
+decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
+`docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
 
 ## Comandos
 

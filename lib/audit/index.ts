@@ -56,7 +56,11 @@ export type AuditAction =
   // Módulo de usuarios: quién puede entrar y con qué rol es tan sensible como
   // cualquier otra de esta lista, aunque INV-09 no lo enumerara al escribirse.
   | "CREAR_USUARIO"
-  | "EDITAR_USUARIO";
+  | "EDITAR_USUARIO"
+  // Objetivos: la cuota es contra lo que se mide a una persona y de lo que
+  // puede depender su variable. Cambiarla a mitad del año sin rastro sería la
+  // clase de cosa que INV-09 existe para impedir.
+  | "FIJAR_OBJETIVO";
 
 export type AuditEntry = {
   /** El modelo, en singular y como lo llama Prisma: "Opportunity", "Quote". */

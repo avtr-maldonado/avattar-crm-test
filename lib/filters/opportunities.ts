@@ -60,6 +60,14 @@ export type ParsedFilters = {
   meddicMin: number | null;
   meddicMax: number | null;
   risk: (typeof BANDERAS)[number][];
+  /**
+   * Atajo de §9.2: solo lo que trae alguna bandera.
+   *
+   * Es el único filtro que NO se traduce a SQL. Las banderas se calculan, no
+   * se guardan (INV-11): no hay columna que consultar. El recorte ocurre en la
+   * pantalla, sobre el conjunto ya acotado por el rol, después de calcularlas.
+   */
+  atRisk: boolean;
   dateField: DateField;
   period: DatePreset;
   from: string | null;
@@ -145,6 +153,7 @@ export function filtrosVisibles(session: Session): string[] {
     "meddicMin",
     "meddicMax",
     "risk",
+    "atRisk",
     "dateField",
     "period",
   ];
@@ -209,6 +218,9 @@ export function parseFilters(searchParams: URLSearchParams, session: Session): P
     meddicMin: unEntero(searchParams.get("meddicMin"), 0, 100),
     meddicMax: unEntero(searchParams.get("meddicMax"), 0, 100),
     risk: variosEnum(searchParams.getAll("risk"), BANDERAS),
+    // Solo "1" lo enciende: la URL es entrada del usuario y `atRisk=quiza` no
+    // debe filtrar nada.
+    atRisk: searchParams.get("atRisk") === "1",
     dateField,
     period,
     from: searchParams.get("from"),

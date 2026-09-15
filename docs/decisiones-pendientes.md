@@ -698,3 +698,204 @@ perfil con el mismo correo sin vincular, lo reutiliza en vez de duplicarlo.
 **Dónde vive:** `darAcceso` en `lib/domain/usuario.ts`; la lista de quienes
 entraron sin perfil se lee de `auth.users` con la clave de servicio en
 `lib/scope/usuarios.ts`.
+
+---
+
+## 16. Oficina activa, búsqueda global y menú contraído (14 de septiembre de 2026)
+
+La barra superior ganó dos cosas que §13.5 pedía y no existían —el selector de
+país operativo y el buscador— y la barra lateral aprendió a contraerse. Tres
+decisiones se tomaron al construirlas.
+
+### La oficina activa vive en una cookie, no en la URL
+
+`INV-10` dice que el estado de los filtros vive en `searchParams`. La oficina
+activa **no se trata como un filtro**, y esta es la excepción deliberada: es la
+mesa desde la que se trabaja, no una pregunta sobre los datos. Ponerla en la URL
+obligaba a arrastrar `?pais=CO` por cada enlace de la aplicación —los rubros del
+menú, el logotipo, las tarjetas del kanban, los enlaces del buscador— y el
+primero que se olvidara devolvía al usuario a México sin avisar. Una cookie
+(`crm-oficina`, un año, `httpOnly`) sobrevive a cualquier enlace y a cerrar el
+navegador, que es lo que uno espera de «estoy trabajando Colombia esta semana».
+
+Lo que sí se mantiene de `INV-10` es el espíritu: la oficina **recorta dentro
+del alcance del rol, nunca lo amplía** (`AC-25`). Se valida contra
+`session.countryCodes` al escribirla y al leerla; una cookie manipulada con un
+país que la sesión no alcanza se ignora y se cae al primero del alcance. Un
+vendedor de México con la oficina puesta en Colombia ve el tablero, la lista
+de cuentas y los contadores del menú **vacíos**, no llenos de datos ajenos.
+
+Manda sobre P-01 (pipeline, política, tablero, tabla y las cuatro métricas
+del encabezado, que antes sumaban todos los países mientras el tablero pintaba
+uno), sobre P-03 (cuentas y personas), sobre P-07 (bandeja y agenda semanal,
+con la misma cláusula que el contador de Actividades del menú, para que los dos
+digan lo mismo) y sobre los contadores del menú. Una actividad suelta, sin
+oportunidad ni cuenta, es del usuario y aparece en cualquier oficina. El
+detalle de una oportunidad no la mira: se llega a él por enlace o por búsqueda,
+y ahí manda el alcance del rol.
+
+**Dónde vive:** `oficinaActiva` y `menuColapsado` en `lib/auth/session.ts`;
+la acción `elegirOficinaAccion` en `app/(app)/acciones.ts`; los nombres de
+cookie en `lib/preferencias.ts`.
+**Costo de cambiarlo:** mover la oficina a `searchParams` es tocar cada
+`<Link>` de la aplicación para que la conserve; un `Link` propio que la
+agregue sería el mínimo.
+
+### La búsqueda global mira todo el alcance, no solo la oficina activa
+
+El buscador encuentra oportunidades, cuentas y personas de cualquier país que
+la sesión alcance. Quien busca «Bancolombia» desde la oficina México quiere
+encontrarla, no que le digan que no existe; el resultado de otro país lleva su
+código al lado para que no sorprenda al abrirlo. Las cerradas también salen,
+detrás de las abiertas y con su estado, porque un folio se busca justamente
+cuando ya pasó.
+
+Cinco por grupo, desde el segundo carácter, sin ranking: `contains` sin
+distinguir mayúsculas sobre nombre, folio y cuenta. Es lo que hace falta para
+llegar a algo que ya sabes cómo se llama; un buscador con pesos y sinónimos es
+otra cosa y no está pedido.
+
+**Dónde vive:** `buscarGlobal` en `lib/scope/busqueda.ts`, con los mismos
+`withScope` de las pantallas (`INV-01`); la acción `buscarGlobalAccion` al lado
+de la de oficina. No hay ficha de persona (P-05 no existe): una persona lleva a
+la ficha de su empresa.
+
+### El menú contraído se recuerda en una cookie que lee el servidor
+
+El ancho de la barra lateral se guarda en `crm-menu` y el layout lo lee antes
+de pintar, así que la barra ya nace de 64 o de 256 píxeles y no salta al
+hidratar. La escribe el navegador con `document.cookie`, sin acción de
+servidor: es una preferencia de pantalla, no un dato, y no merece una ida a la
+base ni una revalidación. No es `httpOnly` por lo mismo.
+
+---
+
+## 17. Embudo, filtros y objetivos acumulativos (14 de septiembre de 2026)
+
+P-01 ganó la vista de embudo y la barra de filtros de §9 —la deuda que `AC-23`
+señalaba desde E0—, y P-08 existe por primera vez. Siete decisiones se tomaron
+al construirlo; la primera es una **regla de negocio que no está en el spec**.
+
+### Los objetivos se miden acumulados, no trimestre por trimestre
+
+**Esto es nuevo.** §10.2 medía cada periodo por separado: cuota del trimestre
+contra lo ganado en el trimestre. El negocio pidió otra cosa, con este ejemplo:
+
+> «Si se establece un objetivo de 100 por trimestre y en el T1 no se vendió,
+> pero en el T2 se vendió 200, eso cuenta para los 100 del T1 y los 100 del T2.»
+
+Lo que se compara, entonces, es **acumulado contra acumulado**: la suma de las
+cuotas del T1 al trimestre en curso contra la suma de lo ganado en ese mismo
+tramo. Un trimestre flojo no se perdona, se arrastra; uno bueno lo paga. La
+consecuencia visible es que la cifra grande de la pantalla es la del año a la
+fecha, y que existe una cifra de **arrastre** —con cuánta deuda o cuánto
+adelanto se entra al trimestre— que en el modelo anterior no tenía sentido.
+
+La vista anual no acumula nada: el año **es** el periodo.
+
+**Candidata a entrar al spec.** Cambia §10.2 y la lectura de `AC-29`.
+
+**Dónde vive:** `computeCumulativeTrack` en `lib/domain/objectives.ts`, puro y
+con pruebas. La pantalla solo lo pinta.
+**Costo de cambiarlo:** volver al modelo por periodo es usar
+`computePeriodProgress` con la cuota del trimestre en vez de la pista
+acumulada. Las dos funciones ya existen y están probadas.
+
+### La utilidad de la pantalla de objetivos depende de `VER_MARGEN`
+
+`INV-02` dice que «el costo y la utilidad no se serializan para quien no tiene
+`VER_COSTO`», y `VENDEDOR` no lo tiene. Pero §10.3 le promete ver su cuota de
+utilidad, y el esquema le guarda una (`Objective.grossProfitQuota`). Las dos
+cosas no pueden ser ciertas a la vez.
+
+Se resolvió a favor de §10.3, con este razonamiento: lo que `INV-02` protege es
+**el costo del proveedor**, y esta pantalla no muestra ningún costo ni ninguna
+línea de cotización. Muestra la utilidad agregada de negocios que quien mira ya
+ve uno por uno con su margen —`VENDEDOR` sí tiene `VER_MARGEN`—, y venta ×
+margen **es** esa utilidad. Para un vendedor, la columna no revela nada que no
+tuviera ya; para gerencia y dirección, que sí tienen `VER_COSTO`, la pregunta no
+se plantea.
+
+El conmutador Venta / Utilidad solo aparece con `VER_MARGEN`. Los permisos son
+datos (`F-1005`): revocarlo quita la métrica sin tocar código.
+
+**Dónde vive:** `puedeVerUtilidad` en `app/(app)/objetivos/page.tsx`.
+
+### Fijar cuotas es `EDITAR_CATALOGOS`, no `VER_OBJETIVOS_EQUIPO`
+
+Se evaluó usar `VER_OBJETIVOS_EQUIPO` —lo tienen gerencia y dirección— y se
+descartó: un gerente de país podría fijar la cuota del equipo contra la que a él
+lo miden. Queda en Administración, que es donde vive el resto de la
+configuración.
+
+Es probable que el negocio quiera que Dirección también pueda. Es un cambio de
+matriz desde Administración, no de código.
+
+**Dónde vive:** `fijarObjetivo` en `lib/domain/objetivo.ts`.
+
+### La fila ANUAL no está protegida por la clave única
+
+`@@unique([userId, fiscalYear, periodType, quarter])` **no impide dos objetivos
+anuales** de la misma persona y el mismo año: ahí `quarter` es nulo, y en
+Postgres `NULL` nunca es igual a `NULL`. Prisma lo delata al tipar la clave
+compuesta con `quarter: number`.
+
+`fijarObjetivo` busca y luego escribe dentro de la transacción, así que por la
+aplicación no entran duplicados. El hueco sigue abierto para cualquier escritura
+directa a la base.
+
+**Costo de cerrarlo:** un índice parcial —`create unique index … on objectives
+(user_id, fiscal_year) where quarter is null`— que Prisma todavía no sabe
+expresar en el esquema. Sería la primera migración que vive solo en
+`supabase/migrations/` y no en `schema.prisma`, y esa divergencia es la razón de
+no haberlo hecho sin consultarlo. La otra salida es guardar `quarter = 0` en las
+anuales, que cambia el significado de la columna y obliga a migrar los datos.
+
+### La tasa de paso del embudo se mide con movimientos, no con inventario
+
+La barra de cada etapa es **valor abierto**: cuánto dinero está parado ahí. La
+línea de abajo es la **tasa de paso**: de las oportunidades que entraron a la
+etapa anterior en los últimos 90 días, cuántas llegaron a esta o más lejos, leído
+de `StageTransition`.
+
+Son cifras de naturaleza distinta a propósito. Dividir el valor de una etapa
+entre el de la anterior —el error clásico— da porcentajes por encima del 100 %
+que no significan nada: una etapa puede tener más dinero que la previa solo
+porque ahí se juntaron los negocios grandes.
+
+Saltarse una etapa cuenta como haberla pasado. Sin nadie en el denominador, la
+tasa es **nula**, no cero: cero sería una afirmación sobre el equipo.
+
+**La entrada a la primera etapa se reconstruye.** El historial guarda
+movimientos, y el alta no lo es: una oportunidad nace en una etapa sin que nadie
+la mueva. Se deduce de la etapa `fromStage` de su primera transición —de ahí
+venía— o, si nunca se movió, de la etapa donde sigue; la fecha es la de creación.
+Sin eso, el denominador de la segunda etapa sería siempre cero.
+
+Los 90 días no son un umbral de negocio (`INV-05`): nada cambia de veredicto al
+moverlos. Es el tamaño de la muestra.
+
+**Dónde vive:** `buildFunnel` en `lib/domain/funnel.ts` y `historiasDeEtapas` en
+`lib/scope/funnel.ts`.
+
+### «Solo en riesgo» es el único filtro que no viaja al SQL
+
+§9.1 pide que los filtros se apliquen en la consulta, «nunca en memoria después
+de traer todo». `atRisk` no puede: las banderas se calculan y no se guardan
+(`INV-11`), así que no hay columna que consultar. El recorte ocurre en la
+pantalla, **después** del alcance y de los demás filtros, así que sigue sin
+poder ampliar nada (`AC-25`).
+
+Los filtros `risk`, `stage`, `status`, `forecast`, `amount` y `meddic` ya se
+parseaban y no tienen control en la barra todavía: la barra ofrece cliente,
+vendedor, lapso, pipeline y «solo en riesgo», que es lo que se pidió. Agregar
+los demás es agregar pastillas, no lógica.
+
+### La cobertura reemplazó al piso de margen en el encabezado de P-01
+
+El piso de margen ya se ve donde decide algo: en cada tarjeta, verde o coral
+(§13.1). Repetirlo como indicador gastaba uno de los cinco lugares en un número
+que no cambia nunca. En su lugar va la **cobertura** —pipeline del trimestre
+sobre la brecha acumulada contra la cuota—, que no se veía en ningún otro lado y
+que ahora existe porque existen los objetivos. Sin cuota fijada dice «—» y «sin
+cuota fijada para el año», nunca un cero.

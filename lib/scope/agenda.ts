@@ -1,6 +1,7 @@
+import type { CountryCode } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { activityScope } from "./activities";
+import { actividadEnOficina, activityScope } from "./activities";
 import { opportunityScope } from "./opportunities";
 
 /**
@@ -21,10 +22,18 @@ import { opportunityScope } from "./opportunities";
  * Mezclarlas convertiría la pantalla en una lista larga que nadie termina.
  *
  * Todo pasa por `lib/scope`: un gerente ve su oficina, un vendedor lo suyo.
+ * Con `pais`, además, solo lo de esa oficina (`decisiones-pendientes.md` §16):
+ * es lo que hace que el contador de Actividades del menú y esta pantalla
+ * cuenten lo mismo.
  */
 export type BandejaDeTrabajo = Awaited<ReturnType<typeof bandejaDeTrabajo>>;
 
-export async function bandejaDeTrabajo(session: Session, ahora = new Date()) {
+export async function bandejaDeTrabajo(
+  session: Session,
+  ahora = new Date(),
+  pais?: CountryCode,
+) {
+  const enOficina = pais ? actividadEnOficina(pais) : {};
   const inicioDeHoy = new Date(
     Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate()),
   );
@@ -45,7 +54,11 @@ export async function bandejaDeTrabajo(session: Session, ahora = new Date()) {
   const [vencidas, hoy, sinProxima] = await Promise.all([
     prisma.activity.findMany({
       where: {
-        AND: [activityScope(session), { completedAt: null, startsAt: { lt: inicioDeHoy } }],
+        AND: [
+          activityScope(session),
+          { completedAt: null, startsAt: { lt: inicioDeHoy } },
+          enOficina,
+        ],
       },
       select: seleccion,
       // Lo más viejo primero: es lo que más tiempo lleva sin atenderse.
@@ -57,6 +70,7 @@ export async function bandejaDeTrabajo(session: Session, ahora = new Date()) {
         AND: [
           activityScope(session),
           { completedAt: null, startsAt: { gte: inicioDeHoy, lte: finDeHoy } },
+          enOficina,
         ],
       },
       select: seleccion,
@@ -72,6 +86,8 @@ export async function bandejaDeTrabajo(session: Session, ahora = new Date()) {
           opportunityScope(session),
           {
             status: "ABIERTA",
+            // `undefined` no filtra: sin oficina, todo el alcance.
+            countryCode: pais,
             OR: [{ nextActivityAt: null }, { nextActivityAt: { lt: ahora } }],
           },
         ],
@@ -101,7 +117,11 @@ export async function bandejaDeTrabajo(session: Session, ahora = new Date()) {
  * no una lista de pendientes: ver lo que ya se hizo es la mitad de para qué
  * alguien abre una agenda.
  */
-export async function agendaSemanal(session: Session, ahora = new Date()) {
+export async function agendaSemanal(
+  session: Session,
+  ahora = new Date(),
+  pais?: CountryCode,
+) {
   // La semana arranca en lunes: es una agenda de trabajo, no un calendario.
   const diaDeLaSemana = (ahora.getUTCDay() + 6) % 7;
   const lunes = new Date(
@@ -111,7 +131,11 @@ export async function agendaSemanal(session: Session, ahora = new Date()) {
 
   const actividades = await prisma.activity.findMany({
     where: {
-      AND: [activityScope(session), { startsAt: { gte: lunes, lte: domingo } }],
+      AND: [
+        activityScope(session),
+        { startsAt: { gte: lunes, lte: domingo } },
+        pais ? actividadEnOficina(pais) : {},
+      ],
     },
     select: {
       id: true,

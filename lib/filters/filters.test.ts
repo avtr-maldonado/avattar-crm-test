@@ -198,3 +198,29 @@ describe("AC-22 · la vista es reproducible desde la URL", () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });
+
+describe("atRisk · el único filtro que no viaja al SQL", () => {
+  it("se lee de la URL como booleano", () => {
+    expect(parseFilters(params("atRisk=1"), gerente).atRisk).toBe(true);
+    expect(parseFilters(params(""), gerente).atRisk).toBe(false);
+  });
+
+  it("cualquier otro valor no lo enciende", () => {
+    // La URL es entrada del usuario: `atRisk=quizá` no debe filtrar nada.
+    expect(parseFilters(params("atRisk=quiza"), gerente).atRisk).toBe(false);
+  });
+
+  it("no agrega cláusula a la consulta, porque las banderas se calculan (INV-11)", () => {
+    // No existe una columna «en riesgo» que consultar: la bandera se deriva de
+    // actividad, etapa y margen cada vez que se pregunta. El recorte ocurre en
+    // la pantalla, después de calcularlas, y es la única excepción a «los
+    // filtros se aplican en la consulta» (§9.1).
+    const sin = toWhere(parseFilters(params(""), gerente), gerente, opciones);
+    const con = toWhere(parseFilters(params("atRisk=1"), gerente), gerente, opciones);
+    expect(JSON.stringify(con)).toBe(JSON.stringify(sin));
+  });
+
+  it("se ofrece en la barra de filtros", () => {
+    expect(parseFilters(params(""), gerente).visibles).toContain("atRisk");
+  });
+});

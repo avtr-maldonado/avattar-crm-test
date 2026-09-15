@@ -168,17 +168,28 @@ que revisar cuando el inicio de sesión no entra, en este orden:
 - **Los umbrales están en la base**, no en el código: piso de margen, mínimos
   MEDDIC, pesos, días para estancada, impuesto. Un `0.20` en `lib/domain` es un
   defecto.
+- **Los objetivos se miden acumulados**, no trimestre por trimestre: vender de más
+  en el T2 salda lo que faltó del T1. Es una regla que el negocio pidió después
+  del spec; está razonada en `docs/decisiones-pendientes.md` §17.
 
-## Estado · 10 de septiembre de 2026
+## Estado · 14 de septiembre de 2026
 
 - ✅ **E0** cimientos · **E1** núcleo comercial: kanban y tabla con arrastre,
   alta en modal, detalle con edición, cambio de etapa y actividades, contactos,
   productos. Administración de usuarios: alta previa por correo, edición de rol y
   países, y acceso para quien ya entró con Microsoft sin perfil.
+- ✅ Barra superior de §13.5 completa: selector de oficina activa (cookie, recorta
+  dentro del alcance) y buscador global por alcance. Menú lateral con iconos,
+  contadores acotados a la oficina y contraíble a solo iconos.
+- ✅ P-01 en tres vistas: kanban, tabla y **embudo** (conversión etapa a etapa y
+  cola de riesgo). **Barra de filtros de §9** —cliente, vendedor, lapso, pipeline
+  y «solo en riesgo»—, que salda la deuda de E0 (AC-23).
+- ✅ De **E4**, P-08 objetivos: trimestral y anual, venta y utilidad, con medición
+  **acumulada** y captura de cuotas desde Administración.
 - ✅ De **E2**, el cotizador: líneas, congelar, versionar, alertas de política.
 - ✅ De **E3**, las pestañas MEDDIC, hitos y documentos.
-- ⬜ Barra de filtros de §9 (deuda de E0), marcar ganada/perdida, E4 medición,
-  E5 regional. Autorizaciones de descuento fuera de este alcance.
+- ⬜ Marcar ganada/perdida, P-09 análisis, vistas guardadas (§9.5), E5 regional.
+  Autorizaciones de descuento fuera de este alcance.
 - ⚠️ El bucket `documentos` de Storage está en **público**; debe ser privado
   (`Q-17`). El despliegue en Vercel devolvía 500 en el callback de login porque
   Prisma fallaba antes de conectar; `GET /salud` dice por qué (ver «Despliegue»).
