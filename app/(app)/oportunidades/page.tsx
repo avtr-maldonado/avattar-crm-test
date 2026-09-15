@@ -1,21 +1,34 @@
-import { requireSession } from "@/lib/auth/session";
-import { listOpportunities } from "@/lib/scope";
+import { oficinaActiva, requireSession } from "@/lib/auth/session";
+import { listOpportunities, listOrganizations } from "@/lib/scope";
 import { listPipelines, pipelinePorOmision } from "@/lib/scope/pipelines";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
+import { historiasDeEtapas } from "@/lib/scope/funnel";
+import { avanceDeObjetivos } from "@/lib/scope/objetivos";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
 import { can } from "@/lib/auth/permissions";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
-import { formatPercent, formatUSD, sum, toClient } from "@/lib/money";
+import { formatPercent, formatUSD, sum, toClient, type Money } from "@/lib/money";
 import { openTotal, weightedAmount, weightedTotal } from "@/lib/domain/pipeline";
-import { computeRiskFlags } from "@/lib/domain/riskFlags";
-import { parseFilters, resolvePeriod, toWhere } from "@/lib/filters";
-import { iniciales } from "@/lib/etiquetas";
+import { explainRiskFlags } from "@/lib/domain/riskFlags";
+import { buildFunnel } from "@/lib/domain/funnel";
+import { computeCoverage, computeCumulativeTrack } from "@/lib/domain/objectives";
+import {
+  ETIQUETA_CAMPO,
+  ETIQUETA_PREAJUSTE,
+  parseFilters,
+  resolvePeriod,
+  toWhere,
+  trimestreDe,
+} from "@/lib/filters";
+import { fraseDeRiesgo, iniciales, tonoDeRiesgo } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { Boton, ControlSegmentado, StatTile } from "@/components/ui/primitivas";
 import { TableroKanban, type ColumnaKanban } from "@/components/pipeline/TableroKanban";
 import type { DatosTarjeta } from "@/components/pipeline/TarjetaOportunidad";
 import { TablaOportunidades } from "@/components/pipeline/TablaOportunidades";
 import { NuevaOportunidad } from "@/components/pipeline/NuevaOportunidad";
+import { Embudo, type RiesgoVisible } from "@/components/pipeline/Embudo";
+import { BarraDeFiltros } from "@/components/pipeline/BarraDeFiltros";
 import { buscarOrganizacionesAccion, buscarPersonasAccion, crearOportunidadAccion } from "./acciones";
 import { cambiarEtapaAccion } from "./[id]/acciones";
 
@@ -36,17 +49,35 @@ import { cambiarEtapaAccion } from "./[id]/acciones";
  *   - La vista vive en la URL (INV-10): la pantalla es compartible y el botón
  *     de regresar funciona.
  *
- * Lo que falta de E1: el arrastre entre etapas con evaluación de compuertas, la
- * barra de filtros completa, las vistas guardadas y el panel de oportunidades
- * en riesgo para gerencia. El embudo es Fase 2.
+ * Tres vistas de los mismos datos: **Kanban** para trabajar el día, **Tabla**
+ * para comparar renglón a renglón, **Embudo** para preguntar por el proceso.
+ * Las tres salen de la misma consulta; cambiar de vista no vuelve a la base.
+ *
+ * Lo que falta de E1: marcar ganada y perdida, las vistas guardadas de §9.5 y
+ * las autorizaciones de descuento, fuera de este alcance por decisión del
+ * negocio.
  */
 const VISTAS = [
   { valor: "kanban", etiqueta: "Kanban" },
   { valor: "tabla", etiqueta: "Tabla" },
-  { valor: "embudo", etiqueta: "Embudo", deshabilitada: true },
+  { valor: "embudo", etiqueta: "Embudo" },
 ] as const;
 
-type Vista = "kanban" | "tabla";
+type Vista = (typeof VISTAS)[number]["valor"];
+
+/**
+ * La ventana de la tasa de paso.
+ *
+ * No es un umbral de negocio (INV-05): nada se decide con ella y nada cambia de
+ * veredicto al moverla. Es el tamaño de la muestra con que se mide el
+ * movimiento, y noventa días son un trimestre comercial, que es la unidad en
+ * que esta empresa piensa.
+ */
+const VENTANA_DE_PASO_EN_DIAS = 90;
+
+function esVista(valor: string | null): valor is Vista {
+  return VISTAS.some((v) => v.valor === valor);
+}
 
 export default async function PipelinePage({
   searchParams,
@@ -67,11 +98,18 @@ export default async function PipelinePage({
     }
   }
 
-  const vista: Vista = urlParams.get("vista") === "tabla" ? "tabla" : "kanban";
-  const paisActivo = session.countryCodes[0] ?? "MX";
+  const enUrl = urlParams.get("vista");
+  const vista: Vista = esVista(enUrl) ? enUrl : "kanban";
+  // La oficina elegida en la barra superior. Manda sobre el pipeline, la
+  // política, la lista y las métricas: las cuatro leen el mismo país.
+  const paisActivo = await oficinaActiva(session);
 
   const puedeAsignar = can(session, "VER_OPORTUNIDADES_OFICINA");
   const filtros = parseFilters(urlParams, session);
+
+  const ahora = new Date();
+  const desdeLaVentana = new Date(ahora.getTime() - VENTANA_DE_PASO_EN_DIAS * 86_400_000);
+  const deLaOficina = { countryCode: paisActivo };
 
   // El país arranca primero porque la lista lo necesita: `toWhere` traduce los
   // preajustes de fecha con el mes de arranque del año fiscal. La lista se
@@ -80,7 +118,17 @@ export default async function PipelinePage({
   // (docs/latencia-dev.md, §4).
   const paisPromesa = getCountry(paisActivo);
 
-  const [pipelines, politica, pais, catalogos, propietarios, oportunidades] = await Promise.all([
+  const [
+    pipelines,
+    politica,
+    pais,
+    catalogos,
+    propietarios,
+    cuentas,
+    oportunidades,
+    historias,
+    objetivos,
+  ] = await Promise.all([
     listPipelines(session),
     getCommercialPolicy(paisActivo),
     paisPromesa,
@@ -88,10 +136,34 @@ export default async function PipelinePage({
     // Solo si de verdad puede asignar: consultar usuarios para deshabilitar un
     // control sería pagar por una lista que nadie va a poder usar (Q-13).
     puedeAsignar ? destinatariosValidos(paisActivo) : Promise.resolve([]),
+    // Las opciones del filtro «Cliente», ya acotadas por alcance: un vendedor
+    // solo puede filtrar por las cuentas que alcanza.
+    listOrganizations(session, { where: deLaOficina }),
     paisPromesa.then((p) =>
       listOpportunities(session, {
-        where: toWhere(filtros, session, { fiscalYearStartMonth: p.fiscalYearStartMonth }),
+        // La oficina activa va DESPUÉS del alcance y de los filtros, con AND:
+        // recorta, nunca amplía (AC-25). Sin ella, el tablero pintaba las
+        // columnas del pipeline de un país y las métricas sumaban las
+        // oportunidades de todos: las de otros países caían en etapas que no
+        // estaban en pantalla y desaparecían del tablero, no de los totales.
+        where: {
+          AND: [
+            toWhere(filtros, session, { fiscalYearStartMonth: p.fiscalYearStartMonth }),
+            deLaOficina,
+          ],
+        },
         orderBy: [{ amount: "desc" }],
+      }),
+    ),
+    // El movimiento entre etapas, para la tasa de paso. A propósito NO lo
+    // recortan los filtros del usuario: «¿el proceso mueve?» es una pregunta
+    // sobre el proceso, no sobre el subconjunto que se esté mirando.
+    historiasDeEtapas(session, { desde: desdeLaVentana, where: deLaOficina }),
+    paisPromesa.then((p) =>
+      avanceDeObjetivos(session, {
+        fiscalYear: trimestreDe(ahora, p.fiscalYearStartMonth).fiscalYear,
+        pais: paisActivo,
+        fiscalYearStartMonth: p.fiscalYearStartMonth,
       }),
     ),
   ]);
@@ -131,20 +203,32 @@ export default async function PipelinePage({
 
   // El mismo país que la política y el selector del encabezado. Pasarlo
   // explícitamente es lo que impide que el tablero y la política se separen.
-  const pipeline = pipelinePorOmision(pipelines, session, paisActivo);
+  const pipeline = pipelinePorOmision(pipelines, session, paisActivo, filtros.pipeline);
 
-  const ahora = new Date();
-  const conBanderas = oportunidades.map((o) => ({
-    ...o,
-    banderas: computeRiskFlags(o, o.stage, politica, ahora),
-  }));
+  const conEvidencia = oportunidades.map((o) => {
+    const evidencia = explainRiskFlags(o, o.stage, politica, ahora);
+    return { ...o, evidencia, banderas: evidencia.map((e) => e.flag) };
+  });
 
-  const abiertas = conBanderas.filter((o) => o.status === "ABIERTA");
-  const enRiesgo = conBanderas.filter((o) => o.banderas.length > 0);
+  /**
+   * `atRisk` es el único filtro que se aplica en memoria.
+   *
+   * §9.1 los quiere en la consulta, y este no puede: las banderas se calculan y
+   * no se guardan (INV-11), así que no hay columna que consultar. Se recorta
+   * **después** del alcance y de los demás filtros, nunca antes, así que sigue
+   * sin poder ampliar nada (AC-25).
+   */
+  const visibles = filtros.atRisk
+    ? conEvidencia.filter((o) => o.banderas.length > 0)
+    : conEvidencia;
+
+  const abiertas = visibles.filter((o) => o.status === "ABIERTA");
+  const enRiesgo = visibles.filter((o) => o.banderas.length > 0);
 
   // §10.2 · el cierre del trimestre mira `expectedCloseDate`; el avance de
-  // cuota miraría `actualCloseDate`. Mezclarlas produce coberturas absurdas al
+  // cuota mira `actualCloseDate`. Mezclarlas produce coberturas absurdas al
   // final del trimestre.
+  const { quarter } = trimestreDe(ahora, pais.fiscalYearStartMonth);
   const trimestre = resolvePeriod("ESTE_TRIMESTRE", pais.fiscalYearStartMonth, ahora)!;
   const cierraEnTrimestre = abiertas.filter(
     (o) =>
@@ -152,49 +236,73 @@ export default async function PipelinePage({
       o.expectedCloseDate <= trimestre.to,
   );
 
-  const tarjetas = conBanderas.map(
-    (o): DatosTarjeta => ({
+  /**
+   * Cobertura · §10.2 · pipeline del trimestre ÷ brecha contra la cuota.
+   *
+   * La brecha se suma de los renglones que la sesión alcanza, nunca de una
+   * consulta aparte (§10.3): para un vendedor es su propia brecha, no la de la
+   * oficina. Y es la brecha **acumulada**, que es la que el negocio mide
+   * (`decisiones-pendientes.md` §17).
+   */
+  const brecha = sum(
+    objetivos.map(
+      (r) => computeCumulativeTrack(r.cuotaVenta, r.logradoVenta)[quarter - 1]!.faltante,
+    ),
+  );
+  const cobertura = computeCoverage(brecha, openTotal(cierraEnTrimestre));
+  const hayCuota = objetivos.some((r) => r.tieneCuota);
+
+  const tarjetas = visibles.map((o) => aTarjeta(o, politica));
+  const columnas = columnasDelTablero(pipeline?.stages ?? [], visibles, tarjetas);
+  // La tabla muestra la etapa como columna; la tarjeta no la lleva porque en el
+  // kanban ya la dice la columna donde está.
+  const etapaDe = Object.fromEntries(visibles.map((o) => [o.id, o.stage.name]));
+
+  // El embudo mide sobre lo abierto: una etapa no «tiene» las que ya cerraron.
+  const etapasDelEmbudo = buildFunnel(pipeline?.stages ?? [], abiertas, historias).map((e) => ({
+    nombre: e.nombre,
+    valor: formatUSD(e.valor),
+    cuantas: e.cuantas,
+    fraccionDeBarra: e.fraccionDeBarra,
+    tasaDePaso: e.tasaDePaso,
+    base: e.base,
+    pasaron: e.tasaDePaso === null ? 0 : Math.round(e.tasaDePaso * e.base),
+    vieneDe: e.vieneDe,
+    esCierre: e.esCierre,
+  }));
+
+  /**
+   * La cola de riesgo, ordenada por valor · por valor y no por antigüedad:
+   * con tiempo para atender tres cosas, se atienden las tres que más dinero
+   * mueven. De cada oportunidad se escribe **una** bandera, la más grave: el
+   * renglón tiene una línea, y repetir las tres haría un muro.
+   */
+  const pisoVisible = formatPercent(toClient(politica.marginFloor), 0);
+  // Sin `sort`: la consulta ya pidió `amount: "desc"` y `filter` conserva el
+  // orden. Reordenar aquí sería recorrer la lista otra vez para dejarla igual.
+  const riesgos: RiesgoVisible[] = enRiesgo.map((o) => {
+    const peor =
+      o.evidencia.find((e) => e.flag === "MARGEN_BAJO") ??
+      o.evidencia.find((e) => e.flag === "SIN_ACTIVIDAD") ??
+      o.evidencia[0]!;
+
+    return {
       id: o.id,
       folio: o.folio,
       nombre: o.name,
-      organizacion: o.organization.name,
-      importe: formatUSD(o.amount),
-      margen: o.grossMargin ? formatPercent(toClient(o.grossMargin)) : null,
-      margenBajoElPiso: o.grossMargin ? o.grossMargin.lt(politica.marginFloor) : false,
-      meddicScore: o.meddicScore,
-      cierre: FORMATO_FECHA.format(o.expectedCloseDate),
-      propietario: { nombre: o.owner.name, iniciales: o.owner.initials },
-      banderas: o.banderas,
-    }),
-  );
-
-  const porId = new Map(tarjetas.map((t) => [t.id, t]));
-
-  // Se agrupa UNA vez por etapa. Filtrar dentro del bucle de columnas recorre
-  // la lista completa por cada etapa: con 14 oportunidades da igual, con las
-  // 500 del requisito no funcional §13, no.
-  const porEtapa = new Map<string, typeof conBanderas>();
-  for (const o of conBanderas) {
-    const lista = porEtapa.get(o.stage.id);
-    if (lista) lista.push(o);
-    else porEtapa.set(o.stage.id, [o]);
-  }
-
-  // Todas las etapas del pipeline, incluidas las vacías: una columna que
-  // desaparece rompe el mapa mental del proceso.
-  const columnas: ColumnaKanban[] = (pipeline?.stages ?? []).map((etapa) => {
-    const deLaEtapa = porEtapa.get(etapa.id) ?? [];
-    return {
-      etapaId: etapa.id,
-      nombre: etapa.name,
-      probabilidad: formatPercent(toClient(etapa.probability), 0),
-      total: formatUSD(openTotal(deLaEtapa)),
-      ponderado: formatUSD(
-        sum(deLaEtapa.map((o) => weightedAmount(o.amount, etapa.probability))),
+      motivo: fraseDeRiesgo(
+        peor.flag === "MARGEN_BAJO"
+          ? {
+              flag: "MARGEN_BAJO",
+              margen: formatPercent(toClient(peor.margen), 0),
+              piso: pisoVisible,
+            }
+          : peor,
+        { etapa: o.stage.name },
       ),
-      esCierre: etapa.isClosing,
-      gateMode: etapa.gateMode,
-      oportunidades: deLaEtapa.map((o) => porId.get(o.id)!),
+      importe: formatUSD(o.amount),
+      propietario: o.owner.name,
+      tono: tonoDeRiesgo(peor.flag),
     };
   });
 
@@ -203,6 +311,15 @@ export default async function PipelinePage({
     p.set("vista", v);
     return `/oportunidades?${p.toString()}`;
   };
+
+  const accionVacio = (
+    <>
+      <Boton href="/oportunidades" variante="secundario">
+        Limpiar filtros
+      </Boton>
+      {botonDeAlta}
+    </>
+  );
 
   return (
     <>
@@ -228,63 +345,225 @@ export default async function PipelinePage({
           <div className="ml-auto">{botonDeAlta}</div>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-5">
-          <StatTile
-            etiqueta="Valor abierto"
-            valor={formatUSD(openTotal(abiertas))}
-            subtexto={`${abiertas.length} oportunidades`}
+        <div className="mt-4">
+          <BarraDeFiltros
+            ruta="/oportunidades"
+            visibles={filtros.visibles}
+            activos={{
+              org: filtros.org,
+              owner: filtros.owner,
+              pipeline: filtros.pipeline,
+              dateField: filtros.dateField,
+              period: filtros.period,
+              from: filtros.from,
+              to: filtros.to,
+              atRisk: filtros.atRisk,
+            }}
+            catalogos={catalogosDeFiltro(cuentas, propietarios, pipelines, paisActivo)}
           />
-          <StatTile
-            etiqueta="Ponderado"
-            valor={formatUSD(weightedTotal(abiertas))}
-            subtexto="por probabilidad de etapa"
-            tono="acento"
-          />
-          <StatTile
-            etiqueta="Cierre del trimestre"
-            valor={formatUSD(openTotal(cierraEnTrimestre))}
-            subtexto={`${cierraEnTrimestre.length} con cierre estimado`}
-          />
-          <StatTile
-            etiqueta="Piso de margen"
-            valor={formatPercent(toClient(politica.marginFloor), 0)}
-            subtexto="política del país"
-            tono="exito"
-          />
-          <StatTile
-            etiqueta="En riesgo"
-            valor={formatUSD(openTotal(enRiesgo))}
-            subtexto={`${enRiesgo.length} con bandera activa`}
-            tono={enRiesgo.length > 0 ? "peligro" : "neutro"}
+        </div>
+
+        <div className="mt-5">
+          <Indicadores
+            abiertas={abiertas}
+            cierraEnTrimestre={cierraEnTrimestre}
+            enRiesgo={enRiesgo}
+            cobertura={{ veces: cobertura, brecha, hayCuota }}
           />
         </div>
 
         <div className="mt-6">
-          {vista === "kanban" ? (
+          {vista === "kanban" && (
             <TableroKanban
               columnas={columnas}
               // Mover desde el tablero es la misma acción que desde el
               // detalle: una sola evaluación de RN-02, un solo camino.
               puedeMover
               accion={cambiarEtapaAccion}
-              accionVacio={
-                <>
-                  <Boton href="/oportunidades" variante="secundario">
-                    Limpiar filtros
-                  </Boton>
-                  {botonDeAlta}
-                </>
-              }
+              accionVacio={accionVacio}
             />
-          ) : (
-            <TablaOportunidades
-              oportunidades={tarjetas}
-              etapaDe={Object.fromEntries(conBanderas.map((o) => [o.id, o.stage.name]))}
+          )}
+
+          {vista === "tabla" && (
+            <TablaOportunidades oportunidades={tarjetas} etapaDe={etapaDe} />
+          )}
+
+          {vista === "embudo" && (
+            <Embudo
+              etapas={etapasDelEmbudo}
+              riesgos={riesgos}
+              ventanaEnDias={VENTANA_DE_PASO_EN_DIAS}
+              accionVacio={accionVacio}
             />
           )}
         </div>
       </div>
     </>
+  );
+}
+
+type Oportunidad = Awaited<ReturnType<typeof listOpportunities>>[number] & {
+  banderas: ReturnType<typeof explainRiskFlags>[number]["flag"][];
+};
+
+/** El renglón de la tabla y la tarjeta del kanban son el mismo objeto. */
+function aTarjeta(o: Oportunidad, politica: { marginFloor: Money }): DatosTarjeta {
+  return {
+    id: o.id,
+    folio: o.folio,
+    nombre: o.name,
+    organizacion: o.organization.name,
+    importe: formatUSD(o.amount),
+    margen: o.grossMargin ? formatPercent(toClient(o.grossMargin)) : null,
+    margenBajoElPiso: o.grossMargin ? o.grossMargin.lt(politica.marginFloor) : false,
+    meddicScore: o.meddicScore,
+    cierre: FORMATO_FECHA.format(o.expectedCloseDate),
+    propietario: { nombre: o.owner.name, iniciales: o.owner.initials },
+    banderas: o.banderas,
+  };
+}
+
+/**
+ * Las columnas del tablero · una por etapa del pipeline, incluidas las vacías.
+ *
+ * Una columna que desaparece cuando se queda sin oportunidades rompe el mapa
+ * mental del proceso: el kanban deja de ser el proceso y pasa a ser la lista.
+ *
+ * Se agrupa **una vez** por etapa. Filtrar dentro del bucle de columnas recorre
+ * la lista completa por cada etapa: con catorce oportunidades da igual, con las
+ * quinientas del requisito no funcional §13, no.
+ */
+function columnasDelTablero(
+  etapas: {
+    id: string;
+    name: string;
+    probability: Money;
+    isClosing: boolean;
+    gateMode: ColumnaKanban["gateMode"];
+  }[],
+  oportunidades: Oportunidad[],
+  tarjetas: DatosTarjeta[],
+): ColumnaKanban[] {
+  const porId = new Map(tarjetas.map((t) => [t.id, t]));
+
+  const porEtapa = new Map<string, Oportunidad[]>();
+  for (const o of oportunidades) {
+    const lista = porEtapa.get(o.stage.id);
+    if (lista) lista.push(o);
+    else porEtapa.set(o.stage.id, [o]);
+  }
+
+  return etapas.map((etapa) => {
+    const deLaEtapa = porEtapa.get(etapa.id) ?? [];
+    return {
+      etapaId: etapa.id,
+      nombre: etapa.name,
+      probabilidad: formatPercent(toClient(etapa.probability), 0),
+      total: formatUSD(openTotal(deLaEtapa)),
+      ponderado: formatUSD(
+        sum(deLaEtapa.map((o) => weightedAmount(o.amount, etapa.probability))),
+      ),
+      esCierre: etapa.isClosing,
+      gateMode: etapa.gateMode,
+      oportunidades: deLaEtapa.map((o) => porId.get(o.id)!),
+    };
+  });
+}
+
+/**
+ * Las opciones de cada desplegable, ya acotadas por alcance.
+ *
+ * Las listas vienen de `lib/scope`, así que un vendedor solo puede filtrar por
+ * cuentas que alcanza; y «Vendedor» ni siquiera se le ofrece (AC-24). Lo que
+ * esta función hace es traducirlas a pares valor/etiqueta: ninguna decisión de
+ * visibilidad vive aquí.
+ */
+function catalogosDeFiltro(
+  cuentas: { id: string; name: string }[],
+  propietarios: { id: string; name: string }[],
+  pipelines: { id: string; name: string; countryCode: string }[],
+  paisActivo: string,
+) {
+  const paresDe = (mapa: Record<string, string>) =>
+    Object.entries(mapa).map(([valor, etiqueta]) => ({ valor, etiqueta }));
+
+  // Un recorrido, no filtrar y luego mapear: solo los de la oficina activa, y
+  // se arma el par en el mismo paso.
+  const deLaOficina = [];
+  for (const p of pipelines) {
+    if (p.countryCode === paisActivo) deLaOficina.push({ valor: p.id, etiqueta: p.name });
+  }
+
+  return {
+    org: cuentas.map((c) => ({ valor: c.id, etiqueta: c.name })),
+    owner: propietarios.map((u) => ({ valor: u.id, etiqueta: u.name })),
+    pipeline: deLaOficina,
+    camposDeFecha: paresDe(ETIQUETA_CAMPO),
+    preajustes: paresDe(ETIQUETA_PREAJUSTE),
+  };
+}
+
+/**
+ * Los cinco indicadores del encabezado · §11.
+ *
+ * Se calculan sobre el conjunto **ya acotado** que recibe: para un vendedor son
+ * los suyos, nunca el total de la oficina ni por agregación (§2.3).
+ *
+ * «Cobertura» ocupa el lugar que tenía el piso de margen. El piso ya se ve
+ * donde decide algo —en cada tarjeta, verde o coral—, mientras que cuántas
+ * veces cubre el pipeline lo que falta de cuota no se veía en ningún otro lado.
+ * Sin cuota fijada se dice eso, nunca un cero (§11).
+ */
+function Indicadores({
+  abiertas,
+  cierraEnTrimestre,
+  enRiesgo,
+  cobertura,
+}: {
+  abiertas: { amount: Money; stage: { probability: Money } }[];
+  cierraEnTrimestre: { amount: Money }[];
+  enRiesgo: { amount: Money }[];
+  cobertura: { veces: number | null; brecha: Money; hayCuota: boolean };
+}) {
+  const { veces, brecha, hayCuota } = cobertura;
+
+  return (
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <StatTile
+        etiqueta="Valor abierto"
+        valor={formatUSD(openTotal(abiertas))}
+        subtexto={`${abiertas.length} oportunidades`}
+      />
+      <StatTile
+        etiqueta="Ponderado"
+        valor={formatUSD(weightedTotal(abiertas))}
+        subtexto="por probabilidad de etapa"
+        tono="acento"
+      />
+      <StatTile
+        etiqueta="Cierre del trimestre"
+        valor={formatUSD(openTotal(cierraEnTrimestre))}
+        subtexto={`${cierraEnTrimestre.length} con cierre estimado`}
+      />
+      <StatTile
+        etiqueta="Cobertura"
+        valor={!hayCuota ? "—" : veces === null ? "Cubierta" : `${veces.toFixed(1)} ×`}
+        subtexto={
+          !hayCuota
+            ? "sin cuota fijada para el año"
+            : veces === null
+              ? "la cuota acumulada ya está cubierta"
+              : `sobre ${formatUSD(brecha)} de brecha`
+        }
+        tono={hayCuota && veces !== null && veces < 1 ? "peligro" : "exito"}
+      />
+      <StatTile
+        etiqueta="En riesgo"
+        valor={formatUSD(openTotal(enRiesgo))}
+        subtexto={`${enRiesgo.length} con bandera activa`}
+        tono={enRiesgo.length > 0 ? "peligro" : "neutro"}
+      />
+    </div>
   );
 }
 

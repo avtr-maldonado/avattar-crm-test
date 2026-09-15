@@ -85,6 +85,35 @@ export function trimestreDe(
   return { fiscalYear, quarter: Math.floor(mesesTranscurridos / 3) + 1 };
 }
 
+/**
+ * El rango de un trimestre fiscal concreto.
+ *
+ * Los preajustes de §9.3 resuelven contra «hoy»; los objetivos (§10) preguntan
+ * por un trimestre nombrado: «T2 de 2026», se esté en el mes que se esté. Es la
+ * misma aritmética de año fiscal, así que sale de aquí en vez de repetirse.
+ */
+export function rangoDeTrimestre(
+  fiscalYear: number,
+  quarter: number,
+  fiscalYearStartMonth: number,
+): { from: Date; to: Date } {
+  return {
+    from: inicioDeTrimestre(fiscalYear, quarter, fiscalYearStartMonth),
+    to: finDeTrimestre(fiscalYear, quarter, fiscalYearStartMonth),
+  };
+}
+
+/** El año fiscal completo: del primer día del T1 al último del T4. */
+export function rangoDeAnioFiscal(
+  fiscalYear: number,
+  fiscalYearStartMonth: number,
+): { from: Date; to: Date } {
+  return {
+    from: inicioDeTrimestre(fiscalYear, 1, fiscalYearStartMonth),
+    to: finDeTrimestre(fiscalYear, 4, fiscalYearStartMonth),
+  };
+}
+
 /** Primer día del trimestre fiscal indicado. */
 function inicioDeTrimestre(
   fiscalYear: number,

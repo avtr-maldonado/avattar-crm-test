@@ -1,6 +1,12 @@
+"use client";
+
 import Image from "next/image";
+import { useState } from "react";
+import { clsx } from "clsx";
 import type { CountryCode, Role } from "@/lib/dto";
 import { ETIQUETA_ROL } from "@/lib/etiquetas";
+import { COOKIE_MENU, MENU_COLAPSADO, MENU_EXPANDIDO, UN_ANIO_EN_SEGUNDOS } from "@/lib/preferencias";
+import { Icono } from "./iconos";
 import { RubrosNavegacion, type Rubro } from "./RubrosNavegacion";
 
 /**
@@ -13,9 +19,13 @@ import { RubrosNavegacion, type Rubro } from "./RubrosNavegacion";
  * barra que se va hacia arriba obliga a subir para cambiar de pantalla, y en
  * una aplicación que se usa ocho horas eso se paga en cada cambio de contexto.
  *
- * Si algún día los rubros no caben, el que gana scroll es el bloque central
- * —`overflow-y-auto`—, nunca la barra completa: el logotipo y la sesión se
- * quedan anclados.
+ * ## Contraída, quedan los iconos
+ *
+ * Se contrae a 64 px con el botón del pie: iconos con su nombre en `title`, los
+ * contadores como insignia sobre el icono, el avatar solo. La preferencia vive
+ * en una cookie que el layout lee en el servidor, así que la barra ya nace del
+ * ancho correcto y no salta al hidratar. Se escribe desde aquí con
+ * `document.cookie`: no hace falta un viaje al servidor para recordar un ancho.
  *
  * ## El bloque de sesión
  *
@@ -23,11 +33,8 @@ import { RubrosNavegacion, type Rubro } from "./RubrosNavegacion";
  * rol (§2.3), **bajo qué alcance estoy operando** es información de trabajo:
  * explica por qué el pipeline muestra catorce oportunidades y no cuarenta, y
  * por qué Análisis aparece o no en el menú. Por eso está siempre a la vista y
- * no escondido tras el avatar.
- *
- * No es un conmutador. El prototipo mostraba tres roles seleccionables, que es
- * un recurso de demostración: con autenticación real, dejar que alguien cambie
- * su propio rol es escalada de privilegios. El rol lo cambia Administración.
+ * no escondido tras el avatar. No es un conmutador: el rol lo cambia
+ * Administración.
  */
 export type SeccionNavegacion = {
   titulo: string;
@@ -37,6 +44,7 @@ export type SeccionNavegacion = {
 export function BarraLateral({
   secciones,
   usuario,
+  colapsadoInicial = false,
 }: {
   secciones: SeccionNavegacion[];
   usuario: {
@@ -45,41 +53,109 @@ export function BarraLateral({
     rol: Role;
     paises: CountryCode[];
   };
+  colapsadoInicial?: boolean;
 }) {
+  const [colapsado, setColapsado] = useState(colapsadoInicial);
+
+  function alternar() {
+    const siguiente = !colapsado;
+    setColapsado(siguiente);
+    document.cookie = `${COOKIE_MENU}=${siguiente ? MENU_COLAPSADO : MENU_EXPANDIDO}; path=/; max-age=${UN_ANIO_EN_SEGUNDOS}; samesite=lax`;
+  }
+
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-hidden bg-navy-900 lg:flex">
-      <div className="flex items-center gap-3 px-5 pb-4 pt-5">
-        <Image
-          src="/marca/avattar-blanco.png"
-          alt="Avattar IT Solutions"
-          width={534}
-          height={200}
-          priority
-          className="h-6 w-auto"
-        />
-        <span className="border-l border-navy-700 pl-3 text-sm font-semibold tracking-wide text-white">
-          CRM
-        </span>
+    <aside
+      className={clsx(
+        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-hidden bg-navy-900 lg:flex",
+        "transition-[width] duration-base ease-estandar",
+        colapsado ? "w-16" : "w-64",
+      )}
+    >
+      <div
+        className={clsx(
+          "flex items-center pb-4 pt-5",
+          colapsado ? "justify-center px-2" : "gap-3 px-5",
+        )}
+      >
+        {colapsado ? (
+          <span
+            title="CRM Avattar"
+            className="text-xs font-semibold tracking-wide text-white"
+          >
+            CRM
+          </span>
+        ) : (
+          <>
+            <Image
+              src="/marca/avattar-blanco.png"
+              alt="Avattar IT Solutions"
+              width={534}
+              height={200}
+              priority
+              className="h-6 w-auto"
+            />
+            <span className="border-l border-navy-700 pl-3 text-sm font-semibold tracking-wide text-white">
+              CRM
+            </span>
+          </>
+        )}
       </div>
 
-      <nav aria-label="Principal" className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-        {secciones.map((s) => (
-          <Seccion key={s.titulo} seccion={s} />
+      <nav
+        aria-label="Principal"
+        className={clsx("min-h-0 flex-1 overflow-y-auto pb-4", colapsado ? "px-2" : "px-3")}
+      >
+        {secciones.map((s, i) => (
+          <Seccion key={s.titulo} seccion={s} colapsado={colapsado} primera={i === 0} />
         ))}
       </nav>
 
-      <BloqueDeSesion usuario={usuario} />
+      <button
+        type="button"
+        onClick={alternar}
+        aria-expanded={!colapsado}
+        aria-label={colapsado ? "Expandir el menú" : "Contraer el menú"}
+        title={colapsado ? "Expandir el menú" : "Contraer el menú"}
+        className={clsx(
+          "flex items-center gap-2 border-t border-navy-800 py-2.5 text-xs text-navy-300",
+          "transition-colors duration-rapido ease-estandar hover:bg-navy-800/60 hover:text-white",
+          colapsado ? "justify-center px-2" : "px-4",
+        )}
+      >
+        <Icono nombre={colapsado ? "expandir" : "contraer"} className="size-4" />
+        {!colapsado && "Contraer menú"}
+      </button>
+
+      <BloqueDeSesion usuario={usuario} colapsado={colapsado} />
     </aside>
   );
 }
 
-function Seccion({ seccion }: { seccion: SeccionNavegacion }) {
+function Seccion({
+  seccion,
+  colapsado,
+  primera,
+}: {
+  seccion: SeccionNavegacion;
+  colapsado: boolean;
+  primera: boolean;
+}) {
   if (seccion.rubros.length === 0) return null;
 
   return (
-    <div className="pb-5 pt-3 first:pt-0">
-      <p className="eyebrow px-2.5 pb-2 text-navy-400">{seccion.titulo}</p>
-      <RubrosNavegacion rubros={seccion.rubros} />
+    <div
+      className={clsx(
+        "pb-5",
+        // Contraída no hay título de sección; una línea separa una de otra.
+        colapsado
+          ? primera
+            ? "pt-1"
+            : "border-t border-navy-800 pt-3"
+          : "pt-3 first:pt-0",
+      )}
+    >
+      {!colapsado && <p className="eyebrow px-2.5 pb-2 text-navy-400">{seccion.titulo}</p>}
+      <RubrosNavegacion rubros={seccion.rubros} colapsado={colapsado} />
     </div>
   );
 }
@@ -90,9 +166,27 @@ function Seccion({ seccion }: { seccion: SeccionNavegacion }) {
  */
 function BloqueDeSesion({
   usuario,
+  colapsado,
 }: {
   usuario: { nombre: string; iniciales: string; rol: Role; paises: CountryCode[] };
+  colapsado: boolean;
 }) {
+  const resumen = `${usuario.nombre} · ${ETIQUETA_ROL[usuario.rol]} · ${usuario.paises.join(", ")}`;
+
+  if (colapsado) {
+    return (
+      <div className="flex shrink-0 justify-center border-t border-navy-800 px-2 py-4">
+        <span
+          title={resumen}
+          aria-label={resumen}
+          className="grid h-8 w-8 place-items-center rounded-pill bg-acento text-xs font-semibold text-navy-900"
+        >
+          {usuario.iniciales}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="shrink-0 border-t border-navy-800 px-4 py-4">
       <div className="flex items-center gap-2.5">

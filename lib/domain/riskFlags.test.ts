@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { money } from "@/lib/money";
-import { computeRiskFlags, type RiskInputs } from "./riskFlags";
+import { computeRiskFlags, explainRiskFlags, type RiskInputs } from "./riskFlags";
 
 const HOY = new Date("2026-09-01T12:00:00Z");
 const MANANA = new Date("2026-09-02T12:00:00Z");
@@ -115,5 +115,70 @@ describe("computeRiskFlags · RN-13, INV-11", () => {
       .toContain("MARGEN_BAJO");
     expect(computeRiskFlags(conMargen15, etapa, { marginFloor: money("0.10") }, HOY))
       .not.toContain("MARGEN_BAJO");
+  });
+});
+
+describe("explainRiskFlags · la bandera con el número que la justifica", () => {
+  it("la evidencia trae los mismos veredictos que las banderas", () => {
+    const entrada = sana({ grossMargin: money("0.05"), nextActivityAt: null });
+    expect(explainRiskFlags(entrada, etapa, politica, HOY).map((e) => e.flag)).toEqual(
+      computeRiskFlags(entrada, etapa, politica, HOY),
+    );
+  });
+
+  it("sin actividad dice cuántos días lleva sin contacto", () => {
+    const hace34Dias = new Date("2026-07-29T12:00:00Z");
+    const [evidencia] = explainRiskFlags(
+      sana({ nextActivityAt: null, lastActivityAt: hace34Dias }),
+      etapa,
+      politica,
+      HOY,
+    );
+
+    expect(evidencia).toEqual({ flag: "SIN_ACTIVIDAD", diasSinContacto: 34 });
+  });
+
+  it("sin actividad y sin historia: los días no se inventan", () => {
+    // Una oportunidad recién creada no lleva «0 días sin contacto»: no ha
+    // habido ninguno. Nulo, y la frase lo dice de otra manera.
+    const [evidencia] = explainRiskFlags(
+      sana({ nextActivityAt: null, lastActivityAt: null }),
+      etapa,
+      politica,
+      HOY,
+    );
+
+    expect(evidencia).toEqual({ flag: "SIN_ACTIVIDAD", diasSinContacto: null });
+  });
+
+  it("estancada trae los días en la etapa y el límite que se pasó", () => {
+    const hace26Dias = new Date("2026-08-06T12:00:00Z");
+    const evidencia = explainRiskFlags(
+      sana({ stageEnteredAt: hace26Dias }),
+      { staleAfterDays: 21 },
+      politica,
+      HOY,
+    );
+
+    expect(evidencia).toContainEqual({ flag: "ESTANCADA", diasEnEtapa: 26, limite: 21 });
+  });
+
+  it("margen bajo trae el margen y el piso contra el que se comparó", () => {
+    const evidencia = explainRiskFlags(
+      sana({ grossMargin: money("0.09") }),
+      etapa,
+      { marginFloor: money("0.20") },
+      HOY,
+    );
+
+    expect(evidencia).toContainEqual({
+      flag: "MARGEN_BAJO",
+      margen: money("0.09"),
+      piso: money("0.20"),
+    });
+  });
+
+  it("una oportunidad sana no trae evidencia de nada", () => {
+    expect(explainRiskFlags(sana(), etapa, politica, HOY)).toEqual([]);
   });
 });

@@ -75,7 +75,7 @@ export function EsqueletoDeEncabezado({ titulo }: { titulo: string }) {
       </div>
 
       <div className="ml-auto flex items-center gap-4">
-        <Esqueleto className="hidden h-8 w-72 rounded-sm lg:block" />
+        <Esqueleto className="hidden h-8 w-80 rounded-sm lg:block" />
         <div className="flex items-center gap-2 border-l border-borde pl-4">
           <Esqueleto className="h-8 w-8 rounded-pill" />
           <div className="hidden flex-col gap-1 sm:flex">
