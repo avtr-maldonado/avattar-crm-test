@@ -32,7 +32,7 @@ export default function CargandoOportunidadesId() {
           </div>
 
           <div className="mt-5">
-            <EsqueletoDeIndicadores cuantos={4} columnas="lg:grid-cols-4" />
+            <EsqueletoDeIndicadores cuantos={4} columnas="lg:grid-cols-4" denso />
           </div>
 
           <div className="mt-6">

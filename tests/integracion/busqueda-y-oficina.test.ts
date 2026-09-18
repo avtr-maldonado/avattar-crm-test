@@ -151,11 +151,10 @@ describe("bandejaDeTrabajo y agendaSemanal · se acotan a la oficina activa", ()
       where: {
         deletedAt: null,
         startsAt: { gte: lunes, lte: domingo },
-        OR: [
-          { opportunity: { countryCode: "CL" } },
-          { organization: { countryCode: "CL" } },
-          { opportunity: null, organization: null },
-        ],
+        // La oficina es de la oportunidad. Una actividad sin oportunidad —de
+        // una cuenta, o suelta— cuenta en todas, porque las cuentas no son de
+        // un país (§18).
+        OR: [{ opportunity: { countryCode: "CL" } }, { opportunity: null }],
       },
     });
     expect(enPantalla).toBe(enBase);

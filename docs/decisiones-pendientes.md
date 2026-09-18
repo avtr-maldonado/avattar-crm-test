@@ -614,6 +614,11 @@ acciones distintas —congelar una cotización, o repartir lo que falta—.
 
 ## 14. Altas desde la pantalla de Contactos (11 de septiembre de 2026)
 
+> **Revisado el 17 de septiembre de 2026 (§18).** Las dos reglas de país de esta
+> sección —la cuenta nace en un país de la sesión, y el homónimo solo se
+> rechaza dentro del mismo país— quedaron sin efecto: las cuentas ya no son de
+> un país. Se conservan como historia de por qué se construyó así.
+
 P-03 ganó dos botones: «Nueva cuenta» en Organizaciones y «Agregar contacto» en
 Personas. Hasta entonces una organización solo nacía en línea dentro del alta
 de oportunidad, y una persona solo desde la ficha de su empresa o el detalle.
@@ -727,12 +732,13 @@ de cuentas y los contadores del menú **vacíos**, no llenos de datos ajenos.
 
 Manda sobre P-01 (pipeline, política, tablero, tabla y las cuatro métricas
 del encabezado, que antes sumaban todos los países mientras el tablero pintaba
-uno), sobre P-03 (cuentas y personas), sobre P-07 (bandeja y agenda semanal,
-con la misma cláusula que el contador de Actividades del menú, para que los dos
-digan lo mismo) y sobre los contadores del menú. Una actividad suelta, sin
-oportunidad ni cuenta, es del usuario y aparece en cualquier oficina. El
-detalle de una oportunidad no la mira: se llega a él por enlace o por búsqueda,
-y ahí manda el alcance del rol.
+uno), sobre P-07 (bandeja y agenda semanal, con la misma cláusula que el
+contador de Actividades del menú, para que los dos digan lo mismo) y sobre los
+contadores del menú. Una actividad sin oportunidad —de una cuenta, o suelta—
+aparece en cualquier oficina, porque las cuentas no son de un país (§18); por lo
+mismo, desde el 17 de septiembre **no manda sobre Contactos**. El detalle de
+una oportunidad no la mira: se llega a él por enlace o por búsqueda, y ahí manda
+el alcance del rol.
 
 **Dónde vive:** `oficinaActiva` y `menuColapsado` en `lib/auth/session.ts`;
 la acción `elegirOficinaAccion` en `app/(app)/acciones.ts`; los nombres de
@@ -899,3 +905,84 @@ que no cambia nunca. En su lugar va la **cobertura** —pipeline del trimestre
 sobre la brecha acumulada contra la cuota—, que no se veía en ningún otro lado y
 que ahora existe porque existen los objetivos. Sin cuota fijada dice «—» y «sin
 cuota fijada para el año», nunca un cero.
+
+---
+
+## 18. Las cuentas no son de un país (17 de septiembre de 2026)
+
+**Decisión del negocio, revisada en uso.** El spec y la construcción de E0 daban
+por hecho que una organización pertenece a un país y solo se ve desde él
+(`AC-05` aplicado a cuentas, §5.3). Se probó y no resultó conveniente: una
+misma empresa —Bancolombia, Cemex, un integrador regional— se atiende desde
+varias oficinas y se le venden oportunidades en más de un país. Esconderla por
+país producía duplicados y cuentas que nadie encontraba.
+
+### La cuenta es una sola para toda la operación
+
+Gerencia, Dirección y Administración ven **todas** las cuentas. Un vendedor
+sigue viendo las suyas —donde es propietario o tiene una oportunidad— porque
+esa regla es de propiedad, no de país (`RN-31`, §5.3), y no cambió.
+
+El país sigue existiendo donde sí decide algo: en las **oportunidades**. El
+alcance por oficina, la oficina activa de la barra superior, la política
+comercial, el impuesto de la cotización y a quién se puede reasignar siguen
+leyendo el país de la oportunidad, que es **el del pipeline elegido**. Antes se
+tomaba de la cuenta; ahora una cuenta con sede en Chile puede tener una
+oportunidad en el pipeline de México y otra en el de Colombia. Lo que sí se
+sigue exigiendo es que quien crea la oportunidad opere en el país del pipeline
+(`AC-05`).
+
+**Dónde vive:** `organizationScope` en `lib/scope/organizations.ts`;
+`crearOportunidad` en `lib/domain/opportunity.ts` (el país sale de
+`pipeline.countryCode`); `actividadEnOficina` en `lib/scope/activities.ts` (una
+actividad sin oportunidad aparece en toda oficina).
+
+### El país de la cuenta se vuelve «sede», opcional e informativa
+
+La columna `organizations.country_code` **no se borra**: los datos existentes lo
+tienen y saber dónde está la sede de una empresa sigue siendo útil. Pasa a ser
+opcional (migración `20260917120000_organizaciones_sin_pais`), se puede elegir
+cualquiera de los tres países —o ninguno— al crear y al editar, y no recorta
+nada. En pantalla se muestra como «Sede en México», solo si existe.
+
+**Costo de cambiarlo:** volver a la regla por país es devolver el `countryCode:
+{ in: session.countryCodes }` al alcance del gerente y a
+`buscarOrganizacionesParaAlta`, y devolver la comprobación de que la sede está
+entre los países de la sesión en `crearOrganizacion`.
+
+### El identificador fiscal lleva un nombre genérico
+
+Antes el campo se llamaba RFC, NIT o RUT según el país de la cuenta. Sin país
+que lo decida, se llama **Identificador fiscal** en el formulario y en la ficha,
+con la ayuda «RFC, NIT o RUT, según dónde facture la empresa». Una cuenta con
+sede en Chile puede facturar con RFC en México; el nombre del campo no tiene por
+qué adivinarlo.
+
+### El homónimo se rechaza en cualquier país
+
+La regla de §14 —mismo nombre en el mismo país se rechaza, en otro país se
+permite— pierde la segunda mitad: si la cuenta es una sola para toda la
+operación, «Bancolombia» con sede en Colombia y «Bancolombia» con sede en México
+son la misma empresa partida en dos. `crearOrganizacion` busca el nombre sin
+distinguir mayúsculas en todas las cuentas vivas, sin mirar la sede ni el
+alcance, y responde «Ya existe una cuenta llamada …». Sigue sin revelar de quién
+es.
+
+**Lo que no se hizo:** un índice único en la base sobre el nombre en minúsculas
+cerraría el hueco de dos altas simultáneas, pero Prisma no sabe expresar un
+índice sobre una expresión, y sería una migración que vive solo en Supabase.
+Misma razón que la fila anual de objetivos (§17): se anota, no se improvisa.
+
+### Reasignar una cuenta ya no exige país
+
+«Editar cuenta» ofrece cualquier usuario activo como propietario. La regla
+`Q-14` —el destinatario debe operar en el país— queda solo para las
+oportunidades, que sí lo tienen.
+
+### Lo que esto cambia en el spec
+
+`AC-05` («un usuario no ve datos de un país que no opera») sigue valiendo para
+oportunidades, actividades y objetivos; deja de aplicar a cuentas y personas.
+§5.3 (alcance de organizaciones por país para el gerente) queda superado. El
+catálogo del negocio (`listado-funcionalidades-mvp-v2.md`, `AV-201`) hablaba de
+«datos fiscales por país»; el campo existe, con nombre genérico.

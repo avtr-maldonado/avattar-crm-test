@@ -92,9 +92,15 @@ export function contextoDeCompuertaNueva(input: {
  * correctamente en cada consulta y el dato habría cruzado igual. La fuga no
  * está en el filtro, está en la escritura.
  */
-export async function destinatariosValidos(countryCode: CountryCode) {
+export async function destinatariosValidos(countryCode?: CountryCode | null) {
   return prisma.user.findMany({
-    where: { active: true, deletedAt: null, countryCodes: { has: countryCode } },
+    where: {
+      active: true,
+      deletedAt: null,
+      // Sin país, cualquier usuario activo: es el caso de las cuentas, que no
+      // son de un país (decisiones §18).
+      ...(countryCode ? { countryCodes: { has: countryCode } } : {}),
+    },
     select: { id: true, name: true, initials: true },
     orderBy: { name: "asc" },
   });
@@ -163,37 +169,12 @@ export async function crearOportunidad(
     });
   }
 
-  // ── El país: sale de la organización, nunca del formulario ────────────────
-  // Que un vendedor pudiera elegirlo sería darle una llave a otro país por la
-  // puerta de atrás (AC-05).
-  let countryCode: CountryCode;
-  let organizationId: string | null = null;
-  let nombreDeOrganizacion: string;
-
-  if (input.organizationId) {
-    const existente = await prisma.organization.findFirst({
-      where: { id: input.organizationId, deletedAt: null },
-      select: { id: true, name: true, countryCode: true },
-    });
-    if (!existente) {
-      return falla("VALIDACION", { campo: "organizationId", mensaje: "Esa organización no existe." });
-    }
-    organizationId = existente.id;
-    countryCode = existente.countryCode;
-    nombreDeOrganizacion = existente.name;
-  } else {
-    // Una organización nueva nace en el país de quien la da de alta. Un usuario
-    // con más de un país tendría que elegir, y por eso se toma el del pipeline
-    // más abajo cuando hay ambigüedad.
-    countryCode = session.countryCodes[0];
-    nombreDeOrganizacion = input.organizacionNueva!.name;
-  }
-
-  if (!session.countryCodes.includes(countryCode)) {
-    return falla("AUTORIZACION", `No operas en ${countryCode}.`);
-  }
-
-  // ── El pipeline: del mismo país que la organización ───────────────────────
+  // ── El pipeline: de él sale el país ───────────────────────────────────────
+  // El país de la oportunidad es el del pipeline elegido, no el de la cuenta:
+  // las cuentas no son de un país (decisiones §18) y a una misma empresa se le
+  // vende en México y en Colombia. Lo que sí se exige es que quien crea opere
+  // en ese país (AC-05): elegir el pipeline de Colombia sin operar ahí sería
+  // darse una llave por la puerta de atrás.
   const pipeline = await prisma.pipeline.findFirst({
     where: { id: input.pipelineId, active: true },
     select: {
@@ -210,14 +191,23 @@ export async function crearOportunidad(
     return falla("VALIDACION", { campo: "pipelineId", mensaje: "Ese pipeline no existe." });
   }
 
-  // Una organización mexicana con el pipeline de Colombia produciría una
-  // oportunidad que ninguna pantalla filtra bien y cuyas etapas no son las que
-  // su gerente administra.
-  if (pipeline.countryCode !== countryCode) {
-    return falla("VALIDACION", {
-      campo: "pipelineId",
-      mensaje: `«${nombreDeOrganizacion}» es de ${countryCode} y «${pipeline.name}» es de ${pipeline.countryCode}.`,
+  const countryCode: CountryCode = pipeline.countryCode;
+  if (!session.countryCodes.includes(countryCode)) {
+    return falla("AUTORIZACION", `No operas en ${countryCode}.`);
+  }
+
+  // ── La organización: existente, o nueva en la misma operación ─────────────
+  let organizationId: string | null = null;
+
+  if (input.organizationId) {
+    const existente = await prisma.organization.findFirst({
+      where: { id: input.organizationId, deletedAt: null },
+      select: { id: true },
     });
+    if (!existente) {
+      return falla("VALIDACION", { campo: "organizationId", mensaje: "Esa organización no existe." });
+    }
+    organizationId = existente.id;
   }
 
   // ── La etapa y su compuerta · RN-02 ──────────────────────────────────────
@@ -541,11 +531,13 @@ export async function editarOportunidad(
     if (!can(session, "VER_OPORTUNIDADES_OFICINA")) {
       return falla("AUTORIZACION", "Cambiar de propietario es de Gerencia.");
     }
-    const validos = await destinatariosValidos(detalle.organization.countryCode);
+    // El país es el de la oportunidad, no el de la cuenta: las cuentas no son
+    // de un país (decisiones §18).
+    const validos = await destinatariosValidos(detalle.countryCode);
     if (!validos.some((u) => u.id === cambios.ownerId)) {
       return falla("VALIDACION", {
         campo: "ownerId",
-        mensaje: `Ese usuario no está activo o no opera en ${detalle.organization.countryCode}.`,
+        mensaje: `Ese usuario no está activo o no opera en ${detalle.countryCode}.`,
       });
     }
     datos.owner = { connect: { id: cambios.ownerId } };

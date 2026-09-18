@@ -1,7 +1,7 @@
 import {
+  Esqueleto,
   EsqueletoDeEncabezado,
   EsqueletoDeIndicadores,
-  EsqueletoDePestanas,
   EsqueletoDeTabla,
   RegionQueCarga,
 } from "@/components/ui/esqueleto";
@@ -23,10 +23,13 @@ export default function CargandoProductos() {
       <EsqueletoDeEncabezado titulo="Productos" />
       <RegionQueCarga anuncio="Cargando el catálogo…">
         <div className="px-8 py-6">
-          <EsqueletoDePestanas cuantas={2} />
+          <div className="flex flex-wrap items-center gap-3">
+            <Esqueleto className="h-9 w-56 rounded-sm" />
+            <Esqueleto className="ml-auto h-9 w-40 rounded-sm" />
+          </div>
 
           <div className="mt-5">
-            <EsqueletoDeIndicadores cuantos={4} columnas="lg:grid-cols-4" />
+            <EsqueletoDeIndicadores cuantos={4} columnas="lg:grid-cols-4" denso />
           </div>
 
           <div className="mt-6">

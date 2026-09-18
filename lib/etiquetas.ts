@@ -1,4 +1,10 @@
-import type { CountryCode, OpportunityStatus, RiskFlag, Role } from "@/lib/dto";
+import type {
+  CountryCode,
+  ForecastCategory,
+  OpportunityStatus,
+  RiskFlag,
+  Role,
+} from "@/lib/dto";
 
 /**
  * Los textos visibles · INV-14.
@@ -31,6 +37,25 @@ export const ETIQUETA_ESTATUS: Record<OpportunityStatus, string> = {
   GANADA: "Ganada",
   PERDIDA: "Perdida",
 };
+
+/**
+ * RN-15 · la categoría de pronóstico es el juicio del vendedor, independiente
+ * de la etapa. «Omitida» es dinero que existe pero no se pronostica.
+ */
+export const ETIQUETA_CATEGORIA: Record<ForecastCategory, string> = {
+  COMPROMISO: "Compromiso",
+  MEJOR_CASO: "Mejor caso",
+  PIPELINE: "Pipeline",
+  OMITIDA: "Omitida",
+};
+
+const MES_CORTO = new Intl.DateTimeFormat("es-MX", { month: "short", timeZone: "UTC" });
+
+/** «oct 2026», sin el punto que `es-MX` a veces agrega a la abreviatura. */
+export function etiquetaDeMes(anio: number, mes: number): string {
+  const nombre = MES_CORTO.format(new Date(Date.UTC(anio, mes - 1, 1))).replace(".", "");
+  return `${nombre} ${anio}`;
+}
 
 /**
  * INV-11 · las banderas se calculan, no se capturan. Estas son sus etiquetas.

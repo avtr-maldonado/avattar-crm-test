@@ -21,8 +21,11 @@ import { RubrosNavegacion, type Rubro } from "./RubrosNavegacion";
  *
  * ## Contraída, quedan los iconos
  *
- * Se contrae a 64 px con el botón del pie: iconos con su nombre en `title`, los
- * contadores como insignia sobre el icono, el avatar solo. La preferencia vive
+ * Se contrae a 64 px con el botón del encabezado, a la derecha del nombre:
+ * iconos con su nombre en `title`, los contadores como insignia sobre el icono,
+ * el avatar solo. Contraída, el encabezado entero es el conmutador: 64 px no
+ * dan para el nombre y el botón, y expandir es lo único que se puede querer
+ * hacer ahí. La preferencia vive
  * en una cookie que el layout lee en el servidor, así que la barra ya nace del
  * ancho correcto y no salta al hidratar. Se escribe desde aquí con
  * `document.cookie`: no hace falta un viaje al servidor para recordar un ancho.
@@ -74,17 +77,10 @@ export function BarraLateral({
       <div
         className={clsx(
           "flex items-center pb-4 pt-5",
-          colapsado ? "justify-center px-2" : "gap-3 px-5",
+          colapsado ? "justify-center px-2" : "gap-3 pl-5 pr-3",
         )}
       >
-        {colapsado ? (
-          <span
-            title="CRM Avattar"
-            className="text-xs font-semibold tracking-wide text-white"
-          >
-            CRM
-          </span>
-        ) : (
+        {!colapsado && (
           <>
             <Image
               src="/marca/avattar-blanco.png"
@@ -99,6 +95,21 @@ export function BarraLateral({
             </span>
           </>
         )}
+
+        <button
+          type="button"
+          onClick={alternar}
+          aria-expanded={!colapsado}
+          aria-label={colapsado ? "Expandir el menú" : "Contraer el menú"}
+          title={colapsado ? "Expandir el menú" : "Contraer el menú"}
+          className={clsx(
+            "grid size-8 shrink-0 place-items-center rounded-sm text-navy-300",
+            "transition-colors duration-rapido ease-estandar hover:bg-navy-800/60 hover:text-white",
+            !colapsado && "ml-auto",
+          )}
+        >
+          <Icono nombre={colapsado ? "expandir" : "contraer"} className="size-4" />
+        </button>
       </div>
 
       <nav
@@ -109,22 +120,6 @@ export function BarraLateral({
           <Seccion key={s.titulo} seccion={s} colapsado={colapsado} primera={i === 0} />
         ))}
       </nav>
-
-      <button
-        type="button"
-        onClick={alternar}
-        aria-expanded={!colapsado}
-        aria-label={colapsado ? "Expandir el menú" : "Contraer el menú"}
-        title={colapsado ? "Expandir el menú" : "Contraer el menú"}
-        className={clsx(
-          "flex items-center gap-2 border-t border-navy-800 py-2.5 text-xs text-navy-300",
-          "transition-colors duration-rapido ease-estandar hover:bg-navy-800/60 hover:text-white",
-          colapsado ? "justify-center px-2" : "px-4",
-        )}
-      >
-        <Icono nombre={colapsado ? "expandir" : "contraer"} className="size-4" />
-        {!colapsado && "Contraer menú"}
-      </button>
 
       <BloqueDeSesion usuario={usuario} colapsado={colapsado} />
     </aside>

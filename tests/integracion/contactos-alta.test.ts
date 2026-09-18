@@ -9,11 +9,11 @@ import { crearOrganizacion } from "@/lib/domain/contact";
  *
  * Lo que estas pruebas afirman, y por qué:
  *
- * - La cuenta nace en el país indicado **y** a nombre de quien la crea. Igual
+ * - La cuenta nace con la sede indicada —o sin ella— **y** a nombre de quien la crea. Igual
  *   que en el alta en línea de oportunidad: «la empresa que un vendedor da de
  *   alta es suya».
- * - Nadie crea una cuenta en un país donde no opera (AC-05).
- * - Un nombre repetido en el mismo país se rechaza, sin distinguir mayúsculas y
+ * - La sede es libre: las cuentas no son de un país (§18).
+ * - Un nombre repetido se rechaza en cualquier país, sin distinguir mayúsculas y
  *   **aunque la sesión no alcance a la existente**: el duplicado es daño
  *   permanente y la fuga del nombre no (decisiones-pendientes §11.1).
  *
@@ -67,7 +67,7 @@ afterAll(async () => {
 });
 
 describe("crearOrganizacion · la cuenta nace bien formada", () => {
-  it("nace en el país indicado, a nombre de quien la crea, con los campos recortados", async () => {
+  it("nace con la sede indicada, a nombre de quien la crea, con los campos recortados", async () => {
     const r = await crearOrganizacion(paulina, {
       name: nombre("Prueba de alta"),
       type: "PROSPECTO",
@@ -94,9 +94,11 @@ describe("crearOrganizacion · la cuenta nace bien formada", () => {
     expect(await getOrganization(paulina, r.datos.id)).not.toBeNull();
   });
 
-  it("quien opera en varios países elige entre los suyos", async () => {
-    const r = await crearOrganizacion(direccion, {
-      name: nombre("Cuenta en Colombia"),
+  it("la sede es libre: un vendedor de México da de alta una cuenta con sede en Colombia (§18)", async () => {
+    // Las cuentas no son de un país. La sede es un dato informativo, no una
+    // llave: no limita quién la ve ni dónde se le venden oportunidades.
+    const r = await crearOrganizacion(paulina, {
+      name: nombre("Cuenta con sede en Colombia"),
       type: "CLIENTE",
       countryCode: "CO",
     });
@@ -109,49 +111,46 @@ describe("crearOrganizacion · la cuenta nace bien formada", () => {
       select: { countryCode: true, ownerId: true },
     });
     expect(fila.countryCode).toBe("CO");
-    expect(fila.ownerId).toBe(direccion.userId);
+    expect(fila.ownerId).toBe(paulina.userId);
+  });
+
+  it("también nace sin sede", async () => {
+    const r = await crearOrganizacion(direccion, {
+      name: nombre("Cuenta sin sede"),
+      type: "PROSPECTO",
+      countryCode: null,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    creadas.push(r.datos.id);
+
+    const fila = await prisma.organization.findUniqueOrThrow({
+      where: { id: r.datos.id },
+      select: { countryCode: true },
+    });
+    expect(fila.countryCode).toBeNull();
   });
 });
 
 describe("crearOrganizacion · lo que rechaza", () => {
-  it("un país en el que la sesión no opera (AC-05)", async () => {
-    const r = await crearOrganizacion(paulina, {
-      name: nombre("Fuera de país"),
-      type: "PROSPECTO",
-      countryCode: "CO",
-    });
-    expect(r.ok).toBe(false);
-    if (r.ok) return;
-    expect(r.motivo).toBe("AUTORIZACION");
-  });
-
-  it("un nombre que ya existe en ese país, sin distinguir mayúsculas y sin importar de quién sea", async () => {
+  it("un nombre que ya existe, en cualquier país, sin distinguir mayúsculas y sin importar de quién sea", async () => {
     const base = nombre("Hidrosistemas del Valle");
     const primera = await crearOrganizacion(jorge, { name: base, type: "PROSPECTO", countryCode: "MX" });
     expect(primera.ok).toBe(true);
     if (primera.ok) creadas.push(primera.datos.id);
 
-    // Paulina no alcanza la cuenta de Jorge y aun así el duplicado se detecta.
+    // Paulina no alcanza la cuenta de Jorge, la sede es otra, y aun así el
+    // duplicado se detecta: la cuenta es una sola para toda la operación.
     const segunda = await crearOrganizacion(paulina, {
       name: base.toUpperCase(),
       type: "CLIENTE",
-      countryCode: "MX",
+      countryCode: "CL",
     });
     expect(segunda.ok).toBe(false);
     if (segunda.ok) return;
     expect(segunda.motivo).toBe("VALIDACION");
     expect(segunda.problemas[0]?.campo).toBe("name");
     expect(segunda.problemas[0]?.mensaje).toContain("Ya existe");
-  });
-
-  it("pero el mismo nombre en otro país sí se permite", async () => {
-    const base = nombre("Homónima regional");
-    const mx = await crearOrganizacion(direccion, { name: base, type: "PROSPECTO", countryCode: "MX" });
-    const cl = await crearOrganizacion(direccion, { name: base, type: "PROSPECTO", countryCode: "CL" });
-    if (mx.ok) creadas.push(mx.datos.id);
-    if (cl.ok) creadas.push(cl.datos.id);
-    expect(mx.ok).toBe(true);
-    expect(cl.ok).toBe(true);
   });
 
   it("lo mismo que la edición: nombre de una letra y números negativos", async () => {

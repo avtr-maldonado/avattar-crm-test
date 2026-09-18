@@ -92,17 +92,26 @@ export function EsqueletoDeEncabezado({ titulo }: { titulo: string }) {
 export function EsqueletoDeIndicadores({
   cuantos = 5,
   columnas = "lg:grid-cols-5",
+  denso = false,
 }: {
   cuantos?: number;
   columnas?: string;
+  /** La forma de `StatTile denso`: etiqueta y cifra, sin subtexto. */
+  denso?: boolean;
 }) {
   return (
     <div className={clsx("grid grid-cols-2 gap-4", columnas)}>
       {Array.from({ length: cuantos }, (_, i) => (
-        <div key={i} className="rounded-md border border-borde bg-superficie-tarjeta px-4 py-3">
+        <div
+          key={i}
+          className={clsx(
+            "rounded-md border border-borde bg-superficie-tarjeta",
+            denso ? "px-3 py-2" : "px-4 py-3",
+          )}
+        >
           <Esqueleto className="h-2.5 w-20" />
-          <Esqueleto className="mt-2 h-6 w-28" />
-          <Esqueleto className="mt-2 h-2.5 w-24" />
+          <Esqueleto className={clsx("mt-2", denso ? "h-5 w-24" : "h-6 w-28")} />
+          {!denso && <Esqueleto className="mt-2 h-2.5 w-24" />}
         </div>
       ))}
     </div>
@@ -172,26 +181,29 @@ export function EsqueletoDeKanban({ columnas = 5 }: { columnas?: number }) {
           key={c}
           className="flex flex-col rounded-md bg-superficie-sutil [container-name:columna] [container-type:inline-size]"
         >
-          <header className="border-b border-borde px-3 py-3 col-angosta:px-2">
+          <header className="border-b border-borde px-3 py-2 col-angosta:px-2">
             <div className="flex items-baseline justify-between gap-2">
               <Esqueleto className="h-3.5 w-3/5" />
               <Esqueleto className="h-2.5 w-1/6" />
             </div>
             <Esqueleto className="mt-2 h-2.5 w-3/4" />
-            <div className="mt-2 h-0.5 rounded-pill bg-borde-fuerte" />
+            <div className="mt-1.5 h-0.5 rounded-pill bg-borde-fuerte" />
           </header>
 
-          <div className="grid min-h-24 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 p-2 lg:grid-cols-1 col-angosta:p-1.5">
+          {/* La misma forma que `TarjetaOportunidad`: nombre en dos líneas,
+              organización, y la fila de importe. */}
+          <div className="grid min-h-24 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1.5 p-1.5 lg:grid-cols-1">
             {Array.from({ length: TARJETAS_POR_COLUMNA[c % TARJETAS_POR_COLUMNA.length] }, (_, t) => (
               <div
                 key={t}
-                className="rounded-md border border-borde bg-superficie-tarjeta p-3 shadow-xs col-angosta:p-2.5"
+                className="rounded-md border border-borde bg-superficie-tarjeta px-2.5 py-2 shadow-xs col-angosta:px-2"
               >
                 <Esqueleto className="h-3.5 w-full" />
+                <Esqueleto className="mt-1 h-3.5 w-3/4" />
                 <Esqueleto className="mt-1.5 h-2.5 w-2/3" />
-                <div className="mt-3 flex items-baseline justify-between gap-2">
+                <div className="mt-2 flex items-center justify-between gap-2">
                   <Esqueleto className="h-3.5 w-1/2" />
-                  <Esqueleto className="h-3.5 w-1/4" />
+                  <Esqueleto className="h-3 w-1/5" />
                 </div>
               </div>
             ))}

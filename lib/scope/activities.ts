@@ -83,17 +83,14 @@ export async function listActivities(
 }
 
 /**
- * Las actividades de una oficina. La oficina se lee de la oportunidad o de la
- * cuenta a la que pertenece la actividad; una actividad suelta —sin ninguna de
- * las dos— es del usuario y aparece en cualquier oficina. Va DESPUÉS del
- * alcance, con AND: recorta, nunca amplía (AC-25).
+ * Las actividades de una oficina. La oficina es la de la **oportunidad**: es el
+ * único lugar donde vive el país (decisiones §18: las cuentas no son de un
+ * país). Una actividad sin oportunidad —de una cuenta, o suelta— es del
+ * usuario y aparece en cualquier oficina. Va DESPUÉS del alcance, con AND:
+ * recorta, nunca amplía (AC-25).
  */
 export function actividadEnOficina(pais: CountryCode): Prisma.ActivityWhereInput {
   return {
-    OR: [
-      { opportunity: { countryCode: pais } },
-      { organization: { countryCode: pais } },
-      { opportunity: null, organization: null },
-    ],
+    OR: [{ opportunity: { countryCode: pais } }, { opportunity: null }],
   };
 }

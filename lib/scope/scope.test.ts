@@ -84,11 +84,10 @@ describe("organizationScope · §5.3", () => {
     });
   });
 
-  it("el gerente ve las cuentas de su oficina", () => {
-    expect(organizationScope(gerenteMx)).toEqual({
-      deletedAt: null,
-      countryCode: { in: ["MX"] },
-    });
+  it("el gerente ve todas las cuentas: las cuentas no son de un país (§18)", () => {
+    // Decisión del negocio del 17-sep-2026: una empresa se atiende desde
+    // cualquier oficina. El país sede es informativo y no recorta nada.
+    expect(organizationScope(gerenteMx)).toEqual({ deletedAt: null });
   });
 });
 

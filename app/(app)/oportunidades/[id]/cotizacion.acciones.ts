@@ -58,7 +58,9 @@ export async function abrirCotizacionAccion(
   const detalle = await getOpportunityDetail(session, opportunityId);
   if (!detalle) return falla("AUTORIZACION", NO_ALCANZA);
 
-  const pais = await getCountry(detalle.organization.countryCode);
+  // La tasa de impuesto es la del país de la oportunidad (el del pipeline), no
+  // la de la sede de la cuenta (decisiones §18).
+  const pais = await getCountry(detalle.countryCode);
   const r = await borradorDeCotizacion(session, detalle, pais.taxRate);
   if (!r.ok) return r;
 

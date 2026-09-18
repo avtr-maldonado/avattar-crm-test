@@ -25,7 +25,9 @@ async function cargar(id: string) {
   const detalle = await getOpportunityDetail(session, id);
   if (!detalle) return { session, detalle: null };
 
-  const politica = await getCommercialPolicy(detalle.organization.countryCode);
+  // La política es la del país de la oportunidad, que es el del pipeline. La
+  // cuenta ya no tiene país que decida nada (decisiones §18).
+  const politica = await getCommercialPolicy(detalle.countryCode);
   return {
     session,
     detalle,
