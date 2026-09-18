@@ -116,15 +116,18 @@ export function BarraDeFiltros({
     activos.from !== null ||
     activos.to !== null;
 
+  // Sin caja propia (`contents`): las pastillas participan una por una en la
+  // fila de quien monta la barra. Así, cuando dejan de caber, baja solo la que
+  // no cabe y el botón de alta se queda al final de la última línea, en vez de
+  // que toda la barra salte en bloque y lo deje solo en la suya. Como no hay
+  // caja que atenuar mientras se navega, la atenuación va en cada pastilla.
+  const atenuado = navegando ? "opacity-60" : undefined;
+
   return (
-    <div
-      className={clsx(
-        "flex flex-wrap items-center gap-2 transition-opacity duration-rapido",
-        navegando && "opacity-60",
-      )}
-    >
+    <div className="contents">
       {visibles.includes("pipeline") && catalogos.pipeline.length > 1 && (
         <Desplegable
+          className={atenuado}
           etiqueta="Pipeline"
           resumen={resumenDeUno(catalogos.pipeline, activos.pipeline)}
           activo={activos.pipeline !== null}
@@ -141,6 +144,7 @@ export function BarraDeFiltros({
 
       {visibles.includes("org") && (
         <Desplegable
+          className={atenuado}
           etiqueta="Cliente"
           resumen={resumenDeVarios(catalogos.org, activos.org)}
           activo={activos.org.length > 0}
@@ -161,6 +165,7 @@ export function BarraDeFiltros({
           posible y desplegarlo revelaría la lista de compañeros. */}
       {visibles.includes("owner") && (
         <Desplegable
+          className={atenuado}
           etiqueta="Vendedor"
           resumen={resumenDeVarios(catalogos.owner, activos.owner)}
           activo={activos.owner.length > 0}
@@ -177,6 +182,7 @@ export function BarraDeFiltros({
       )}
 
       <Desplegable
+        className={atenuado}
         etiqueta="Lapso"
         resumen={resumenDeLapso(catalogos, activos)}
         activo={activos.period !== "PERSONALIZADO" || activos.from !== null || activos.to !== null}
@@ -202,6 +208,7 @@ export function BarraDeFiltros({
             activos.atRisk
               ? "border-coral bg-coral/10 text-coral"
               : "border-borde bg-superficie-pagina text-texto-tenue hover:bg-superficie-sutil",
+            atenuado,
           )}
         >
           Solo en riesgo
@@ -212,7 +219,10 @@ export function BarraDeFiltros({
         <button
           type="button"
           onClick={() => iniciar(() => router.push(ruta))}
-          className="rounded-pill px-2.5 py-1.5 text-xs font-medium text-texto-tenue underline-offset-2 transition-colors duration-rapido hover:text-texto-cuerpo hover:underline"
+          className={clsx(
+            "rounded-pill px-2.5 py-1.5 text-xs font-medium text-texto-tenue underline-offset-2 transition-colors duration-rapido hover:text-texto-cuerpo hover:underline",
+            atenuado,
+          )}
         >
           Limpiar
         </button>
@@ -259,6 +269,7 @@ function Desplegable({
   abierto,
   alAlternar,
   ancho = "w-72",
+  className,
   children,
 }: {
   etiqueta: string;
@@ -267,6 +278,7 @@ function Desplegable({
   abierto: boolean;
   alAlternar: (abierto: boolean) => void;
   ancho?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   const raiz = useRef<HTMLDivElement>(null);
@@ -293,7 +305,7 @@ function Desplegable({
   }, [abierto, alAlternar]);
 
   return (
-    <div ref={raiz} className="relative">
+    <div ref={raiz} className={clsx("relative transition-opacity duration-rapido", className)}>
       <button
         ref={disparador}
         type="button"

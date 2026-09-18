@@ -269,6 +269,9 @@ describe("crearOportunidad · organización y persona nuevas, una sola operació
       select: { id: true },
     });
 
+    // Jorge no opera en Colombia: el país de la oportunidad es el del pipeline
+    // (§18) y elegir uno donde no operas se niega (AC-05). Lo que importa aquí
+    // es lo que pasa después de la negativa.
     const r = await crearOportunidad(
       jorge,
       {
@@ -279,7 +282,7 @@ describe("crearOportunidad · organización y persona nuevas, una sola operació
       },
       await umbrales(),
     );
-    expect(r).toMatchObject({ motivo: "VALIDACION" });
+    expect(r).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
 
     const huerfana = await prisma.organization.findFirst({ where: { name: nombreEmpresa } });
     expect(huerfana).toBeNull();
@@ -376,17 +379,22 @@ describe("buscarOrganizacionesParaAlta · la excepción al alcance", () => {
     expect(serializado).not.toContain("_count");
   });
 
-  it("no cruza países · AC-05", async () => {
+  it("no filtra por país: una cuenta con sede en Chile se le ofrece a un vendedor de México (§18)", async () => {
+    // Las cuentas no son de un país. Si la búsqueda las escondiera por sede,
+    // el vendedor crearía un duplicado justo del caso que más importa evitar.
     const paulina = await sesionDe("pe@avattar.com");
-    const todas = await buscarOrganizacionesParaAlta(paulina, "an");
-    const ids = todas.map((o) => o.id);
-    if (ids.length === 0) return;
-
-    const paises = await prisma.organization.findMany({
-      where: { id: { in: ids } },
-      select: { countryCode: true },
+    const direccion = await sesionDe("dc@avattar.com");
+    const nombre = `Zeta Global Prueba ${Date.now()}`;
+    const creada = await prisma.organization.create({
+      data: { name: nombre, type: "PROSPECTO", countryCode: "CL", ownerId: direccion.userId },
+      select: { id: true },
     });
-    for (const o of paises) expect(paulina.countryCodes).toContain(o.countryCode);
+    try {
+      const encontradas = await buscarOrganizacionesParaAlta(paulina, "Zeta Global Prueba");
+      expect(encontradas.map((o) => o.id)).toContain(creada.id);
+    } finally {
+      await prisma.organization.delete({ where: { id: creada.id } });
+    }
   });
 
   it("no busca con menos de dos caracteres", async () => {

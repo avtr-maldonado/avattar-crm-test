@@ -129,6 +129,7 @@ que revisar cuando el inicio de sesión no entra, en este orden:
 
 | | |
 |---|---|
+| `docs/funcionalidades-y-casos-de-uso.md` | Lo construido, leído del código: cada funcionalidad con sus casos de uso por rol, y lo pendiente |
 | `docs/CRM-AVTR-SPEC.md` | Especificación normativa. §3 invariantes, §17 orden de construcción, §18 preguntas abiertas Q-01 a Q-17 |
 | `docs/decisiones-pendientes.md` | Supuestos adoptados, dónde viven y qué cuesta cambiarlos. Manda sobre el spec |
 | `docs/superpowers/specs/` · `plans/` | Decisiones de construcción y planes (E0, mutaciones de E1) |
@@ -171,6 +172,10 @@ que revisar cuando el inicio de sesión no entra, en este orden:
 - **Los objetivos se miden acumulados**, no trimestre por trimestre: vender de más
   en el T2 salda lo que faltó del T1. Es una regla que el negocio pidió después
   del spec; está razonada en `docs/decisiones-pendientes.md` §17.
+- **Las cuentas no son de un país.** Se ven desde todas las oficinas y se les
+  venden oportunidades en cualquier pipeline; el país de la oportunidad es el del
+  pipeline. La sede de la cuenta es informativa y opcional. Decidido con el
+  negocio el 17 de septiembre de 2026; razonado en `decisiones-pendientes.md` §18.
 
 ## Estado · 14 de septiembre de 2026
 
@@ -181,9 +186,10 @@ que revisar cuando el inicio de sesión no entra, en este orden:
 - ✅ Barra superior de §13.5 completa: selector de oficina activa (cookie, recorta
   dentro del alcance) y buscador global por alcance. Menú lateral con iconos,
   contadores acotados a la oficina y contraíble a solo iconos.
-- ✅ P-01 en tres vistas: kanban, tabla y **embudo** (conversión etapa a etapa y
-  cola de riesgo). **Barra de filtros de §9** —cliente, vendedor, lapso, pipeline
-  y «solo en riesgo»—, que salda la deuda de E0 (AC-23).
+- ✅ P-01 en cuatro vistas: kanban, tabla, **embudo** (conversión etapa a etapa y
+  cola de riesgo) y **forecast** (lo abierto por mes o trimestre fiscal de cierre
+  estimado, por categoría y ponderado). **Barra de filtros de §9** —cliente,
+  vendedor, lapso, pipeline y «solo en riesgo»—, que salda la deuda de E0 (AC-23).
 - ✅ De **E4**, P-08 objetivos: trimestral y anual, venta y utilidad, con medición
   **acumulada** y captura de cuotas desde Administración.
 - ✅ De **E2**, el cotizador: líneas, congelar, versionar, alertas de política.

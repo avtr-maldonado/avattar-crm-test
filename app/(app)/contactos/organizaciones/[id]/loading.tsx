@@ -22,7 +22,7 @@ export default function CargandoContactosOrganizacionesId() {
       <EsqueletoDeEncabezado titulo="Organización" />
       <RegionQueCarga anuncio="Cargando la ficha de la cuenta…">
         <div className="px-8 py-6">
-          <EsqueletoDeIndicadores cuantos={4} columnas="lg:grid-cols-4" />
+          <EsqueletoDeIndicadores cuantos={4} columnas="lg:grid-cols-4" denso />
 
           <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
             <div className="flex flex-col gap-5 lg:col-span-2">

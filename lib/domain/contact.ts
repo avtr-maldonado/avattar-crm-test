@@ -2,7 +2,7 @@ import type { CountryCode, OrganizationType, Prisma } from "@prisma/client";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
+import { iniciales } from "@/lib/etiquetas";
 import type { OrganizacionConGente } from "@/lib/scope/organizations";
 import type { PersonaEditable } from "@/lib/scope/people";
 
@@ -143,6 +143,8 @@ export type DatosDeOrganizacion = {
   creditDays?: number | null;
   isStrategic?: boolean;
   ownerId?: string;
+  /** País sede, informativo y opcional (§18). Nulo es «sin sede». */
+  countryCode?: CountryCode | null;
 };
 
 /** Los campos de la ficha que el alta y la edición validan igual. */
@@ -158,6 +160,7 @@ type CamposDeOrganizacion = Partial<
     | "employees"
     | "creditDays"
     | "isStrategic"
+    | "countryCode"
   >
 >;
 
@@ -188,6 +191,8 @@ function camposDeOrganizacion(
   if (entrada.industry !== undefined) campos.industry = entrada.industry?.trim() || null;
   if (entrada.city !== undefined) campos.city = entrada.city?.trim() || null;
   if (entrada.isStrategic !== undefined) campos.isStrategic = entrada.isStrategic;
+  // La sede: informativa y opcional (§18). Vacía se guarda como nulo.
+  if (entrada.countryCode !== undefined) campos.countryCode = entrada.countryCode;
 
   if (entrada.employees !== undefined) {
     if (entrada.employees !== null && entrada.employees < 0) {
@@ -214,22 +219,28 @@ function camposDeOrganizacion(
   return { ok: true, campos };
 }
 
-export type DatosDeOrganizacionNueva = Omit<DatosDeOrganizacion, "ownerId" | "name" | "type"> & {
+export type DatosDeOrganizacionNueva = Omit<
+  DatosDeOrganizacion,
+  "ownerId" | "name" | "type" | "countryCode"
+> & {
   name: string;
   type: OrganizationType;
-  countryCode: CountryCode;
+  /** País sede, informativo. Nulo si no se conoce o no aplica (§18). */
+  countryCode?: CountryCode | null;
 };
 
 /**
  * Da de alta una cuenta desde P-03.
  *
- * ## El país sale de la sesión, nunca de un campo libre
+ * ## La sede es un dato, no una llave · decisiones §18
  *
- * Una cuenta nace en un país donde quien la crea opera. Si opera en uno, no se
- * pregunta; si opera en varios, elige entre los suyos. Que alguien pudiera
- * elegir otro sería darle una llave a ese país por la puerta de atrás (AC-05).
- * Es la misma regla del alta en línea de oportunidad, que ahí resuelve la
- * ambigüedad con el país del pipeline; aquí no hay pipeline y se pregunta.
+ * Las cuentas no son de un país. El negocio revisó la regla original —una
+ * cuenta pertenece al país donde nace y solo se ve desde ahí— y no le resultó
+ * conveniente: una empresa se atiende desde cualquier oficina y se le venden
+ * oportunidades en cualquier pipeline. El país queda como **sede**, opcional e
+ * informativa: dice dónde está la empresa, no quién puede verla. Por eso ya no
+ * se exige que quien crea opere en ese país; el alcance por oficina vive en
+ * las oportunidades, que sí tienen país (el del pipeline).
  *
  * ## El propietario es quien la crea
  *
@@ -237,7 +248,7 @@ export type DatosDeOrganizacionNueva = Omit<DatosDeOrganizacion, "ownerId" | "na
  * Reasignarla es de Gerencia (Q-13, Q-14) y se hace desde la ficha, donde ya
  * se valida que el destinatario opere en ese país.
  *
- * ## Los duplicados se rechazan por nombre, sin mirar el alcance
+ * ## Los duplicados se rechazan por nombre, sin mirar el alcance ni la sede
  *
  * Si quien captura no ve que «Hidrosistemas del Valle» ya existe porque la
  * ficha es de otro, va a crear «Hidrosistemas del Valle SA» y el histórico de
@@ -245,34 +256,29 @@ export type DatosDeOrganizacionNueva = Omit<DatosDeOrganizacion, "ownerId" | "na
  * existe aunque la sesión no la alcance; es la misma decisión que
  * decisiones-pendientes §11.1 tomó para el alta de oportunidad: el duplicado es
  * daño permanente, la fuga del nombre no. Solo el nombre: nunca el propietario
- * ni cifras. Regla derivada al construir, anotada en decisiones-pendientes §14.
+ * ni cifras. Y sin mirar la sede: la misma empresa con sede en dos países
+ * seguiría siendo la misma empresa (decisiones-pendientes §14 y §18).
  */
 export async function crearOrganizacion(
   session: Session,
   entrada: DatosDeOrganizacionNueva,
 ): Promise<ResultadoAccion<{ id: string }>> {
-  if (!session.countryCodes.includes(entrada.countryCode)) {
-    return falla("AUTORIZACION", `No operas en ${NOMBRE_PAIS[entrada.countryCode]}.`);
-  }
-
   const traducido = camposDeOrganizacion(entrada);
   if (!traducido.ok) {
     return falla("VALIDACION", { campo: traducido.campo, mensaje: traducido.mensaje });
   }
   const nombre = entrada.name.trim();
 
+  // Un solo nombre para toda la operación: las cuentas no son de un país
+  // (decisiones §18), así que la homónima se busca sin mirar la sede.
   const homonima = await prisma.organization.findFirst({
-    where: {
-      deletedAt: null,
-      countryCode: entrada.countryCode,
-      name: { equals: nombre, mode: "insensitive" },
-    },
+    where: { deletedAt: null, name: { equals: nombre, mode: "insensitive" } },
     select: { id: true },
   });
   if (homonima) {
     return falla("VALIDACION", {
       campo: "name",
-      mensaje: `Ya existe una cuenta llamada «${nombre}» en ${NOMBRE_PAIS[entrada.countryCode]}. Si es la misma empresa, pide que te asignen una oportunidad ahí; si es otra, distingue el nombre.`,
+      mensaje: `Ya existe una cuenta llamada «${nombre}». Si es la misma empresa, pide que te asignen una oportunidad ahí; si es otra, distingue el nombre.`,
     });
   }
 
@@ -281,7 +287,8 @@ export async function crearOrganizacion(
       ...traducido.campos,
       name: nombre,
       type: entrada.type,
-      countryCode: entrada.countryCode,
+      // La sede es informativa y opcional. No decide quién la ve.
+      countryCode: entrada.countryCode ?? null,
       ownerId: session.userId,
     },
     select: { id: true },
@@ -295,12 +302,11 @@ export async function crearOrganizacion(
  *
  * ## Lo que NO se edita, y no por olvido
  *
- * **El país.** Cambiarlo movería de país todas sus oportunidades y con ellas
- * quién las ve: el alcance por rol se aplicaría bien en cada consulta y el dato
- * habría cruzado la frontera igual (`AC-05`). Eso no es editar, es migrar.
- *
  * **La organización matriz.** La jerarquía matriz-filial es `F-402`, Fase 2. La
  * columna existe para no migrar después, pero nada la mantiene todavía.
+ *
+ * La sede sí se edita: desde decisiones §18 es un dato informativo que no mueve
+ * ninguna oportunidad de país ni cambia quién ve qué.
  */
 export async function editarOrganizacion(
   session: Session,
@@ -327,15 +333,11 @@ export async function editarOrganizacion(
     if (!can(session, "VER_OPORTUNIDADES_OFICINA")) {
       return falla("AUTORIZACION", "Cambiar de propietario la cuenta es de Gerencia.");
     }
-    // Q-14 · mismo país, por la misma razón que en las oportunidades: quien no
-    // opera en ese país no debería quedar con la cuenta en su cartera.
+    // Cualquier usuario activo: las cuentas no son de un país (decisiones
+    // §18), así que la restricción de Q-14 por país queda solo para las
+    // oportunidades, que sí lo tienen.
     const valido = await prisma.user.findFirst({
-      where: {
-        id: entrada.ownerId,
-        active: true,
-        deletedAt: null,
-        countryCodes: { has: organizacion.countryCode },
-      },
+      where: { id: entrada.ownerId, active: true, deletedAt: null },
       select: { id: true },
     });
     if (!valido) {

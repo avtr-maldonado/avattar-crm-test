@@ -1,16 +1,15 @@
 import Link from "next/link";
-import { oficinaActiva, requireSession } from "@/lib/auth/session";
+import { requireSession } from "@/lib/auth/session";
 import { listOrganizationsConIndicadores } from "@/lib/scope/organizationIndicators";
 import { listPersonas } from "@/lib/scope/people";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
-import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
 import { EditarOrganizacion } from "@/components/contactos/EditarOrganizacion";
 import { EditarPersona, type CuentaElegible } from "@/components/contactos/EditarPersona";
 import { crearOrganizacionAccion, crearPersonaAccion, editarPersonaAccion } from "./acciones";
 import { formatUSD } from "@/lib/money";
 import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
-import { Avatar, EstadoVacio, Pastilla, StatTile } from "@/components/ui/primitivas";
+import { Avatar, ControlSegmentado, EstadoVacio, Pastilla, StatTile } from "@/components/ui/primitivas";
 
 /**
  * P-03 · Contactos.
@@ -42,24 +41,23 @@ export default async function ContactosPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const [session, sp] = await Promise.all([requireSession(), searchParams]);
-  const pais = await oficinaActiva(session);
 
-  // Cuentas y personas de la oficina activa. La oficina recorta dentro del
-  // alcance del rol, nunca lo amplía: para un vendedor de México con la
-  // oficina en Colombia, la lista queda vacía, no llena de cuentas ajenas.
+  // Todas las cuentas y personas que el rol alcanza, sin recorte por oficina:
+  // las cuentas no son de un país (decisiones §18). La oficina activa sigue
+  // mandando en oportunidades, que sí lo tienen.
   const [{ organizaciones, hayHistoricoDeCierres }, personas, catalogos] = await Promise.all([
-    listOrganizationsConIndicadores(session, { where: { countryCode: pais } }),
-    listPersonas(session, { organization: { countryCode: pais } }),
+    listOrganizationsConIndicadores(session),
+    listPersonas(session),
     catalogosParaAlta(),
   ]);
 
   // La pestaña vive en la URL (INV-10): la vista es compartible y el botón de
   // regresar funciona.
   const pestanaActiva = sp.t === "personas" ? "personas" : "organizaciones";
-  const pestanas: Pestana[] = [
-    { clave: "organizaciones", etiqueta: "Organizaciones", contador: organizaciones.length },
-    { clave: "personas", etiqueta: "Personas", contador: personas.length },
-  ];
+  const pestanas = [
+    { valor: "organizaciones", etiqueta: "Organizaciones", contador: organizaciones.length },
+    { valor: "personas", etiqueta: "Personas", contador: personas.length },
+  ] as const;
 
   const ahora = new Date();
   const conPipeline = organizaciones.filter((o) => o.indicadores.abiertas > 0);
@@ -88,7 +86,7 @@ export default async function ContactosPage({
         variante="primario"
       />
     ) : (
-      <EditarOrganizacion paises={session.countryCodes} accion={crearOrganizacionAccion} />
+      <EditarOrganizacion accion={crearOrganizacionAccion} />
     );
   const hayFilas =
     pestanaActiva === "personas" ? personas.length > 0 : organizaciones.length > 0;
@@ -108,13 +106,16 @@ export default async function ContactosPage({
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <Pestanas
-          pestanas={pestanas}
-          activa={pestanaActiva}
-          hrefDe={(clave) => `/contactos?t=${clave}`}
-        />
-
-        {hayFilas && <div className="mt-4 flex justify-end">{botonDeAlta}</div>}
+        {/* El mismo control que las vistas de P-01: una pestaña es una vista de
+            los mismos contactos, y el alta va en la misma fila, como allá. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <ControlSegmentado
+            opciones={pestanas}
+            activa={pestanaActiva}
+            hrefDe={(clave) => `/contactos?t=${clave}`}
+          />
+          {hayFilas && <div className="ml-auto">{botonDeAlta}</div>}
+        </div>
 
         {pestanaActiva === "personas" ? (
           <TablaDePersonas
@@ -125,23 +126,23 @@ export default async function ContactosPage({
         ) : (
         <>
         <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile
+          <StatTile denso
             etiqueta="Cuentas"
             valor={String(organizaciones.length)}
             subtexto="que puedes ver"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Con pipeline abierto"
             valor={String(conPipeline.length)}
             subtexto="tienen al menos una oportunidad"
             tono="acento"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Estratégicas"
             valor={String(organizaciones.filter((o) => o.isStrategic).length)}
             subtexto="marcadas por Dirección"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Sin actividad"
             valor={String(frias.length)}
             subtexto={`más de ${DIAS_SIN_ACTIVIDAD} días`}
@@ -187,7 +188,7 @@ export default async function ContactosPage({
                       <div className="flex items-center gap-1.5 text-xs text-texto-tenue">
                         <span>
                           {[o.industry, o.city].filter(Boolean).join(" · ") ||
-                            NOMBRE_PAIS[o.countryCode]}
+                            (o.countryCode ? `Sede en ${NOMBRE_PAIS[o.countryCode]}` : "")}
                         </span>
                         {o.isStrategic && <Pastilla tono="acento">Estratégica</Pastilla>}
                       </div>

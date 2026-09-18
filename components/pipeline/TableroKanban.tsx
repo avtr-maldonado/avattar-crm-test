@@ -182,7 +182,7 @@ export function TableroKanban({
             {/* Lo que no cabe en una línea baja a la siguiente, en vez de
                 empujar el ancho de la columna: el conteo debajo del nombre, el
                 ponderado debajo del total. */}
-            <header className="border-b border-borde px-3 py-3 col-angosta:px-2">
+            <header className="border-b border-borde px-3 py-2 col-angosta:px-2">
               <div className="flex flex-wrap items-baseline justify-between gap-x-2">
                 <h2 className="text-sm font-semibold leading-snug text-texto-titulo">{c.nombre}</h2>
                 <span className="tabular whitespace-nowrap text-xs text-texto-tenue">
@@ -197,13 +197,13 @@ export function TableroKanban({
               </div>
               {/* La etapa de cierre se marca: es donde el gate es más exigente. */}
               <div
-                className={`mt-2 h-0.5 rounded-pill ${c.esCierre ? "bg-exito" : "bg-borde-fuerte"}`}
+                className={`mt-1.5 h-0.5 rounded-pill ${c.esCierre ? "bg-exito" : "bg-borde-fuerte"}`}
               />
             </header>
 
             {/* En franja (bajo `lg`) las tarjetas fluyen en rejilla; en columna,
                 una debajo de otra. */}
-            <div className="grid min-h-24 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2 p-2 lg:grid-cols-1 col-angosta:p-1.5">
+            <div className="grid min-h-24 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1.5 p-1.5 lg:grid-cols-1">
               {c.oportunidades.map((o) => {
                 const moviendose = enviando && detenida?.tarjeta.id === o.id;
                 return (

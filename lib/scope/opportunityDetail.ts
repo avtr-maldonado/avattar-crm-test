@@ -45,6 +45,9 @@ export async function getOpportunityDetail(session: Session, id: string) {
       nextActivityAt: true,
       createdAt: true,
       lossCompetitor: true,
+      // El país es de la oportunidad, no de la cuenta: política, impuesto y
+      // destinatarios de reasignación se leen de aquí (decisiones §18).
+      countryCode: true,
 
       organization: {
         select: {

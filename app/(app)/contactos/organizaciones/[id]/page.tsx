@@ -64,7 +64,8 @@ export default async function FichaDeOrganizacionPage({
     oportunidadesDeCuenta(session, cuenta.id),
     listActivities(session, { where: { organizationId: cuenta.id }, take: 25 }),
     catalogosParaAlta(),
-    puedeReasignar ? destinatariosValidos(cuenta.countryCode) : Promise.resolve([]),
+    // Cualquier usuario activo: las cuentas no son de un país (decisiones §18).
+    puedeReasignar ? destinatariosValidos() : Promise.resolve([]),
   ]);
 
   const abiertas = oportunidades.filter((o) => o.status === "ABIERTA");
@@ -78,7 +79,7 @@ export default async function FichaDeOrganizacionPage({
           ETIQUETA_TIPO[cuenta.type],
           cuenta.industry,
           cuenta.city,
-          NOMBRE_PAIS[cuenta.countryCode],
+          cuenta.countryCode ? `Sede en ${NOMBRE_PAIS[cuenta.countryCode]}` : null,
         ]
           .filter(Boolean)
           .join(" · ")}
@@ -135,18 +136,18 @@ export default async function FichaDeOrganizacionPage({
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile
+          <StatTile denso
             etiqueta="Pipeline abierto"
             valor={formatUSD(indicadores.pipelineAbierto)}
             subtexto={`${indicadores.abiertas} oportunidades tuyas`}
             tono="acento"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Ponderado"
             valor={formatUSD(weightedTotal(abiertas))}
             subtexto="por probabilidad de etapa"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Cerradas"
             valor={String(cerradas.length)}
             subtexto={
@@ -155,7 +156,7 @@ export default async function FichaDeOrganizacionPage({
                 : formatUSD(openTotal(cerradas))
             }
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Personas"
             valor={String(cuenta.people.length)}
             subtexto="en el comité de compra"
@@ -281,11 +282,7 @@ export default async function FichaDeOrganizacionPage({
             <Tarjeta titulo="Datos de la cuenta">
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <Dato etiqueta="Razón social" valor={cuenta.legalName ?? "—"} />
-                <Dato
-                  etiqueta={IDENTIFICADOR_FISCAL[cuenta.countryCode]}
-                  valor={cuenta.taxId ?? "—"}
-                  mono
-                />
+                <Dato etiqueta="Identificador fiscal" valor={cuenta.taxId ?? "—"} mono />
                 <Dato etiqueta="Propietario" valor={cuenta.owner.name} />
                 <Dato
                   etiqueta="Empleados"
@@ -419,9 +416,3 @@ const ETIQUETA_TIPO: Record<string, string> = {
   PROVEEDOR: "Proveedor",
 };
 
-/** El identificador fiscal cambia de nombre en cada país (F-408). */
-const IDENTIFICADOR_FISCAL: Record<string, string> = {
-  MX: "RFC",
-  CO: "NIT",
-  CL: "RUT",
-};

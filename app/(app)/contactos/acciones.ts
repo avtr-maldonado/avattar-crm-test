@@ -127,6 +127,8 @@ const esquemaOrganizacion = z.object({
   creditDays: entero,
   isStrategic: z.coerce.boolean().optional(),
   ownerId: opcional,
+  // La sede: informativa y opcional (decisiones §18). Vacío es «sin sede».
+  countryCode: z.enum(["MX", "CO", "CL"]).or(z.literal("")).optional(),
 });
 
 export async function editarOrganizacionAccion(
@@ -154,6 +156,7 @@ export async function editarOrganizacionAccion(
     // valor `false`, no «no tocar».
     isStrategic: d.isStrategic ?? false,
     ownerId: d.ownerId || undefined,
+    countryCode: d.countryCode === undefined ? undefined : d.countryCode || null,
   });
   if (!r.ok) return r;
 
@@ -162,19 +165,13 @@ export async function editarOrganizacionAccion(
   return ok(null);
 }
 
-const esquemaAltaDeOrganizacion = esquemaOrganizacion
-  .omit({ organizationId: true, ownerId: true })
-  .extend({
-    // Solo viaja cuando la sesión opera en más de un país; con uno, se deduce.
-    countryCode: z.enum(["MX", "CO", "CL"]).optional(),
-  });
+const esquemaAltaDeOrganizacion = esquemaOrganizacion.omit({ organizationId: true, ownerId: true });
 
 /**
  * Da de alta una cuenta desde P-03.
  *
- * El país no lo decide el formulario: con un solo país se toma el de la sesión,
- * y con varios el formulario ofrece únicamente los suyos. Aun así el servicio
- * vuelve a comprobar que la sesión opere ahí (AC-05). El propietario es quien
+ * La sede es opcional e informativa: las cuentas no son de un país (decisiones
+ * §18), así que no se exige que la sesión opere ahí. El propietario es quien
  * crea, siempre; reasignar es de Gerencia y se hace desde la ficha.
  */
 export async function crearOrganizacionAccion(
@@ -186,11 +183,6 @@ export async function crearOrganizacionAccion(
   const d = datos.data;
 
   const session = await requireSession();
-  const countryCode =
-    d.countryCode ?? (session.countryCodes.length === 1 ? session.countryCodes[0] : undefined);
-  if (!countryCode) {
-    return falla("VALIDACION", { campo: "countryCode", mensaje: "Elige el país de la cuenta." });
-  }
 
   const r = await crearOrganizacion(session, {
     name: d.name,
@@ -202,7 +194,7 @@ export async function crearOrganizacionAccion(
     employees: d.employees,
     creditDays: d.creditDays,
     isStrategic: d.isStrategic ?? false,
-    countryCode,
+    countryCode: d.countryCode || null,
   });
   if (!r.ok) return r;
 

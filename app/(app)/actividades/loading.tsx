@@ -28,7 +28,7 @@ export default function CargandoActividades() {
       <EsqueletoDeEncabezado titulo="Actividades" />
       <RegionQueCarga anuncio="Cargando tu agenda…">
         <div className="px-8 py-6">
-          <EsqueletoDeIndicadores cuantos={3} columnas="lg:grid-cols-3" />
+          <EsqueletoDeIndicadores cuantos={3} columnas="lg:grid-cols-3" denso />
 
           {/*
             Las tres listas de §12.4. Sus títulos no dependen de ninguna

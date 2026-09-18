@@ -116,7 +116,7 @@ export default async function DetalleOportunidadPage({
     // Solo si de verdad puede reasignar: pedir la lista para deshabilitar un
     // control sería pagar por algo que nadie va a poder usar (Q-13).
     puedeReasignar
-      ? destinatariosValidos(oportunidad.organization.countryCode)
+      ? destinatariosValidos(oportunidad.countryCode)
       : Promise.resolve([]),
     listCotizaciones(session, oportunidad.id),
   ]);
@@ -307,25 +307,10 @@ function Encabezado({
         </div>
       </div>
 
-      {/*
-        La línea de contexto: de quién es la cuenta, con quién se habla y quién
-        la lleva. Es lo que alguien necesita antes de tocar nada.
-      */}
-      <p className="mt-3 text-sm text-texto-tenue">
-        <span className="[font-variant-numeric:tabular-nums]">{o.folio}</span> ·{" "}
-        {o.organization.name}
-        {o.primaryPerson && (
-          <>
-            {" · "}
-            {o.primaryPerson.name}
-            {o.primaryPerson.jobTitle ? ` (${o.primaryPerson.jobTitle})` : ""}
-          </>
-        )}
-        {" · "}
-        {o.owner.name} · USD
-      </p>
-
-      <div className="mt-5">
+      {/* Sin línea de contexto aquí: el folio y la cuenta ya están en la barra
+          superior, y la persona y el propietario viven en el resumen. Repetirlos
+          encima de las etapas era una fila que no decía nada nuevo. */}
+      <div className="mt-4">
         <CambioDeEtapa
           opportunityId={o.id}
           etapas={etapas}
@@ -337,32 +322,32 @@ function Encabezado({
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatTile
+        <StatTile denso
           etiqueta={congelada ? "Valor neto" : "Valor estimado"}
           valor={formatUSD(congelada?.netSubtotal ?? o.amount)}
           subtexto={congelada ? `Cotización v${congelada.version}` : "Sin cotización congelada"}
         />
-        <StatTile
+        <StatTile denso
           etiqueta="Ponderado"
           valor={formatUSD(weightedAmount(o.amount, o.stage.probability))}
           subtexto={`${formatPercent(toClient(o.stage.probability), 0)} · ${o.stage.name}`}
           tono="acento"
         />
         {margen ? (
-          <StatTile
+          <StatTile denso
             etiqueta="Margen"
             valor={formatPercent(toClient(margen))}
             subtexto={`Piso ${formatPercent(toClient(politica.marginFloor), 0)}`}
             tono={margenBajoElPiso ? "peligro" : "exito"}
           />
         ) : (
-          <StatTile
+          <StatTile denso
             etiqueta="Margen"
             valor="—"
             subtexto="Aún sin cotizar"
           />
         )}
-        <StatTile
+        <StatTile denso
           etiqueta="MEDDIC"
           valor={o.meddicScore === null ? "—" : String(o.meddicScore)}
           subtexto={`Mínimo de cierre ${politica.meddicMinToClosing}`}

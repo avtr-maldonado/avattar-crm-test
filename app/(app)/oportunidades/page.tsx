@@ -11,6 +11,11 @@ import { formatPercent, formatUSD, sum, toClient, type Money } from "@/lib/money
 import { openTotal, weightedAmount, weightedTotal } from "@/lib/domain/pipeline";
 import { explainRiskFlags } from "@/lib/domain/riskFlags";
 import { buildFunnel } from "@/lib/domain/funnel";
+import {
+  buildForecast,
+  type ColumnaDeForecast,
+  type ResultadoDeForecast,
+} from "@/lib/domain/forecast";
 import { computeCoverage, computeCumulativeTrack } from "@/lib/domain/objectives";
 import {
   ETIQUETA_CAMPO,
@@ -20,7 +25,7 @@ import {
   toWhere,
   trimestreDe,
 } from "@/lib/filters";
-import { fraseDeRiesgo, iniciales, tonoDeRiesgo } from "@/lib/etiquetas";
+import { etiquetaDeMes, fraseDeRiesgo, iniciales, tonoDeRiesgo } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { Boton, ControlSegmentado, StatTile } from "@/components/ui/primitivas";
 import { TableroKanban, type ColumnaKanban } from "@/components/pipeline/TableroKanban";
@@ -28,6 +33,7 @@ import type { DatosTarjeta } from "@/components/pipeline/TarjetaOportunidad";
 import { TablaOportunidades } from "@/components/pipeline/TablaOportunidades";
 import { NuevaOportunidad } from "@/components/pipeline/NuevaOportunidad";
 import { Embudo, type RiesgoVisible } from "@/components/pipeline/Embudo";
+import { Forecast, type ColumnaVisible } from "@/components/pipeline/Forecast";
 import { BarraDeFiltros } from "@/components/pipeline/BarraDeFiltros";
 import { buscarOrganizacionesAccion, buscarPersonasAccion, crearOportunidadAccion } from "./acciones";
 import { cambiarEtapaAccion } from "./[id]/acciones";
@@ -49,9 +55,10 @@ import { cambiarEtapaAccion } from "./[id]/acciones";
  *   - La vista vive en la URL (INV-10): la pantalla es compartible y el botón
  *     de regresar funciona.
  *
- * Tres vistas de los mismos datos: **Kanban** para trabajar el día, **Tabla**
- * para comparar renglón a renglón, **Embudo** para preguntar por el proceso.
- * Las tres salen de la misma consulta; cambiar de vista no vuelve a la base.
+ * Cuatro vistas de los mismos datos: **Kanban** para trabajar el día, **Tabla**
+ * para comparar renglón a renglón, **Embudo** para preguntar por el proceso y
+ * **Forecast** para ver cuándo cae el dinero, por mes o por trimestre fiscal.
+ * Las cuatro salen de la misma consulta; cambiar de vista no vuelve a la base.
  *
  * Lo que falta de E1: marcar ganada y perdida, las vistas guardadas de §9.5 y
  * las autorizaciones de descuento, fuera de este alcance por decisión del
@@ -61,9 +68,14 @@ const VISTAS = [
   { valor: "kanban", etiqueta: "Kanban" },
   { valor: "tabla", etiqueta: "Tabla" },
   { valor: "embudo", etiqueta: "Embudo" },
+  // «Forecast» y no «Pronóstico»: es la palabra con que el equipo comercial
+  // nombra esta vista, y el nombre de una pantalla es de quien la usa (INV-14
+  // pide español en la interfaz; este es un préstamo asentado en ventas).
+  { valor: "forecast", etiqueta: "Forecast" },
 ] as const;
 
 type Vista = (typeof VISTAS)[number]["valor"];
+type Agrupacion = "mes" | "trimestre";
 
 /**
  * La ventana de la tasa de paso.
@@ -100,6 +112,12 @@ export default async function PipelinePage({
 
   const enUrl = urlParams.get("vista");
   const vista: Vista = esVista(enUrl) ? enUrl : "kanban";
+  // Cómo agrupa el forecast. Meses por omisión: es la unidad en que se
+  // persigue un cierre; el trimestre es la unidad en que se rinde cuentas.
+  // `desde` desplaza la ventana hacia adelante; nunca hacia atrás (el pasado
+  // del forecast es la columna de vencidas).
+  const agrupar: Agrupacion = urlParams.get("agrupar") === "trimestre" ? "trimestre" : "mes";
+  const desde = Math.max(0, Number.parseInt(urlParams.get("desde") ?? "0", 10) || 0);
   // La oficina elegida en la barra superior. Manda sobre el pipeline, la
   // política, la lista y las métricas: las cuatro leen el mismo país.
   const paisActivo = await oficinaActiva(session);
@@ -137,8 +155,9 @@ export default async function PipelinePage({
     // control sería pagar por una lista que nadie va a poder usar (Q-13).
     puedeAsignar ? destinatariosValidos(paisActivo) : Promise.resolve([]),
     // Las opciones del filtro «Cliente», ya acotadas por alcance: un vendedor
-    // solo puede filtrar por las cuentas que alcanza.
-    listOrganizations(session, { where: deLaOficina }),
+    // solo puede filtrar por las cuentas que alcanza. Sin recorte por oficina:
+    // las cuentas no son de un país (decisiones §18).
+    listOrganizations(session),
     paisPromesa.then((p) =>
       listOpportunities(session, {
         // La oficina activa va DESPUÉS del alcance y de los filtros, con AND:
@@ -311,6 +330,27 @@ export default async function PipelinePage({
     p.set("vista", v);
     return `/oportunidades?${p.toString()}`;
   };
+  // Cambiar de agrupación vuelve al periodo en curso: un desplazamiento en
+  // meses no significa nada en trimestres.
+  const hrefDeForecast = (cambio: { agrupar?: Agrupacion; desde?: number }) => {
+    const p = new URLSearchParams(urlParams);
+    p.set("vista", "forecast");
+    p.set("agrupar", cambio.agrupar ?? agrupar);
+    const d = cambio.desde ?? desde;
+    if (d > 0) p.set("desde", String(d));
+    else p.delete("desde");
+    return `/oportunidades?${p.toString()}`;
+  };
+
+  // El forecast acomoda lo abierto por su cierre estimado, en meses o en
+  // trimestres fiscales del país. Se formatea aquí; el componente solo pinta.
+  const forecast = buildForecast(abiertas, {
+    agrupar,
+    fiscalYearStartMonth: pais.fiscalYearStartMonth,
+    ahora,
+    desplazamiento: desde,
+  });
+  const columnasDeForecast = vistaDeForecast(forecast, tarjetas);
 
   const accionVacio = (
     <>
@@ -340,12 +380,11 @@ export default async function PipelinePage({
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
+        {/* Una sola fila de controles: qué vista, qué datos, y el alta. La
+            línea entre las dos primeras separa preguntas distintas. */}
         <div className="flex flex-wrap items-center gap-3">
           <ControlSegmentado opciones={VISTAS} activa={vista} hrefDe={hrefVista} />
-          <div className="ml-auto">{botonDeAlta}</div>
-        </div>
-
-        <div className="mt-4">
+          <span aria-hidden className="hidden h-6 w-px bg-borde sm:block" />
           <BarraDeFiltros
             ruta="/oportunidades"
             visibles={filtros.visibles}
@@ -361,9 +400,10 @@ export default async function PipelinePage({
             }}
             catalogos={catalogosDeFiltro(cuentas, propietarios, pipelines, paisActivo)}
           />
+          <div className="ml-auto">{botonDeAlta}</div>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-4">
           <Indicadores
             abiertas={abiertas}
             cierraEnTrimestre={cierraEnTrimestre}
@@ -393,6 +433,17 @@ export default async function PipelinePage({
               etapas={etapasDelEmbudo}
               riesgos={riesgos}
               ventanaEnDias={VENTANA_DE_PASO_EN_DIAS}
+              accionVacio={accionVacio}
+            />
+          )}
+
+          {vista === "forecast" && (
+            <Forecast
+              columnas={columnasDeForecast}
+              agrupar={agrupar}
+              desplazamiento={forecast.desplazamiento}
+              fueraDeVentana={forecast.fueraDeVentana}
+              hrefDe={hrefDeForecast}
               accionVacio={accionVacio}
             />
           )}
@@ -471,6 +522,61 @@ function columnasDelTablero(
 }
 
 /**
+ * Las columnas del forecast, formateadas para pintar.
+ *
+ * La barra de cada cabecera es la mezcla de **esa** columna por categoría, sin
+ * lo omitido: dice qué tan firme es el dinero del periodo, no cuánto hay
+ * comparado con otro periodo; para comparar están las cifras. Las tarjetas son
+ * las mismas del kanban: una oportunidad se ve igual en cualquier tablero.
+ */
+function vistaDeForecast(
+  resultado: ResultadoDeForecast<Oportunidad>,
+  tarjetas: DatosTarjeta[],
+): ColumnaVisible[] {
+  const tarjetaDe = new Map(tarjetas.map((t) => [t.id, t]));
+
+  return resultado.columnas.map((c): ColumnaVisible => {
+    const pronosticado = c.total.minus(c.porCategoria.OMITIDA);
+    const fraccion = (v: Money) => (pronosticado.isZero() ? 0 : v.div(pronosticado).toNumber());
+
+    return {
+      clave: c.clave,
+      etiqueta: etiquetaDePeriodo(c.periodo),
+      nota:
+        c.periodo.tipo === "vencidas" ? "cierre estimado ya pasado" : c.esActual ? "en curso" : null,
+      cuantas: c.oportunidades.length,
+      total: formatUSD(c.total),
+      ponderado: formatUSD(c.ponderado),
+      barra: {
+        compromiso: fraccion(c.porCategoria.COMPROMISO),
+        mejorCaso: fraccion(c.porCategoria.MEJOR_CASO),
+        pipeline: fraccion(c.porCategoria.PIPELINE),
+      },
+      desglose: [
+        `Compromiso ${formatUSD(c.porCategoria.COMPROMISO)}`,
+        `Mejor caso ${formatUSD(c.porCategoria.MEJOR_CASO)}`,
+        `Pipeline ${formatUSD(c.porCategoria.PIPELINE)}`,
+        `Omitida ${formatUSD(c.porCategoria.OMITIDA)}`,
+      ].join(" · "),
+      esVencidas: c.periodo.tipo === "vencidas",
+      esActual: c.esActual,
+      oportunidades: c.oportunidades.map((o) => tarjetaDe.get(o.id)!),
+    };
+  });
+}
+
+function etiquetaDePeriodo(p: ColumnaDeForecast<Oportunidad>["periodo"]): string {
+  switch (p.tipo) {
+    case "vencidas":
+      return "Vencidas";
+    case "mes":
+      return etiquetaDeMes(p.anio, p.mes);
+    case "trimestre":
+      return `T${p.quarter} ${p.fiscalYear}`;
+  }
+}
+
+/**
  * Las opciones de cada desplegable, ya acotadas por alcance.
  *
  * Las listas vienen de `lib/scope`, así que un vendedor solo puede filtrar por
@@ -530,22 +636,26 @@ function Indicadores({
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
       <StatTile
+        denso
         etiqueta="Valor abierto"
         valor={formatUSD(openTotal(abiertas))}
         subtexto={`${abiertas.length} oportunidades`}
       />
       <StatTile
+        denso
         etiqueta="Ponderado"
         valor={formatUSD(weightedTotal(abiertas))}
         subtexto="por probabilidad de etapa"
         tono="acento"
       />
       <StatTile
+        denso
         etiqueta="Cierre del trimestre"
         valor={formatUSD(openTotal(cierraEnTrimestre))}
         subtexto={`${cierraEnTrimestre.length} con cierre estimado`}
       />
       <StatTile
+        denso
         etiqueta="Cobertura"
         valor={!hayCuota ? "—" : veces === null ? "Cubierta" : `${veces.toFixed(1)} ×`}
         subtexto={
@@ -558,6 +668,7 @@ function Indicadores({
         tono={hayCuota && veces !== null && veces < 1 ? "peligro" : "exito"}
       />
       <StatTile
+        denso
         etiqueta="En riesgo"
         valor={formatUSD(openTotal(enRiesgo))}
         subtexto={`${enRiesgo.length} con bandera activa`}

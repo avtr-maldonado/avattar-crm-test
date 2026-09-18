@@ -8,8 +8,7 @@ import { crearProductoAccion, editarProductoAccion } from "./acciones";
 import { formatPercent, formatUSD, money, toClient } from "@/lib/money";
 import { iniciales } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
-import { Pastilla, StatTile } from "@/components/ui/primitivas";
-import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
+import { ControlSegmentado, Pastilla, StatTile } from "@/components/ui/primitivas";
 
 /**
  * P-06 · Productos.
@@ -37,10 +36,10 @@ import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
  */
 const DIAS_COSTO_OBSOLETO = 60;
 
-const PESTANAS: Pestana[] = [
-  { clave: "catalogo", etiqueta: "Catálogo" },
-  { clave: "listas", etiqueta: "Lista de precio" },
-];
+const PESTANAS = [
+  { valor: "catalogo", etiqueta: "Catálogo" },
+  { valor: "listas", etiqueta: "Lista de precio" },
+] as const;
 
 export default async function ProductosPage({
   searchParams,
@@ -84,31 +83,31 @@ export default async function ProductosPage({
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatTile
+          <StatTile denso
             etiqueta="SKU activos"
             valor={String(productos.length)}
             subtexto="en el catálogo"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Familias"
             valor={String(new Set(productos.map((p) => p.family.name)).size)}
             subtexto="agrupan el análisis de rentabilidad"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Con precio vigente"
             valor={String(productos.filter((p) => p.prices.length > 0).length)}
             subtexto="a la fecha de hoy"
             tono="acento"
           />
           {verCosto ? (
-            <StatTile
+            <StatTile denso
               etiqueta="Costo desactualizado"
               valor={String(obsoletos.length)}
               subtexto={`más de ${DIAS_COSTO_OBSOLETO} días`}
               tono={obsoletos.length > 0 ? "peligro" : "exito"}
             />
           ) : (
-            <StatTile
+            <StatTile denso
               etiqueta="Piso de precio"
               valor="por SKU"
               subtexto="hasta ahí puedes descontar (RN-08)"
@@ -129,9 +128,9 @@ export default async function ProductosPage({
           </div>
         )}
 
-        <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
-          <Pestanas
-            pestanas={PESTANAS}
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <ControlSegmentado
+            opciones={PESTANAS}
             activa={activa}
             hrefDe={(clave) => `/productos?p=${clave}`}
           />

@@ -28,11 +28,18 @@ export function StatTile({
   valor,
   subtexto,
   tono = "neutro",
+  denso = false,
 }: {
   etiqueta: string;
   valor: string;
   subtexto?: string;
   tono?: "neutro" | "acento" | "exito" | "alerta" | "peligro";
+  /**
+   * Etiqueta y cifra, nada más, en menos alto. Para pantallas donde los
+   * indicadores compiten por espacio con lo que de verdad se trabaja —el
+   * tablero—. El subtexto no se pierde: pasa al `title`, para quien lo quiera.
+   */
+  denso?: boolean;
 }) {
   const color = {
     neutro: "text-texto-titulo",
@@ -43,12 +50,24 @@ export function StatTile({
   }[tono];
 
   return (
-    <div className="rounded-md border border-borde bg-superficie-tarjeta px-4 py-3">
+    <div
+      title={denso ? subtexto : undefined}
+      className={clsx(
+        "rounded-md border border-borde bg-superficie-tarjeta",
+        denso ? "px-3 py-2" : "px-4 py-3",
+      )}
+    >
       <p className="eyebrow">{etiqueta}</p>
-      <p className={clsx("tabular mt-1 text-h4 font-semibold leading-none", color)}>
+      <p
+        className={clsx(
+          "tabular font-semibold leading-none",
+          denso ? "mt-0.5 text-lg" : "mt-1 text-h4",
+          color,
+        )}
+      >
         {valor}
       </p>
-      {subtexto && <p className="mt-1.5 text-xs text-texto-tenue">{subtexto}</p>}
+      {subtexto && !denso && <p className="mt-1.5 text-xs text-texto-tenue">{subtexto}</p>}
     </div>
   );
 }
@@ -180,7 +199,13 @@ export function ControlSegmentado<T extends string>({
   activa,
   hrefDe,
 }: {
-  opciones: readonly { valor: T; etiqueta: string; deshabilitada?: boolean }[];
+  opciones: readonly {
+    valor: T;
+    etiqueta: string;
+    /** Cuántos hay detrás de la opción. Un cero no se pinta: sería ruido. */
+    contador?: number;
+    deshabilitada?: boolean;
+  }[];
   activa: T;
   hrefDe: (valor: T) => string;
 }) {
@@ -211,6 +236,11 @@ export function ControlSegmentado<T extends string>({
             )}
           >
             {o.etiqueta}
+            {o.contador !== undefined && o.contador > 0 && (
+              <span className="tabular ml-1.5 text-xs font-normal text-texto-tenue">
+                {o.contador}
+              </span>
+            )}
           </Link>
         ),
       )}

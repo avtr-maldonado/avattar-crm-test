@@ -13,6 +13,15 @@ import { prisma } from "@/lib/db";
  * ganado 12 meses— se calculan solo sobre las oportunidades que ese usuario
  * puede ver. Si se calcularan sobre el total de la cuenta, un vendedor
  * deduciría el pipeline de su compañero restando.
+ *
+ * ## Las cuentas no son de un país · decisiones §18
+ *
+ * Un gerente de país ve **todas** las cuentas, no las de su oficina. El
+ * negocio revisó la regla original —una cuenta pertenece a un país y solo se
+ * ve desde él— y no le resultó conveniente: una empresa se atiende desde
+ * cualquier oficina y se le venden oportunidades en cualquier país. El país
+ * sigue recortando **oportunidades** (`opportunityScope`), que es donde vive
+ * el alcance por oficina; la cuenta es una sola para toda la operación.
  */
 export function organizationScope(session: Session): Prisma.OrganizationWhereInput {
   const base: Prisma.OrganizationWhereInput = { deletedAt: null };
@@ -28,7 +37,6 @@ export function organizationScope(session: Session): Prisma.OrganizationWhereInp
         ],
       };
     case "GERENTE_PAIS":
-      return { ...base, countryCode: { in: session.countryCodes } };
     case "DIRECCION":
     case "ADMINISTRADOR":
       return base;
@@ -123,10 +131,12 @@ export async function buscarOrganizacionesParaAlta(session: Session, texto: stri
   const termino = texto.trim();
   if (termino.length < 2) return [];
 
+  // Sin recorte por país: las cuentas no son de un país (decisiones §18), y
+  // esconder una con sede en Chile a un vendedor de México produciría justo el
+  // duplicado que esta búsqueda existe para evitar.
   return prisma.organization.findMany({
     where: {
       deletedAt: null,
-      countryCode: { in: session.countryCodes },
       name: { contains: termino, mode: "insensitive" },
     },
     select: { id: true, name: true, type: true, city: true },

@@ -283,12 +283,16 @@ model Organization {
   id          String           @id @default(cuid())
   name        String
   legalName   String?          @map("legal_name")
-  /// RFC en México, NIT en Colombia, RUT en Chile.
+  /// Identificador fiscal, con nombre genérico: RFC, NIT o RUT según el país
+  /// de la empresa, que puede no ser el de ninguna oficina (§18).
   taxId       String?          @map("tax_id")
   type        OrganizationType
   industry    String?
   city        String?
-  countryCode CountryCode      @map("country_code")
+  /// País sede, informativo y opcional. Las cuentas no son de un país: se ven
+  /// desde todas las oficinas y se les venden oportunidades en cualquier
+  /// pipeline. El país de la oportunidad lo pone el pipeline (§18).
+  countryCode CountryCode?     @map("country_code")
   employees   Int?
   creditDays  Int?             @map("credit_days")
   /// Jerarquía matriz-filial. Fase 2; la columna existe para no migrar después.
@@ -299,7 +303,7 @@ model Organization {
   updatedAt   DateTime         @updatedAt @map("updated_at")
   deletedAt   DateTime?        @map("deleted_at")
 
-  country       Country        @relation(fields: [countryCode], references: [code])
+  country       Country?       @relation(fields: [countryCode], references: [code])
   owner         User           @relation("OrganizationOwner", fields: [ownerId], references: [id])
   parent        Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
   children      Organization[] @relation("OrganizationHierarchy")

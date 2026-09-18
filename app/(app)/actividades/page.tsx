@@ -93,19 +93,19 @@ export default async function ActividadesPage({
         </div>
 
         <div className="mt-5 grid grid-cols-3 gap-4">
-          <StatTile
+          <StatTile denso
             etiqueta="Vencidas"
             valor={String(bandeja.vencidas.length)}
             subtexto="se prometieron y no se hicieron"
             tono={bandeja.vencidas.length > 0 ? "peligro" : "neutro"}
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Hoy"
             valor={String(bandeja.hoy.length)}
             subtexto="el plan del día"
             tono="acento"
           />
-          <StatTile
+          <StatTile denso
             etiqueta="Sin próximo paso"
             valor={String(bandeja.sinProxima.length)}
             subtexto="oportunidades abiertas sin agenda"

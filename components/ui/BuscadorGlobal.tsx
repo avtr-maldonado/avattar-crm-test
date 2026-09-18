@@ -43,7 +43,7 @@ function aplanar(r: ResultadosDeBusqueda): Fila[] {
       titulo: c.nombre,
       detalle: c.ciudad ?? "",
       grupo: "Cuentas",
-      pais: c.countryCode,
+      pais: c.countryCode ?? undefined,
     });
   }
   for (const p of r.personas) {

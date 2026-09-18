@@ -27,8 +27,10 @@ const TIPOS = [
   { valor: "PROVEEDOR", etiqueta: "Proveedor" },
 ];
 
-/** El identificador fiscal se llama distinto en cada país (§4). */
-const IDENTIFICADOR: Record<string, string> = { MX: "RFC", CO: "NIT", CL: "RUT" };
+/** Las sedes posibles. La cuenta puede no tener ninguna (§18). */
+const SEDES: { valor: CountryCode; etiqueta: string }[] = (["MX", "CO", "CL"] as const).map(
+  (p) => ({ valor: p, etiqueta: NOMBRE_PAIS[p] }),
+);
 
 export type OrganizacionDelFormulario = {
   id: string;
@@ -38,7 +40,8 @@ export type OrganizacionDelFormulario = {
   type: string;
   industry: string | null;
   city: string | null;
-  countryCode: string;
+  /** País sede, informativo y opcional (§18). */
+  countryCode: string | null;
   employees: number | null;
   creditDays: number | null;
   isStrategic: boolean;
@@ -52,27 +55,24 @@ export type OrganizacionDelFormulario = {
  * son los mismos y lo que cambia es si llega una `organizacion`. Sin ella, da
  * de alta.
  *
- * ## En el alta, el país se elige solo si hay de dónde
+ * ## La sede es un dato, no una llave · decisiones §18
  *
- * Una cuenta nace en un país donde quien la crea opera. Con un solo país no se
- * pregunta; con varios, el selector ofrece únicamente los de la sesión (AC-05).
- * El nombre del identificador fiscal sigue al país elegido: RFC, NIT o RUT.
+ * Las cuentas no son de un país: se ven desde todas las oficinas y se les
+ * venden oportunidades en cualquier pipeline. El país queda como **sede**,
+ * opcional e informativa —dónde está la empresa—, y por eso se puede elegir
+ * cualquiera, o ninguna, al crear y al editar. El identificador fiscal lleva un
+ * nombre genérico: una empresa con sede en Chile puede facturar con RFC en
+ * México, y el campo no tiene por qué decidir cuál es.
  *
  * El propietario no se elige al crear: es quien crea. Reasignar es de Gerencia
  * y se hace después, desde esta misma ficha.
  *
  * ## Lo que no se edita, y no por olvido
  *
- * **El país.** Cambiarlo movería de país todas las oportunidades de la cuenta y
- * con ellas quién las ve: el alcance por rol se aplicaría bien en cada consulta
- * y el dato habría cruzado la frontera igual (`AC-05`). Eso no es editar, es
- * migrar, y necesita su propia decisión.
- *
  * **La organización matriz.** La jerarquía matriz-filial es `F-402`, Fase 2.
  */
 export function EditarOrganizacion({
   organizacion,
-  paises = [],
   propietarios = [],
   puedeReasignar = false,
   accion,
@@ -81,8 +81,6 @@ export function EditarOrganizacion({
 }: {
   /** Sin organización, el formulario da de alta. */
   organizacion?: OrganizacionDelFormulario;
-  /** Al dar de alta: los países en los que opera la sesión. */
-  paises?: CountryCode[];
   propietarios?: { id: string; name: string }[];
   puedeReasignar?: boolean;
   accion: (previo: ResultadoDeContacto | null, form: FormData) => Promise<ResultadoDeContacto>;
@@ -91,7 +89,6 @@ export function EditarOrganizacion({
 }) {
   const [abierto, setAbierto] = useState(false);
   const esAlta = organizacion === undefined;
-  const [pais, setPais] = useState<string>(organizacion?.countryCode ?? paises[0] ?? "MX");
 
   const [resultado, enviar, enviando] = useActionState(
     async (previo: ResultadoDeContacto | null, form: FormData) => {
@@ -108,8 +105,6 @@ export function EditarOrganizacion({
   );
 
   const idFormulario = `organizacion-${organizacion?.id ?? "nueva"}`;
-  const etiquetaFiscal = IDENTIFICADOR[pais] ?? "Identificador fiscal";
-  const nombrePais = NOMBRE_PAIS[pais as CountryCode] ?? pais;
 
   return (
     <>
@@ -121,8 +116,8 @@ export function EditarOrganizacion({
         titulo={esAlta ? "Nueva cuenta" : "Editar cuenta"}
         subtitulo={
           esAlta
-            ? `Nace en ${nombrePais} y queda a tu nombre. Reasignarla se hace después, desde la ficha.`
-            : `${organizacion.name} · ${organizacion.countryCode}. El país y la matriz no se editan aquí.`
+            ? "Queda a tu nombre y a la vista de toda la operación. Reasignarla se hace después, desde la ficha."
+            : `${organizacion.name}. La matriz no se edita aquí.`
         }
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
@@ -148,29 +143,6 @@ export function EditarOrganizacion({
         <form id={idFormulario} action={enviar} className="flex flex-col gap-5">
           {organizacion && <input type="hidden" name="organizationId" value={organizacion.id} />}
 
-          {esAlta && paises.length > 1 && (
-            <Campo
-              etiqueta="País"
-              htmlFor={`${idFormulario}-countryCode`}
-              problema={problemaDe(resultado, "countryCode")}
-              ayuda="Solo los países en los que operas. Decide quién puede ver la cuenta."
-            >
-              <Seleccion
-                id={`${idFormulario}-countryCode`}
-                name="countryCode"
-                value={pais}
-                onChange={(e) => setPais(e.target.value)}
-                problema={problemaDe(resultado, "countryCode")}
-              >
-                {paises.map((p) => (
-                  <option key={p} value={p}>
-                    {NOMBRE_PAIS[p]}
-                  </option>
-                ))}
-              </Seleccion>
-            </Campo>
-          )}
-
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Campo etiqueta="Nombre" htmlFor={`${idFormulario}-name`} problema={problemaDe(resultado, "name")}>
               <Entrada
@@ -193,12 +165,16 @@ export function EditarOrganizacion({
           </div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <Campo etiqueta={etiquetaFiscal} htmlFor={`${idFormulario}-taxId`}>
+            <Campo
+              etiqueta="Identificador fiscal"
+              htmlFor={`${idFormulario}-taxId`}
+              ayuda="RFC, NIT o RUT, según dónde facture la empresa."
+            >
               <Entrada
                 id={`${idFormulario}-taxId`}
                 name="taxId"
                 defaultValue={organizacion?.taxId ?? ""}
-                placeholder={`${etiquetaFiscal} de la empresa`}
+                placeholder="Identificador fiscal de la empresa"
               />
             </Campo>
 
@@ -236,6 +212,27 @@ export function EditarOrganizacion({
               />
             </Campo>
           </div>
+
+          <Campo
+            etiqueta="País sede"
+            htmlFor={`${idFormulario}-countryCode`}
+            problema={problemaDe(resultado, "countryCode")}
+            ayuda="Informativo. No limita quién ve la cuenta ni dónde se le venden oportunidades."
+          >
+            <Seleccion
+              id={`${idFormulario}-countryCode`}
+              name="countryCode"
+              defaultValue={organizacion?.countryCode ?? ""}
+              problema={problemaDe(resultado, "countryCode")}
+            >
+              <option value="">Sin sede definida</option>
+              {SEDES.map((s) => (
+                <option key={s.valor} value={s.valor}>
+                  {s.etiqueta}
+                </option>
+              ))}
+            </Seleccion>
+          </Campo>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Campo

@@ -22,7 +22,8 @@ export type NombreDeIcono =
   | "lupa"
   | "contraer"
   | "expandir"
-  | "chevron";
+  | "chevron"
+  | "riesgo";
 
 const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
   // Tres columnas de alturas distintas: el kanban.
@@ -89,6 +90,14 @@ const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
   expandir: <path d="m9 5 5 5-5 5M4.5 5l5 5-5 5" />,
   // Apunta hacia abajo: lo giran los controles que se despliegan.
   chevron: <path d="m5 7.5 5 5 5-5" />,
+  // Triángulo con admiración: la bandera de riesgo cuando no hay lugar para
+  // escribirla. Su color dice la gravedad; el `title` dice cuál es.
+  riesgo: (
+    <>
+      <path d="M8.7 3.9a1.5 1.5 0 0 1 2.6 0l6.2 11a1.5 1.5 0 0 1-1.3 2.25H3.8a1.5 1.5 0 0 1-1.3-2.25z" />
+      <path d="M10 8v3.75M10 14.25v.01" />
+    </>
+  ),
 };
 
 export function Icono({ nombre, className }: { nombre: NombreDeIcono; className?: string }) {

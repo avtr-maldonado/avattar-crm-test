@@ -30,7 +30,8 @@ export type ResultadosDeBusqueda = {
     countryCode: CountryCode;
     status: OpportunityStatus;
   }[];
-  cuentas: { id: string; nombre: string; ciudad: string | null; countryCode: CountryCode }[];
+  /** `countryCode` es la sede, informativa y opcional (decisiones §18). */
+  cuentas: { id: string; nombre: string; ciudad: string | null; countryCode: CountryCode | null }[];
   personas: {
     id: string;
     nombre: string;

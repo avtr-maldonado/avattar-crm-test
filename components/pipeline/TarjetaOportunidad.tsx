@@ -1,22 +1,37 @@
 import Link from "next/link";
+import { clsx } from "clsx";
 import type { RiskFlag } from "@/lib/dto";
 import { ETIQUETA_BANDERA } from "@/lib/etiquetas";
+import { Icono } from "@/components/ui/iconos";
 import { Avatar, Pastilla } from "@/components/ui/primitivas";
 
 /**
  * Tarjeta del kanban · §11 P-01.
  *
  * «Nombre, organización, importe, margen, puntaje MEDDIC, fecha de cierre,
- * iniciales del propietario y bandera de riesgo si aplica.»
+ * iniciales del propietario y bandera de riesgo si aplica.» Los ocho datos
+ * siguen aquí, en **cuatro líneas**: un tablero de cinco columnas se lee de
+ * corrido solo si cada tarjeta cabe en el alto de una mano.
+ *
+ *   nombre en dos líneas                                   ⚠
+ *   organización · cierre
+ *   (JM) importe                             margen  MEDDIC
+ *
+ * ## Lo que se fue y a dónde
+ *
+ * Las pastillas de riesgo eran una fila entera para decir «Estancada». Ahora es
+ * el triángulo de la esquina: su color dice la gravedad —coral si cuesta dinero
+ * o clientes, apagado si solo va lento (§13.1)— y su `title` dice cuáles. El
+ * nombre del propietario vive en el `title` del avatar, como en el resto de la
+ * interfaz.
  *
  * Recibe todo ya calculado y formateado. No consulta, no formatea dinero y no
  * decide banderas: eso vive en `lib/domain` y `lib/money`, probado con tests
  * unitarios. «La UI nunca recalcula por su cuenta» (§4.3).
  *
- * El margen es **la señal más importante de toda la interfaz** (§13.1): verde
- * en o sobre el piso, coral debajo. Por eso viaja como `margenBajoElPiso`, un
- * booleano ya resuelto contra `CommercialPolicy`, y no como un umbral que la
- * tarjeta tuviera que comparar.
+ * El margen sigue siendo **la señal más importante de toda la interfaz**
+ * (§13.1): verde en o sobre el piso, coral debajo. Viaja como
+ * `margenBajoElPiso`, un booleano ya resuelto contra `CommercialPolicy`.
  */
 export type DatosTarjeta = {
   id: string;
@@ -42,55 +57,70 @@ export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
       // Los enlaces son arrastrables de nacimiento: sin esto el navegador
       // inicia su propio arrastre de la URL y pisa el del tablero.
       draggable={false}
-      // Tres líneas de nombre como máximo: en una columna angosta un nombre
-      // largo se comería la columna. El título completo queda en el `title`.
       title={o.nombre}
-      className="block rounded-md border border-borde bg-superficie-tarjeta p-3 shadow-xs transition-shadow duration-rapido ease-estandar hover:shadow-sm col-angosta:p-2.5"
+      className="block rounded-md border border-borde bg-superficie-tarjeta px-2.5 py-2 shadow-xs transition-shadow duration-rapido ease-estandar hover:shadow-sm col-angosta:px-2"
     >
-      <p className="line-clamp-3 text-sm font-medium leading-snug text-texto-titulo col-angosta:text-xs">
-        {o.nombre}
-      </p>
-      <p className="mt-0.5 truncate text-xs text-texto-tenue">{o.organizacion}</p>
+      <div className="flex items-start gap-1.5">
+        {/* Dos líneas de nombre como máximo. El título completo queda en `title`. */}
+        <p className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-snug text-texto-titulo col-angosta:text-xs">
+          {o.nombre}
+        </p>
+        {o.banderas.length > 0 && <SenalDeRiesgo banderas={o.banderas} />}
+      </div>
 
-      {/* Si importe y margen no caben juntos, el margen baja debajo del importe:
-          los dos siguen legibles y el color del margen sigue siendo lo primero
-          que se ve (§13.1). */}
-      <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-2">
-        <span className="tabular text-sm font-semibold text-texto-titulo col-angosta:text-xs">
+      {/* Si algo no cabe se recorta el nombre de la cuenta, que se deduce del
+          contexto; la fecha no se recorta, porque «15 oct» a medias no dice nada. */}
+      <p className="mt-0.5 flex items-baseline gap-1 text-xs text-texto-tenue">
+        <span className="truncate">{o.organizacion}</span>
+        <span className="tabular shrink-0 whitespace-nowrap">· {o.cierre}</span>
+      </p>
+
+      {/* El importe nunca se trunca: es el número. En una columna angosta, el
+          margen y el puntaje bajan a una segunda línea, alineados a la derecha. */}
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+        <Avatar iniciales={o.propietario.iniciales} titulo={o.propietario.nombre} />
+        <span className="tabular whitespace-nowrap text-sm font-semibold text-texto-titulo col-angosta:text-xs">
           {o.importe}
         </span>
-        {o.margen && (
-          <span
-            className={
-              o.margenBajoElPiso
-                ? "tabular text-xs font-semibold text-coral"
-                : "tabular text-xs font-medium text-exito"
-            }
-          >
-            {o.margen} mg
-          </span>
-        )}
-      </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="tabular whitespace-nowrap text-xs text-texto-tenue">{o.cierre}</span>
-
-        <div className="ml-auto flex items-center gap-1.5">
+        <span className="ml-auto flex shrink-0 items-center gap-1.5">
+          {o.margen && (
+            <span
+              className={clsx(
+                "tabular text-xs",
+                o.margenBajoElPiso ? "font-semibold text-coral" : "font-medium text-exito",
+              )}
+            >
+              {o.margen}
+            </span>
+          )}
           {o.meddicScore !== null && <PuntajeMeddic valor={o.meddicScore} />}
-          <Avatar iniciales={o.propietario.iniciales} titulo={o.propietario.nombre} />
-        </div>
+        </span>
       </div>
-
-      {o.banderas.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {o.banderas.map((b) => (
-            <Pastilla key={b} tono={b === "MARGEN_BAJO" ? "peligro" : "alerta"}>
-              {ETIQUETA_BANDERA[b]}
-            </Pastilla>
-          ))}
-        </div>
-      )}
     </Link>
+  );
+}
+
+/**
+ * La bandera, sin la fila que ocupaba.
+ *
+ * Coral cuando cuesta dinero o clientes —margen bajo el piso, sin siguiente
+ * paso—; apagado cuando solo es un problema de ritmo (§13.1). El `title` lista
+ * las banderas, así que el detalle no se pierde: se consulta.
+ */
+function SenalDeRiesgo({ banderas }: { banderas: RiskFlag[] }) {
+  const grave = banderas.some((b) => b !== "ESTANCADA");
+  const cuales = banderas.map((b) => ETIQUETA_BANDERA[b]).join(" · ");
+
+  return (
+    <span
+      role="img"
+      aria-label={`En riesgo: ${cuales}`}
+      title={cuales}
+      className={clsx("mt-px shrink-0", grave ? "text-coral" : "text-navy-500")}
+    >
+      <Icono nombre="riesgo" className="size-4" />
+    </span>
   );
 }
 

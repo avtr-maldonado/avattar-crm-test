@@ -87,7 +87,9 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
                     riskFlags (banderas + evidencia con su número), folio, funnel (embudo y tasa de
-                    paso), objectives (avance acumulado → decisiones §17). Servicios con transacción:
+                    paso), forecast (columnas por periodo de cierre estimado, ventana fija que avanza,
+                    vencidas aparte, lo que queda fuera se cuenta),
+                    objectives (avance acumulado → decisiones §17). Servicios con transacción:
                     opportunity, activity, contact, product, quoteService, milestoneService,
                     meddicService, document, usuario, objetivo (fijar cuota)
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
@@ -106,7 +108,9 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
                     contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo)
 components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos}/   por pantalla
-                    pipeline: TableroKanban · TablaOportunidades · Embudo · BarraDeFiltros (§9)
+                    pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
+                    por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
+                    BarraDeFiltros (§9)
                     objetivos: PanelDeAvance · TiraDeTrimestres · TablaDeEquipo · FijarObjetivo
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
                     del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion
@@ -150,6 +154,11 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
 - **Los objetivos se miden acumulados** (decisiones §17, regla nueva que no está en el spec): la
   cuota del T1 al trimestre en curso contra lo ganado en ese mismo tramo. Un trimestre bueno paga
   la deuda del anterior. `computeCumulativeTrack` en `lib/domain/objectives.ts`.
+- **Las cuentas no son de un país** (decisiones §18, revisado con el negocio): gerencia, dirección
+  y administración ven todas; el vendedor ve las suyas por propiedad, no por país. El país vive en
+  la **oportunidad** y sale del **pipeline** elegido; `Organization.countryCode` es la sede,
+  opcional e informativa. El homónimo se rechaza en cualquier país. `AC-05` sigue para
+  oportunidades, actividades y objetivos; no para cuentas ni personas.
 
 ## Sistema de diseño
 
@@ -170,7 +179,7 @@ textualmente; no se sustituyen por la paleta por omisión de ninguna librería.
 `E4` medición → `E5` regional. **E1 antes que E2, sin excepción.** Detalle y criterios de
 aceptación por incremento en §17.
 
-**Dónde está (14 de septiembre de 2026).** E0 y E1 completos: P-01 en kanban, tabla y **embudo**,
+**Dónde está (17 de septiembre de 2026).** E0 y E1 completos: P-01 en kanban, tabla, **embudo** y **forecast**,
 con arrastre entre etapas, alta en modal con alta en línea de organización, P-02 con edición,
 cambio de etapa y registro de actividades, contactos en dos pestañas con edición, productos con
 precio versionado (RN-26). La **barra de filtros de §9** ya existe (cliente, vendedor, lapso,
@@ -236,6 +245,9 @@ Los demás lugares donde vive el contexto, y para quién:
 - `AGENTS.md` — el mismo contrato para agentes que no son Claude; solo apunta aquí.
 - `README.md` — arranque y mapa, para personas.
 - `docs/decisiones-pendientes.md` — supuestos, y qué cuesta cambiarlos.
+- `docs/funcionalidades-y-casos-de-uso.md` — lo construido, funcionalidad por funcionalidad con
+  sus casos de uso por rol y lo pendiente. Para negocio y pruebas; se actualiza al cerrar cada
+  incremento, leyendo el código y no el spec.
 - `.claude/skills/` y `.agents/skills/` — copias idénticas de skills de terceros, gestionadas por
   `skills-lock.json`. Se actualizan con el instalador (`npx skills check` / `update`), no a mano.
   No se versionan (`.gitignore`): en un clon nuevo se reinstalan desde el lock.
