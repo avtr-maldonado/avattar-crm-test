@@ -1,8 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { useEffect, useRef, type ReactNode } from "react";
-import type { Problema, ResultadoAccion } from "@/lib/acciones";
+import { startTransition, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  SIN_CORRECCIONES,
+  corregir,
+  problemaPendiente,
+  type Problema,
+  type ResultadoAccion,
+} from "@/lib/acciones";
 
 /**
  * Etiqueta, control, anotación y problema.
@@ -252,4 +258,55 @@ export function AvisosDeAccion({ resultado }: { resultado: ResultadoAccion<unkno
       </ul>
     </div>
   );
+}
+
+/**
+ * Envía la acción sin que React reinicie el formulario.
+ *
+ * Con `<form action={enviar}>`, React 19 reinicia los campos no controlados en
+ * cuanto la acción termina, y termina también cuando devuelve `VALIDACION`: a
+ * quien olvidó la fecha se le borraban el importe, el tipo y el cargo que sí
+ * había capturado. Enviar desde `onSubmit`, dentro de una transición, evita
+ * ese reinicio y conserva el estado pendiente de `useActionState`. El botón
+ * que disparó el envío viaja también en el `FormData`, para que «Crear de
+ * todos modos» siga llegando como `omitirCompuerta`.
+ */
+export function useEnvioQueConserva(enviar: (form: FormData) => void) {
+  return useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const boton = (e.nativeEvent as SubmitEvent).submitter;
+      const datos = new FormData(e.currentTarget, boton);
+      startTransition(() => enviar(datos));
+    },
+    [enviar],
+  );
+}
+
+/**
+ * Los problemas por campo, apagándose conforme se corrigen.
+ *
+ * `alCambiar` va en el `<form>`: los eventos de cambio suben desde cada control,
+ * así que un solo manejador atiende a todos, también a los no controlados. Lo
+ * que no dispara eventos —lo que resuelve un autocompletado y viaja oculto— se
+ * apaga a mano con `corregir`. La regla de qué se apaga y cuándo vuelve a
+ * encenderse es pura y está probada en `lib/acciones`.
+ */
+export function useProblemas(resultado: ResultadoAccion<unknown> | null) {
+  const [correcciones, setCorrecciones] = useState(SIN_CORRECCIONES);
+
+  const corregirCampo = useCallback(
+    (campo: string) => setCorrecciones((c) => corregir(c, resultado, campo)),
+    [resultado],
+  );
+
+  return {
+    problema: (campo: string) => problemaPendiente(resultado, correcciones, campo),
+    corregir: corregirCampo,
+    alCambiar: (e: React.FormEvent<HTMLFormElement>) => {
+      const control = e.target as HTMLInputElement | HTMLSelectElement;
+      if (control.name) corregirCampo(control.name);
+    },
+    reiniciar: () => setCorrecciones(SIN_CORRECCIONES),
+  };
 }

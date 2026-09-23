@@ -29,8 +29,8 @@ export async function getCotizacion(
     where: { AND: [{ id }, alcance] },
     select: {
       ...quoteSelect(session),
-      // La oportunidad se necesita para escribir el espejo del neto al
-      // congelar; no es dato del cliente.
+      // La oportunidad se necesita para saber si sigue abierta y para escribir
+      // el espejo del neto; no es dato del cliente.
       opportunity: { select: { id: true, status: true, countryCode: true } },
     },
   });
@@ -39,23 +39,18 @@ export async function getCotizacion(
 export type CotizacionConLineas = NonNullable<Awaited<ReturnType<typeof getCotizacion>>>;
 
 /**
- * Las cotizaciones de una oportunidad, para el historial de versiones.
+ * La cotización vigente de una oportunidad: la de mayor versión.
  *
- * Se listan todas —borrador, congeladas y reemplazadas— porque explicar por qué
- * una versión vieja dice otro precio es justo para lo que existe el versionado
- * (RN-26 en su equivalente de cotización).
+ * Es una sola y editable (decisiones §21). Las versiones anteriores a ese
+ * cambio siguen en la base como historia que nadie lee; se toma la última,
+ * que es la que se estaba trabajando.
  */
-export async function listCotizaciones(session: Session, opportunityId: string) {
-  return prisma.quote.findMany({
+export async function cotizacionVigente(session: Session, opportunityId: string) {
+  return prisma.quote.findFirst({
     where: { AND: [{ opportunityId }, { opportunity: opportunityScope(session) }] },
     select: {
-      id: true,
-      version: true,
-      status: true,
-      netSubtotal: true,
-      frozenAt: true,
-      createdAt: true,
-      _count: { select: { lines: true } },
+      ...quoteSelect(session),
+      opportunity: { select: { id: true, status: true, countryCode: true } },
     },
     orderBy: { version: "desc" },
   });

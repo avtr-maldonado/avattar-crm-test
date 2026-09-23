@@ -111,6 +111,9 @@ export function EditarProducto({
 
   const idFormulario = `producto-${producto?.id ?? "nuevo"}`;
   const piso = pisoAproximado(costo, lista, pisoDeMargen);
+  // Los dos vacíos = sin lista (§22): precio y costo se fijan en cada cotización.
+  const sinLista = lista.trim() === "" && costo.trim() === "";
+  const teniaLista = producto !== undefined && producto.listPrice !== "";
   const tocaPrecios =
     !esAlta && (lista !== (producto?.listPrice ?? "") || costo !== (producto?.standardCost ?? ""));
 
@@ -122,16 +125,24 @@ export function EditarProducto({
 
       <Panel
         titulo={esAlta ? "Nuevo producto" : "Editar producto"}
-        subtitulo={esAlta ? "Lista única en USD para los tres países." : `${producto?.sku} · el SKU no se edita`}
+        subtitulo={
+          esAlta
+            ? "Lista única en USD para los tres países. Sin precio ni costo, se fijan en cada cotización."
+            : `${producto?.sku} · el SKU no se edita`
+        }
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         ancho="lg"
         pie={
           <>
             <p className="max-w-sm text-xs leading-snug text-texto-tenue">
-              {tocaPrecios
-                ? "Cambiar precio o costo abre una vigencia nueva desde hoy. La anterior queda como histórico (RN-26)."
-                : "El piso de descuento se deriva del costo y del piso de margen por línea; no se captura."}
+              {tocaPrecios && !sinLista
+                ? teniaLista
+                  ? "Cambiar precio o costo abre una vigencia nueva desde hoy. La anterior queda como histórico (RN-26)."
+                  : "Con precio y costo el producto estrena lista desde hoy (RN-26)."
+                : sinLista
+                  ? "Sin precio ni costo el producto queda sin lista: se fijan en cada cotización, y no hay piso de descuento por SKU."
+                  : "El piso de descuento se deriva del costo y del piso de margen por línea; no se captura."}
             </p>
             <div className="flex items-center gap-2">
               <Boton variante="fantasma" type="button" onClick={() => setAbierto(false)}>
@@ -232,7 +243,7 @@ export function EditarProducto({
                     inputMode="decimal"
                     value={lista}
                     onChange={(e) => setLista(e.target.value)}
-                    placeholder="Monto sin símbolo"
+                    placeholder="Por oportunidad"
                     className="[font-variant-numeric:tabular-nums]"
                     problema={problemaDe(resultado, "listPrice")}
                   />
@@ -250,7 +261,7 @@ export function EditarProducto({
                     inputMode="decimal"
                     value={costo}
                     onChange={(e) => setCosto(e.target.value)}
-                    placeholder="Monto sin símbolo"
+                    placeholder="Por oportunidad"
                     className="[font-variant-numeric:tabular-nums]"
                     problema={problemaDe(resultado, "standardCost")}
                   />
@@ -260,8 +271,12 @@ export function EditarProducto({
                 <Campo
                   etiqueta="Piso de descuento"
                   htmlFor={`${idFormulario}-piso`}
-                  anotacion="derivado"
-                  ayuda={`Costo ÷ (1 − ${Math.round(pisoDeMargen * 100)} %), topado a lista.`}
+                  anotacion={sinLista ? "sin lista" : "derivado"}
+                  ayuda={
+                    sinLista
+                      ? "Sin lista no hay piso por SKU; RN-05 sigue señalando el margen."
+                      : `Costo ÷ (1 − ${Math.round(pisoDeMargen * 100)} %), topado a lista.`
+                  }
                 >
                   <Entrada
                     id={`${idFormulario}-piso`}

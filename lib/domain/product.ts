@@ -24,6 +24,13 @@ import type { ProductoEditable } from "@/lib/scope/productos";
  * La lista es única en USD para los tres países, pero el piso de margen es por
  * país. **Se hereda del seed usar el de México.** Si el negocio prefiere el más
  * estricto de los tres, es una línea en la acción que lee la política.
+ *
+ * ## Un producto puede no tener lista · decisiones §22
+ *
+ * Hay servicios cuyo precio y costo se fijan en cada oportunidad. Se crean con
+ * precio y costo vacíos y **sin vigencia**: la ausencia de `PriceListEntry` ya es
+ * el estado, no hace falta columna. Precio y costo **van juntos o no van**: el
+ * piso RN-08 se deriva de los dos, y una lista con uno solo no significa nada.
  */
 
 /**
@@ -61,11 +68,20 @@ export function pisoDePrecio(costo: Money, lista: Money, pisoMargen: Money): Mon
 
 type Umbrales = { lineMarginFloor: string };
 
-/** Lo que valida cualquier par precio/costo antes de escribirse. */
+/** Lo que valida cualquier par precio/costo antes de escribirse. Van juntos o no van. */
 function validarPrecios(
-  listPrice: Money,
-  standardCost: Money,
+  listPrice: Money | null,
+  standardCost: Money | null,
 ): { campo: string; mensaje: string } | null {
+  if (listPrice === null && standardCost === null) return null;
+  if (listPrice === null || standardCost === null) {
+    // El piso RN-08 se deriva de los dos: con uno solo no hay lista que valga.
+    return {
+      campo: listPrice === null ? "listPrice" : "standardCost",
+      mensaje:
+        "Precio de lista y costo estándar van juntos: captura los dos, o deja ambos vacíos para fijarlos en cada cotización.",
+    };
+  }
   if (listPrice.lte(0)) {
     return { campo: "listPrice", mensaje: "El precio de lista tiene que ser mayor que cero." };
   }
@@ -91,8 +107,9 @@ export type AltaDeProducto = {
   familyId: string;
   unit: string;
   priceModel: PriceModel;
-  listPrice: string;
-  standardCost: string;
+  /** Los dos en `null` = sin lista: precio y costo se fijan en cada cotización. */
+  listPrice: string | null;
+  standardCost: string | null;
 };
 
 export async function crearProducto(
@@ -105,7 +122,7 @@ export async function crearProducto(
   }
   // INV-02 · quien no ve el costo tampoco lo captura. Hoy Administración tiene
   // ambos permisos; la comprobación existe por si mañana no.
-  if (!can(session, "VER_COSTO")) {
+  if (input.standardCost !== null && !can(session, "VER_COSTO")) {
     return falla("AUTORIZACION", "Capturar el costo estándar exige poder verlo.");
   }
 
@@ -120,10 +137,12 @@ export async function crearProducto(
     return falla("VALIDACION", { campo: "unit", mensaje: "Di en qué unidad se vende." });
   }
 
-  const listPrice = money(input.listPrice);
-  const standardCost = money(input.standardCost);
+  const listPrice = input.listPrice === null ? null : money(input.listPrice);
+  const standardCost = input.standardCost === null ? null : money(input.standardCost);
   const problema = validarPrecios(listPrice, standardCost);
   if (problema) return falla("VALIDACION", problema);
+  // Sin lista, el producto existe en el catálogo y su precio se fija al cotizar.
+  const lista = listPrice !== null && standardCost !== null ? { listPrice, standardCost } : null;
 
   const repetido = await prisma.product.findUnique({ where: { sku }, select: { id: true } });
   if (repetido) {
@@ -131,7 +150,6 @@ export async function crearProducto(
   }
 
   const hoy = diaUTC(new Date());
-  const minPrice = pisoDePrecio(standardCost, listPrice, money(umbrales.lineMarginFloor));
 
   const creado = await prisma.product.create({
     data: {
@@ -141,18 +159,22 @@ export async function crearProducto(
       unit: input.unit.trim(),
       priceModel: input.priceModel,
       family: { connect: { id: input.familyId } },
-      // C-01 · el costo acaba de capturarse. Q-05 · sin Defontana, siempre a mano.
-      costUpdatedAt: new Date(),
+      // C-01 · la fecha del costo existe solo si se capturó uno. Q-05 · sin
+      // Defontana, siempre a mano.
+      costUpdatedAt: lista ? new Date() : null,
       costSource: "CARGA_MASIVA",
-      prices: {
-        create: {
-          listPrice,
-          minPrice,
-          standardCost,
-          validFrom: hoy,
-          validTo: VIGENCIA_ABIERTA,
-        },
-      },
+      ...(lista
+        ? {
+            prices: {
+              create: {
+                ...lista,
+                minPrice: pisoDePrecio(lista.standardCost, lista.listPrice, money(umbrales.lineMarginFloor)),
+                validFrom: hoy,
+                validTo: VIGENCIA_ABIERTA,
+              },
+            },
+          }
+        : {}),
     },
     select: { id: true },
   });
@@ -211,31 +233,39 @@ export async function editarProducto(
   // ── Precio o costo: nueva vigencia · RN-26 ───────────────────────────────
   const tocaPrecios = cambios.listPrice !== undefined || cambios.standardCost !== undefined;
   let nuevaVigencia: { listPrice: Money; minPrice: Money; standardCost: Money } | null = null;
+  // La vigencia de hoy, si la hay. Un producto sin lista (§22) no tiene ninguna.
+  const vigente = producto.prices.find((p) => p.validFrom <= new Date()) ?? null;
 
   if (tocaPrecios) {
     // INV-02 · el costo actual no viene en el detalle si la sesión no puede
     // verlo, y sin él no hay contra qué derivar el piso.
-    const vigente = producto.prices.find((p) => p.validFrom <= new Date());
-    if (!vigente || !("standardCost" in vigente) || !can(session, "VER_COSTO")) {
+    if (!can(session, "VER_COSTO") || (vigente && !("standardCost" in vigente))) {
       return falla("AUTORIZACION", "Cambiar precio o costo exige poder ver el costo.");
     }
+    const costoVigente = vigente && "standardCost" in vigente ? vigente.standardCost : null;
 
-    const listPrice = cambios.listPrice !== undefined ? money(cambios.listPrice) : vigente.listPrice;
+    const listPrice =
+      cambios.listPrice !== undefined ? money(cambios.listPrice) : (vigente?.listPrice ?? null);
     const standardCost =
-      cambios.standardCost !== undefined ? money(cambios.standardCost) : vigente.standardCost;
+      cambios.standardCost !== undefined ? money(cambios.standardCost) : costoVigente;
 
     const problema = validarPrecios(listPrice, standardCost);
     if (problema) return falla("VALIDACION", problema);
 
-    nuevaVigencia = {
-      listPrice,
-      standardCost,
-      minPrice: pisoDePrecio(standardCost, listPrice, money(umbrales.lineMarginFloor)),
-    };
+    if (listPrice !== null && standardCost !== null) {
+      nuevaVigencia = {
+        listPrice,
+        standardCost,
+        minPrice: pisoDePrecio(standardCost, listPrice, money(umbrales.lineMarginFloor)),
+      };
 
-    if (cambios.standardCost !== undefined && !standardCost.eq(vigente.standardCost)) {
-      // C-01 · es lo que apaga el ámbar de «costo con más de 60 días».
-      datos.costUpdatedAt = new Date();
+      if (
+        cambios.standardCost !== undefined &&
+        (costoVigente === null || !standardCost.eq(costoVigente))
+      ) {
+        // C-01 · es lo que apaga el ámbar de «costo con más de 60 días».
+        datos.costUpdatedAt = new Date();
+      }
     }
   }
 
@@ -248,19 +278,28 @@ export async function editarProducto(
 
     if (nuevaVigencia) {
       const hoy = diaUTC(new Date());
-      const actual = producto.prices.find((p) => p.validFrom <= new Date())!;
 
-      if (diaUTC(actual.validFrom).getTime() === hoy.getTime()) {
+      if (!vigente) {
+        // La primera lista de un producto que nació sin ella: empieza hoy.
+        await tx.priceListEntry.create({
+          data: {
+            productId: producto.id,
+            ...nuevaVigencia,
+            validFrom: hoy,
+            validTo: VIGENCIA_ABIERTA,
+          },
+        });
+      } else if (diaUTC(vigente.validFrom).getTime() === hoy.getTime()) {
         // Segunda corrección en el mismo día: se corrige la vigencia de hoy en
         // vez de abrir una de cero días, que no significaría nada y chocaría
         // con la unicidad (productId, validFrom).
-        await tx.priceListEntry.update({ where: { id: actual.id }, data: nuevaVigencia });
+        await tx.priceListEntry.update({ where: { id: vigente.id }, data: nuevaVigencia });
       } else {
         // La anterior termina ayer y la nueva empieza hoy: ni solapan ni dejan
         // hueco, que es lo que hace reproducible «el precio vigente a tal
         // fecha».
         await tx.priceListEntry.update({
-          where: { id: actual.id },
+          where: { id: vigente.id },
           data: { validTo: diaAnterior(hoy) },
         });
         await tx.priceListEntry.create({

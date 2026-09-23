@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import type { Session } from "@/lib/auth/permissions";
-import { getCommercialPolicy } from "@/lib/policy";
+import { getCommercialPolicy, getCountry } from "@/lib/policy";
+import { getCotizacion } from "@/lib/scope/cotizaciones";
+import { abrirCotizacion, guardarLinea } from "@/lib/domain/quoteService";
 import { money } from "@/lib/money";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
 import { crearOportunidad } from "@/lib/domain/opportunity";
@@ -41,6 +43,13 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!creadas.length) return;
+  const quotes = await prisma.quote.findMany({
+    where: { opportunityId: { in: creadas } },
+    select: { id: true },
+  });
+  await prisma.quoteLine.deleteMany({ where: { quoteId: { in: quotes.map((q) => q.id) } } });
+  await prisma.auditLog.deleteMany({ where: { entityId: { in: quotes.map((q) => q.id) } } });
+  await prisma.quote.deleteMany({ where: { opportunityId: { in: creadas } } });
   await prisma.meddicComponentAssessment.deleteMany({ where: { opportunityId: { in: creadas } } });
   await prisma.milestone.deleteMany({ where: { opportunityId: { in: creadas } } });
   await prisma.stageTransition.deleteMany({ where: { opportunityId: { in: creadas } } });
@@ -314,5 +323,105 @@ describe("hitos · HF-01 y AC-18", () => {
 
     await quitarHito(jorge, detalle!, dePrimera.id);
     expect(await prisma.milestone.count({ where: { opportunityId: id } })).toBe(0);
+  });
+});
+
+/** Una oportunidad con cotización de una línea: neto exacto de 1 000 000. */
+async function unaOportunidadConNeto() {
+  const id = await unaOportunidad();
+  const detalle = await getOpportunityDetail(jorge, id);
+  const [pais, producto] = await Promise.all([
+    getCountry("MX"),
+    prisma.product.findFirstOrThrow({ where: { active: true, prices: { some: {} } }, select: { id: true } }),
+  ]);
+  const abierta = await abrirCotizacion(jorge, detalle!, pais.taxRate);
+  if (!abierta.ok) throw new Error("no se pudo abrir la cotización");
+  const cotizacion = await getCotizacion(jorge, abierta.datos.id);
+  const linea = await guardarLinea(
+    jorge,
+    cotizacion!,
+    { productId: producto.id, quantity: "1", discountRate: "0", unitPrice: "1000000" },
+    { lineMarginFloor: "0.10" },
+  );
+  if (!linea.ok) throw new Error(`no se pudo agregar la línea: ${JSON.stringify(linea)}`);
+  return id;
+}
+
+describe("hitos · la suma no supera el neto", () => {
+  it("un hito que rebasa el neto se rechaza con las cifras y no se escribe", async () => {
+    const id = await unaOportunidadConNeto();
+    let detalle = await getOpportunityDetail(jorge, id);
+    await guardarHito(jorge, detalle!, {
+      description: "Anticipo",
+      dueDate: new Date("2026-10-15"),
+      amount: "600000",
+    });
+
+    detalle = await getOpportunityDetail(jorge, id);
+    const r = await guardarHito(jorge, detalle!, {
+      description: "Entrega",
+      dueDate: new Date("2026-11-15"),
+      amount: "600000",
+    });
+    expect(r).toMatchObject({ ok: false, motivo: "VALIDACION" });
+    if (!r.ok) {
+      expect(r.problemas[0]?.campo).toBe("amount");
+      expect(r.problemas[0]?.mensaje).toContain("1,200,000");
+      expect(r.problemas[0]?.mensaje).toContain("1,000,000");
+    }
+
+    const hitos = await prisma.milestone.count({ where: { opportunityId: id } });
+    expect(hitos).toBe(1);
+  });
+
+  it("llegar exacto al neto sí pasa: es el cuadre", async () => {
+    const id = await unaOportunidadConNeto();
+    let detalle = await getOpportunityDetail(jorge, id);
+    await guardarHito(jorge, detalle!, { description: "Anticipo", dueDate: new Date("2026-10-15"), amount: "600000" });
+    detalle = await getOpportunityDetail(jorge, id);
+    const r = await guardarHito(jorge, detalle!, { description: "Entrega", dueDate: new Date("2026-11-15"), amount: "400000" });
+    expect(r.ok).toBe(true);
+  });
+
+  it("al editar un hito, su monto anterior no cuenta contra el tope", async () => {
+    const id = await unaOportunidadConNeto();
+    let detalle = await getOpportunityDetail(jorge, id);
+    await guardarHito(jorge, detalle!, { description: "Anticipo", dueDate: new Date("2026-10-15"), amount: "600000" });
+    detalle = await getOpportunityDetail(jorge, id);
+    const anticipo = detalle!.milestones[0]!;
+    // 600 000 → 900 000: con el anterior contado dos veces sumaría 1 500 000.
+    const r = await guardarHito(jorge, detalle!, {
+      milestoneId: anticipo.id,
+      description: "Anticipo",
+      dueDate: new Date("2026-10-15"),
+      amount: "900000",
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("en porcentaje, el servidor convierte contra el neto y guarda monto", async () => {
+    const id = await unaOportunidadConNeto();
+    const detalle = await getOpportunityDetail(jorge, id);
+    const r = await guardarHito(jorge, detalle!, {
+      description: "Anticipo",
+      dueDate: new Date("2026-10-15"),
+      amount: "30",
+      modo: "porcentaje",
+    });
+    expect(r.ok).toBe(true);
+    const hito = await prisma.milestone.findFirstOrThrow({ where: { opportunityId: id }, select: { amount: true } });
+    expect(hito.amount.toString()).toBe("300000");
+  });
+
+  it("en porcentaje sin cotización con líneas no hay neto: se rechaza", async () => {
+    const id = await unaOportunidad();
+    const detalle = await getOpportunityDetail(jorge, id);
+    const r = await guardarHito(jorge, detalle!, {
+      description: "Anticipo",
+      dueDate: new Date("2026-10-15"),
+      amount: "30",
+      modo: "porcentaje",
+    });
+    expect(r).toMatchObject({ ok: false, motivo: "VALIDACION" });
   });
 });

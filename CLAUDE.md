@@ -42,7 +42,12 @@ improvisar. Detalle en `docs/CRM-AVTR-SPEC.md` §3.
 5. **INV-05** Ningún umbral en el código. Piso de margen, umbrales de descuento, mínimos MEDDIC,
    días para estancada, tasa de impuesto y probabilidad de etapa se leen de la base. Un literal
    `0.20`, `0.15`, `0.16` o `0.30` en `lib/domain` es un defecto.
-6. **INV-06** Una cotización congelada es inmutable. Editar = versión nueva.
+6. **INV-06** ~~Una cotización congelada es inmutable. Editar = versión nueva.~~ **Enmendado el 22 de
+   septiembre de 2026 (decisiones §21):** una cotización por oportunidad, editable mientras la
+   oportunidad está abierta; **cada guardado con cambios escribe en `AuditLog` el neto antes y
+   después y qué líneas y campos cambiaron, en la misma transacción**, y espeja `amount` y
+   `grossMargin` al momento. Un guardado sin cambios de valor no escribe nada. No se
+   renumera: la trazabilidad sigue siendo el invariante, solo cambió de forma.
 7. **INV-07** No se gana sin cumplir todas las condiciones. La validación vive en el servicio de
    dominio, no en el formulario.
 8. **INV-08** ~~El tipo de cambio se congela al ganar.~~ **Sin efecto bajo monomoneda (D-A).**
@@ -84,25 +89,39 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     cotizaciones, documentos, agenda, contadores (acotados a la oficina activa),
                     configuracion, pipelines, busqueda (buscador global: todo el alcance, no la oficina),
                     funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline),
-                    usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS)
+                    usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS),
+                    cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
+                    bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
                     riskFlags (banderas + evidencia con su número), folio, funnel (embudo y tasa de
                     paso), forecast (columnas por periodo de cierre estimado, ventana fija que avanza,
                     vencidas aparte, lo que queda fuera se cuenta),
-                    objectives (avance acumulado → decisiones §17). Servicios con transacción:
-                    opportunity, activity, contact, product, quoteService, milestoneService,
-                    meddicService, document, usuario, objetivo (fijar cuota)
+                    objectives (avance acumulado → decisiones §17), opportunityField (qué datos se
+                    corrigen desde la ficha; lista cerrada, el nombre del campo llega del cliente),
+                    bitacora (fusiona y ordena las fuentes de la historia; sin VER_COSTO el costo se
+                    nombra pero no se cifra).
+                    Servicios con transacción:
+                    opportunity, activity (registrar y editar; responsable, duración y calendario por
+                    parámetro), contact, product, quoteService, milestoneService, meddicService, document,
+                    usuario, objetivo (fijar cuota)
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
 lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
                     permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission;
                     oficinaActiva y menuColapsado leen las cookies de preferencia) · permissions (can)
 lib/preferencias.ts nombres y valores de las cookies crm-oficina y crm-menu (puro; lo importa también el cliente)
+lib/tiempo.ts       horas de pared ↔ instantes por zona (instanteEn, horaEn, fechaEn), duración, ciudadDe. Puro;
+                    lo importa también el cliente. La zona de una actividad es la del país de la oportunidad
+lib/graph/          calendario de Microsoft 365 (F-605): token de aplicación con caché de proceso, evento (puro,
+                    con tests) y el adaptador Calendario. Apagado sin AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET.
+                    Entra al dominio por parámetro; nunca hace fallar el guardado
 lib/policy/         lectura de CommercialPolicy y Country → INV-05
 lib/money/          Decimal y formateo → INV-03
 lib/filters/        definición y parseo de filtros → INV-10
 lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
-components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>) · avisos (Sileo)
+components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>; useEnvioQueConserva envía
+                    desde onSubmit para que React no reinicie el formulario cuando la acción devuelve VALIDACION;
+                    useProblemas apaga el error de un campo al corregirlo) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
                     · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
@@ -111,6 +130,18 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos}
                     pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
                     por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
                     BarraDeFiltros (§9)
+                    oportunidad: ComposerDeActividad (nueva o edición; agendar por omisión, «marcar como hecha»
+                    en el pie, tipos en botones con icono y el resto en «Otro…», fecha + inicio + fin en la zona
+                    de la oportunidad, responsable; estadoDeActividad es su reductor puro) ·
+                    DatoEditable (los cinco datos que se corrigen en la ficha sin abrir el panel) ·
+                    Bitacora (línea de tiempo con filtros en la URL) · PanelMeddic (descripción por
+                    componente y calificación rápida que respeta RN-30) · CambioDeEtapa ·
+                    EditarOportunidad · PanelHitos (neto, asignado y por asignar a la vista; la suma no
+                    supera el neto, el % se convierte en el servidor) · PanelDocumentos
+                    cotizacion: TablaDeCotizacion (una sola; «Editar» abre las celdas de cantidad, precio,
+                    descuento y costo y «Guardar cambios» las manda en un viaje: una entrada en la bitácora por
+                    guardado, solo si algo cambió de valor; sin congelar ni versiones → INV-06 enmendado) ·
+                    AbrirCotizacion
                     objetivos: PanelDeAvance · TiraDeTrimestres · TablaDeEquipo · FijarObjetivo
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
                     del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion
@@ -154,6 +185,19 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
 - **Los objetivos se miden acumulados** (decisiones §17, regla nueva que no está en el spec): la
   cuota del T1 al trimestre en curso contra lo ganado en ese mismo tramo. Un trimestre bueno paga
   la deuda del anterior. `computeCumulativeTrack` en `lib/domain/objectives.ts`.
+- **Una actividad agendada ya es el siguiente paso** (decisiones §19, regla nueva que no está en el
+  spec): el `DEBE` de §12.4 —preguntar antes de cerrar sin seguimiento— solo se dispara cuando la
+  oportunidad **se queda sin ningún pendiente**. Si la actividad queda por hacer, o si ya había otra
+  agendada, no hay nada que preguntar. `lastActivityAt` solo avanza con actividades hechas.
+- **Las horas de una actividad son de pared en la zona del país de la oportunidad** (decisiones
+  §20): `startsAt` es instante, la zona sale de `Country.timezone`, y con ella se captura, se lee
+  (pestaña y agenda) y se manda al calendario. Nunca la zona del servidor ni la del navegador. El
+  responsable de una actividad es cualquier activo del país, sin puerta por rol; solo lo **por
+  hacer** va al calendario de Microsoft 365, y si Graph falla la actividad se guarda igual.
+- **Un producto puede no tener lista, y los hitos no rebasan el neto** (decisiones §22, reglas
+  nuevas que no están en el spec): precio de lista y costo estándar **van juntos o no van**; sin
+  ellos el producto existe y se fija precio y costo en cada cotización, sin piso de SKU. La suma de
+  hitos **no supera el neto** al guardar, con las cifras; sin cotización con líneas no hay tope.
 - **Las cuentas no son de un país** (decisiones §18, revisado con el negocio): gerencia, dirección
   y administración ven todas; el vendedor ve las suyas por propiedad, no por país. El país vive en
   la **oportunidad** y sale del **pipeline** elegido; `Organization.countryCode` es la sede,

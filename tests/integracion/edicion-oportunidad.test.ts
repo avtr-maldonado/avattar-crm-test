@@ -82,6 +82,7 @@ async function unaOportunidad(session: Session, nombre: string) {
 afterAll(async () => {
   if (!creadas.length) return;
   await prisma.stageTransition.deleteMany({ where: { opportunityId: { in: creadas } } });
+  await prisma.auditLog.deleteMany({ where: { entityId: { in: creadas } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: creadas } } });
 });
 
@@ -291,5 +292,39 @@ describe("editarOportunidad · quién puede y qué", () => {
       await umbrales(),
     );
     expect(r).toMatchObject({ motivo: "VALIDACION" });
+  });
+});
+
+describe("editarOportunidad · lo que queda en la bitácora", () => {
+  it("cambiar el cierre estimado se anota con la fecha anterior y la nueva", async () => {
+    // Mover el cierre es lo que más se edita y lo que más explica después por
+    // qué un trimestre no cerró. Sin rastro, nadie sabe cuántas veces se corrió.
+    const { id } = await unaOportunidad(jorge, "Edición · cierre auditado");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const nueva = new Date("2027-01-15T12:00:00");
+
+    const r = await editarOportunidad(jorge, detalle!, { expectedCloseDate: nueva }, await umbrales());
+    expect(r.ok).toBe(true);
+
+    const registro = await prisma.auditLog.findFirst({
+      where: { entity: "Opportunity", entityId: id, action: "CAMBIAR_CIERRE_ESTIMADO" },
+      select: { before: true, after: true, byUserId: true },
+    });
+    expect(registro).not.toBeNull();
+    expect(registro!.byUserId).toBe(jorge.userId);
+    expect(registro!.before).toMatchObject({ expectedCloseDate: detalle!.expectedCloseDate.toISOString() });
+    expect(registro!.after).toMatchObject({ expectedCloseDate: nueva.toISOString() });
+  });
+
+  it("editar sin mover el cierre no inventa un registro", async () => {
+    const { id } = await unaOportunidad(jorge, "Edición · sin cierre");
+    const detalle = await getOpportunityDetail(jorge, id);
+
+    await editarOportunidad(jorge, detalle!, { name: "Otro nombre" }, await umbrales());
+
+    const cuantos = await prisma.auditLog.count({
+      where: { entity: "Opportunity", entityId: id, action: "CAMBIAR_CIERRE_ESTIMADO" },
+    });
+    expect(cuantos).toBe(0);
   });
 });

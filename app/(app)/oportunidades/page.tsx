@@ -35,7 +35,7 @@ import { NuevaOportunidad } from "@/components/pipeline/NuevaOportunidad";
 import { Embudo, type RiesgoVisible } from "@/components/pipeline/Embudo";
 import { Forecast, type ColumnaVisible } from "@/components/pipeline/Forecast";
 import { BarraDeFiltros } from "@/components/pipeline/BarraDeFiltros";
-import { buscarOrganizacionesAccion, buscarPersonasAccion, crearOportunidadAccion } from "./acciones";
+import { buscarOrganizacionesAccion, personasDeOrganizacionAccion, crearOportunidadAccion } from "./acciones";
 import { cambiarEtapaAccion } from "./[id]/acciones";
 
 /**
@@ -215,7 +215,7 @@ export default async function PipelinePage({
       usuarioActual={{ id: session.userId, name: session.name }}
       puedeAsignar={puedeAsignar}
       buscarOrganizaciones={buscarOrganizacionesAccion}
-      buscarPersonas={buscarPersonasAccion}
+      cargarPersonas={personasDeOrganizacionAccion}
       accion={crearOportunidadAccion}
     />
   );

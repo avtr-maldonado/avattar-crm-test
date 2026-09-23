@@ -163,13 +163,14 @@ error caro de esta pantalla: crear una cuenta duplicada sin darse cuenta.
 |---|---|---|---|
 | CU-10.1 Con una cuenta existente | Cualquier rol | Escribe el nombre de la cuenta y elige una de las sugeridas (dentro de su alcance) | Se enlaza la existente. El nombre de la oportunidad se sugiere con el prefijo de la cuenta y se puede completar sin perder lo escrito |
 | CU-10.2 Con una cuenta nueva en línea | Cualquier rol | Escribe un nombre que no existe y lo deja | La cuenta se crea **en la misma operación** que la oportunidad, con la sede del país del pipeline y quien crea como propietario (§14, §18) |
-| CU-10.3 Con una persona principal | Cualquier rol | Elige una persona de la cuenta o escribe una nueva con su rol en el comité | Opcional a propósito: exigirla pelea contra la captura rápida |
+| CU-10.3 Con una persona principal | Cualquier rol | Con cuenta existente, el campo es un desplegable con **todos sus contactos** (nombre · cargo · rol) y la opción «Nuevo contacto…», que abre debajo la captura de nombre, cargo y rol en el comité. Con cuenta nueva, se escribe directamente el nombre | Opcional a propósito: exigirla pelea contra la captura rápida. Ver los contactos de golpe evita crear a alguien que ya estaba. Solo se listan los de cuentas que la sesión alcanza; si no alcanza ninguna, queda capturar uno nuevo |
 | CU-10.4 Pipeline, etapa y cierre | Cualquier rol | Elige pipeline y etapa de entrada (cada etapa dice cuántos requisitos tiene), importe estimado, origen y cierre estimado | **El país de la oportunidad es el del pipeline** (§18): a una misma cuenta se le vende en México y en Colombia. Hay que operar en ese país (`AC-05`). La fecha se anota con su trimestre fiscal. El folio `OPP-AAAA-NNNNN` se asigna al crear, consecutivo por año, y es inmutable (`INV-12`) |
 | CU-10.5 Asignar a otra persona | Gerente, Dirección, Administración | Elige propietario | Solo usuarios **activos que operan en ese país** (`Q-14`). Un vendedor siempre crea a su nombre (`Q-13`) |
 | CU-10.6 La etapa de entrada tiene requisitos en advertencia | Cualquier rol | La compuerta no se cumple (p. ej. persona con rol declarado) | El formulario dice qué falta y ofrece «Crear de todos modos». Queda registrado y alimenta el reporte semanal de incumplimiento (§8.3) |
 | CU-10.7 La etapa de entrada es bloqueante | Cualquier rol | La compuerta no se cumple | No se puede crear ahí. Hay que cumplir los requisitos o elegir otra etapa |
 | CU-10.8 Nombre de cuenta repetido | Cualquier rol | Escribe una cuenta nueva cuyo nombre ya existe, en cualquier país, aunque no la alcance | Se rechaza con el mensaje de que ya existe. Un duplicado partiría el histórico para siempre (§14, §18) |
 | CU-10.9 Creada | Cualquier rol | — | Aviso «Oportunidad creada» con su folio y navegación al detalle |
+| CU-10.10 Falta un campo al crear | Cualquier rol | Pulsa «Crear oportunidad» sin importe, sin fecha o sin nombre | El formulario señala qué falta junto a cada campo y **conserva todo lo demás capturado**. La señal de un campo se apaga en cuanto se corrige; si el servidor lo vuelve a rechazar, se vuelve a encender. «Cancelar» sí limpia el formulario |
 
 ### F-11 · Mover una oportunidad de etapa
 
@@ -212,44 +213,67 @@ destildar (`INV-11`, `RN-13`).
 | CU-14.1 Editar la propia | Propietario, o quien tenga alcance de oficina (`Q-13`) | Cambia nombre, importe estimado, cierre, categoría de pronóstico, origen, persona principal, tipo de negocio | Se guarda. Si hay cotización congelada, el importe lo manda ella, no la captura |
 | CU-14.2 Reasignar | Gerente, Dirección, Administración | Cambia el propietario | Solo a un usuario activo que opere en el país de la oportunidad (`Q-14`). El anterior deja de verla si era vendedor |
 | CU-14.3 Cerrada | Cualquiera | Intenta editar una ganada o perdida | No se edita: solo Administración reabre (`RN-18`). Reabrir todavía no tiene pantalla |
+| CU-14.4 Corregir un dato sin abrir nada | Ídem que CU-14.1 | Pulsa el tipo de negocio, el pronóstico, el cierre estimado, el origen o el propietario en «Datos de la oportunidad» | El dato se vuelve control ahí mismo y guarda al elegir; Esc cancela. Rigen las mismas reglas que el panel completo: «Compromiso» exige puntaje MEDDIC y reasignar es de Gerencia. Si el servidor lo rechaza, el dato se queda como estaba y un aviso dice por qué (decisiones §19) |
 
-### F-15 · Registrar una actividad y su siguiente paso
+### F-15 · Agendar o registrar una actividad
 
-Desde la pestaña Actividades del detalle. Es el flujo que decide la adopción (§12.4).
+Desde la pestaña Actividades del detalle, con «Nueva actividad». Es el flujo que decide la
+adopción (§12.4). Por omisión la actividad se **agenda**; «Marcar como hecha», en el pie, la
+convierte en el registro de algo que ya pasó. Lleva fecha, hora de inicio y de fin, y un
+responsable; las horas son **de la ciudad del país de la oportunidad** (decisiones §20). Si el
+calendario de Microsoft 365 está configurado, lo agendado aparece en el calendario del responsable.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-15.1 Registrar y agendar la siguiente | Quien alcance la oportunidad | Captura lo que hizo (tipo, asunto, fecha, duración, notas) **y** el siguiente paso en el mismo formulario | Se guardan las dos. La «próxima actividad» de la oportunidad se recalcula como la pendiente más cercana, no la recién agendada |
-| CU-15.2 Sin siguiente paso | Ídem | Deja vacío el siguiente paso | El sistema **pregunta explícitamente** si se cierra sin seguimiento antes de guardar (§12.4). Sin esa confirmación no escribe nada |
-| CU-15.3 En una oportunidad cerrada | Ídem | Registra sin siguiente paso | No pregunta: en una cerrada, no tener siguiente paso es lo normal |
-| CU-15.4 Desde Actividades | Cualquiera | Pulsa «+ Registrar actividad» en la pantalla de Actividades | **Pendiente:** el botón apunta a una ruta que todavía no existe. Hoy se registra desde el detalle de la oportunidad |
+| CU-15.1 Agendar lo que sigue | Quien alcance la oportunidad | Elige el tipo —seis en botones con icono, los otros siete en «Otro…»—, acepta el asunto que el tipo sugiere, pone fecha, inicio y fin (mover el inicio arrastra el fin), elige al responsable y guarda | Queda pendiente y pasa a ser la «próxima actividad» de la oportunidad si es la más cercana. **No pregunta nada:** una actividad agendada ya es el siguiente paso (§19). Con el calendario configurado, aparece en el calendario de Microsoft 365 del responsable y la fila lo marca «en el calendario» |
+| CU-15.2 Registrar lo que acaba de pasar | Ídem | Marca «Marcar como hecha» | Aparece el campo Resultado, que solo existe hacia atrás. Se guarda como realizada y adelanta la última actividad de la oportunidad. No va al calendario: es historia |
+| CU-15.3 Hecha, y la oportunidad se queda sin nada agendado | Ídem | Guarda una actividad hecha sin que quede ningún pendiente | El sistema **pregunta explícitamente** si se cierra sin seguimiento (§12.4) y no escribe nada hasta que se responda: se agenda el que sigue en el mismo formulario, o se guarda sin seguimiento. Lo capturado sigue ahí |
+| CU-15.4 Hecha, pero ya había algo agendado | Ídem | Lo mismo, con una actividad pendiente viva | No pregunta: la oportunidad no se queda sin próximo paso |
+| CU-15.5 En una oportunidad cerrada | Ídem | Registra sin siguiente paso | No pregunta: en una cerrada, no tener siguiente paso es lo normal |
+| CU-15.6 Falta el asunto | Ídem | Pulsa Guardar con el asunto vacío | Lo señala junto al campo y **conserva todo lo demás capturado**; la señal se apaga al corregir |
+| CU-15.7 Fin antes del inicio | Ídem | Pone una hora de fin anterior a la de inicio | La duración lo dice en rojo mientras captura; al guardar, el servidor lo rechaza junto al campo Fin y lo demás se conserva |
+| CU-15.8 Las horas son de la ciudad de la oportunidad | Cualquiera | Captura «10:30» en una oportunidad chilena | Es 10:30 en Santiago, y así se lee en la pestaña, en la agenda y en el calendario. La etiqueta del formulario lo dice: «Hora de Santiago» (§20) |
+| CU-15.9 Elegir responsable | Quien alcance la oportunidad | Elige a otro usuario activo que opere en el país | La actividad es suya: aparece en su agenda y, si aplica, en su calendario. No hay puerta por rol: coordinar no es reasignar (§20) |
+| CU-15.10 El calendario no responde | Ídem | Guarda con Microsoft 365 caído, sin permisos o sin configurar | La actividad se guarda igual. Si había credenciales y falló, un aviso dice que no llegó al calendario y que editar y guardar de nuevo reintenta. Sin credenciales, no se menciona el calendario |
+| CU-15.11 Editar una actividad | Quien alcance la oportunidad | Pulsa el lápiz de la fila | El mismo formulario, con los datos cargados. Cambiar horario o notas actualiza el evento del calendario; cambiar de responsable lo mueve a su calendario. Completar la última pendiente pregunta como al registrar (§12.4). La última y la próxima actividad de la oportunidad se recalculan |
+| CU-15.12 Un tipo que no está en los botones | Ídem | Lo elige en «Otro…» | Se aplica igual. Los botones son los seis con dibujo; si Administración renombra un tipo, ese tipo pasa al desplegable y nada más |
+| CU-15.13 Desde Actividades | Cualquiera | Pulsa «+ Registrar actividad» en la pantalla de Actividades | **Pendiente:** el botón apunta a una ruta que todavía no existe. Hoy se captura desde el detalle de la oportunidad |
 
 ### F-16 · Cotizar
 
-Pestaña Cotización. Las columnas de costo y utilidad **solo llegan** a quien tiene `VER_COSTO`;
-el margen, a quien tiene `VER_MARGEN` (`RN-09`).
+Pestaña Cotización. **Una cotización por oportunidad, editable en su lugar** (INV-06 enmendado,
+decisiones §21): no se congela ni se versiona; cada cambio queda en la bitácora. Las columnas de
+costo y utilidad **solo llegan** a quien tiene `VER_COSTO`; el margen, a quien tiene `VER_MARGEN`
+(`RN-09`).
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-16.1 Abrir un borrador | Quien alcance la oportunidad | Pulsa «Cotizar» | Nace la versión 1 en borrador con la tasa de impuesto del país **copiada** en ese momento (`RN-24`): un cambio de tasa no altera cotizaciones históricas |
-| CU-16.2 Agregar una línea de catálogo | Ídem | Elige un producto, cantidad y descuento | Precio de la **vigencia del día** (`RN-26`) y costo del producto; se recalculan subtotal bruto, neto, impuesto, total, costo, utilidad y margen |
+| CU-16.1 Abrir la cotización | Quien alcance la oportunidad | Pulsa «Abrir cotización» | Nace vacía con la tasa de impuesto del país **copiada** en ese momento (`RN-24`): un cambio de tasa no altera cotizaciones existentes. Abrirla otra vez devuelve la misma |
+| CU-16.2 Agregar una línea de catálogo | Ídem | Elige un producto; precio y costo de la lista vigente **llenan** los campos y se pueden corregir antes de guardar; pone cantidad y descuento | La línea sigue ligada a su producto. Se recalculan subtotal bruto, neto, impuesto, total, costo, utilidad y margen, y el neto y el margen se espejan en la oportunidad al momento |
+| CU-16.2b Producto sin lista | Ídem | Elige un producto marcado «sin lista» | Precio y costo llegan vacíos y **se fijan para esta oportunidad**; los dos son obligatorios, como en el concepto libre. No hay piso de SKU (`RN-08`); las alertas de margen (`RN-05`) siguen. Sin `VER_COSTO` no se puede capturar el costo, y la línea no entra (decisiones §22) |
 | CU-16.3 Agregar un concepto libre | Ídem | Escribe descripción, unidad, precio y **costo** | El costo es obligatorio (`Q-07`): sin él el margen de la línea sería falso |
-| CU-16.4 Línea bajo el piso de precio | Ídem | El precio con descuento queda debajo del piso del producto | La pantalla lo señala en la línea y en el margen total. La solicitud de autorización que eso dispararía (P-10) no está construida |
-| CU-16.5 Quitar una línea | Ídem | — | Solo en borrador; los totales se recalculan |
-| CU-16.6 Congelar | Ídem | Pulsa «Congelar» | La versión queda **inmutable** (`INV-06`) y su neto y margen se copian a la oportunidad: el kanban y las banderas leen ese espejo |
-| CU-16.7 Editar una congelada | Ídem | Pulsa «Nueva versión» | Nace la siguiente versión **con las líneas de la anterior** y la misma tasa de impuesto; se edita esa (`AC-10`) |
+| CU-16.4 Editar líneas | Ídem | Pulsa «Editar»; cambia cantidad, precio unitario, descuento o costo en las celdas que haga falta; pulsa «Guardar cambios» | Se guardan de una vez **solo los campos que cambiaron de valor**, se recalculan los totales y se espeja el neto. Si nada cambió, avisa «Sin cambios» y no anota nada. Mientras se edita, agregar y quitar líneas se ocultan. Antes, editar cantidad o descuento fallaba en silencio y parecía que «no actualizaba» |
+| CU-16.5 Precio bajo el piso del SKU | Ídem | Deja el precio con descuento debajo del piso del producto (`RN-08`) | El servidor rechaza **el guardado completo** y lo avisa con las dos cifras; nada se escribe hasta corregir. El piso aplica al agregar y al editar |
+| CU-16.6 Costo sin permiso | Vendedor sin `VER_COSTO` | Intenta fijar o cambiar un costo | No se acepta (`INV-02`): probar costos hasta que el margen cuadre sería deducirlo. La columna ni siquiera se pinta |
+| CU-16.7 Línea bajo el piso de margen | Ídem | El margen de la línea queda bajo el piso de la política | La pantalla lo señala en la línea y en una franja. La solicitud de autorización que eso dispararía (P-10) no está construida |
+| CU-16.8 Quitar una línea | Ídem | Pulsa la ✕ | Se quita y se recalcula. Si era la última, la oportunidad vuelve a valer su **estimado** y su margen queda en blanco: una cotización vacía no dice nada |
+| CU-16.9 Lo que queda en la bitácora | — | Cada alta o baja de línea, y cada **guardado con cambios** | Un registro por operación con el neto antes y después y la lista de líneas y campos que cambiaron (`EDITAR_COTIZACION`), en la misma transacción (`INV-09`). Un guardado sin cambios no deja nada. Se lee en la pestaña Bitácora (F-37) |
+| CU-16.10 Compuertas e hitos | — | Una etapa exige `COTIZACION_CONGELADA`; los hitos se cuadran | El requisito conserva su nombre en los datos pero exige **cotización con al menos una línea**; los hitos cuadran contra su neto (`RN-06`) |
 
 ### F-17 · Calificar con MEDDIC
 
 Pestaña MEDDIC. **MEDDIC gatea, no pondera** (§2.1): bloquea avances y el marcado como ganada,
-pero no cambia el importe ponderado.
+pero no cambia el importe ponderado. Cada componente lleva debajo una línea que dice qué hay que
+haber averiguado para marcarlo.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-17.1 Evaluar un componente | Quien alcance la oportunidad | Pone Métricas, Decisor económico, Criterios, Proceso, Dolor o Campeón en sin evaluar, parcial o confirmado | El puntaje se recalcula **en la misma transacción** con los pesos del pipeline (`Q-08`, `AC-16`) |
-| CU-17.2 Parcial o confirmado sin evidencia | Ídem | Deja la evidencia vacía | Se rechaza: «… necesita evidencia. Escribe en qué te basas» (`RN-30`) |
-| CU-17.3 Decisor o campeón confirmado sin persona | Ídem | Confirma sin ligar a alguien del comité | Se rechaza: hay que elegir una persona real del comité de compra (§2.1) |
-| CU-17.4 Lo que el puntaje gatea | — | Según la política comercial del país | Entrar a la etapa de cierre pide un mínimo; marcar ganada pide otro mayor y decisor, dolor y campeón confirmados; la categoría «Compromiso» pide un mínimo (`RN-28`, `RN-29`). Los mínimos son configurables (`INV-05`) |
+| CU-17.1 Calificar sin entrar | Quien alcance la oportunidad | Pulsa uno de los cuatro estados en la fila del componente | «No evaluado» y «Ausente» se guardan al pulsar. «Parcial» y «Confirmado» también, **si ya hay evidencia** (y persona, cuando aplica). El puntaje se recalcula **en la misma transacción** con los pesos del pipeline (`Q-08`, `AC-16`) |
+| CU-17.2 Falta la evidencia o la persona | Ídem | Pulsa «Parcial» o «Confirmado» sin evidencia guardada | Se abre el panel con ese estado ya elegido y el foco en la evidencia. No se guarda nada hasta completarla (`RN-30`) |
+| CU-17.3 Evidencia y persona | Ídem | Pulsa «Evidencia» | El panel completo: estado, evidencia y, para decisor económico y campeón, la persona del comité (§2.1) |
+| CU-17.4 Parcial o confirmado sin evidencia | Ídem | Intenta guardar con la evidencia vacía | Se rechaza: «… necesita evidencia. Escribe en qué te basas» (`RN-30`) |
+| CU-17.5 Decisor o campeón confirmado sin persona | Ídem | Confirma sin ligar a alguien del comité | Se rechaza: hay que elegir una persona real del comité de compra (§2.1) |
+| CU-17.6 Lo que el puntaje gatea | — | Según la política comercial del país | Entrar a la etapa de cierre pide un mínimo; marcar ganada pide otro mayor y decisor, dolor y campeón confirmados; la categoría «Compromiso» pide un mínimo (`RN-28`, `RN-29`). Los mínimos son configurables (`INV-05`) |
 
 ### F-18 · Hitos de facturación
 
@@ -258,8 +282,9 @@ sistema avisa que el calendario dejó de cuadrar en vez de recalcular en silenci
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-18.1 Capturar un hito | Quien alcance la oportunidad | Descripción, fecha y monto (puede teclearse como % del neto; se guarda el monto) | Se agrega al calendario |
-| CU-18.2 Cuadre | — | — | La pestaña dice cuánto falta o sobra contra el neto congelado: «faltan $200,000 por asignar». Distingue «no hay neto todavía» de «cuadra en cero» |
+| CU-18.1 Capturar un hito | Quien alcance la oportunidad | Pulsa «Agregar hito». El panel muestra **neto a repartir, ya asignado y por asignar** antes de teclear; captura concepto, fecha y monto (o % del neto con el conmutador USD/%). «Usar lo que falta» llena el campo con lo que queda | Se agrega al calendario. La conversión de % a monto la hace el servidor con `Decimal` (`INV-03`); se guarda siempre el monto. Un rechazo no borra lo capturado |
+| CU-18.1b Pasarse del neto | Ídem | Captura un monto que, sumado a los demás hitos, supera el neto | El formulario lo avisa en coral mientras se teclea, y el servidor lo **rechaza** con las cifras: «sumarían $1,200,000: $200,000 más que el neto de $1,000,000» (decisiones §22). Al editar, el monto anterior del hito no cuenta. Sin cotización con líneas no hay tope ni porcentaje: se captura en monto |
+| CU-18.2 Cuadre | — | — | La pestaña dice cuánto falta contra el neto de la cotización con líneas: «faltan $200,000 por asignar», con la barra y las tres cifras debajo. Distingue «no hay neto todavía» de «cuadra en cero». «Sobran» solo puede aparecer si la cotización bajó después de capturar los hitos |
 | CU-18.3 Marcar cumplido | Ídem | Pulsa el hito | Pasa a cumplido con fecha, o vuelve a pendiente. Es lo que convierte el calendario en seguimiento de cobro |
 | CU-18.4 Quitar | Ídem | — | Se borra la fila (en duro, a propósito · `Q-16`) |
 
@@ -272,6 +297,21 @@ sistema avisa que el calendario dejó de cuadrar en vez de recalcular en silenci
 | CU-19.3 Quitar | Ídem | — | La fila se borra en duro; el archivo queda en el bucket. Quitar un contrato **apaga la compuerta** y no deja bitácora (`Q-16`, pendiente de decidir) |
 
 ---
+
+### F-37 · Bitácora de la oportunidad
+
+Pestaña Bitácora. Una línea de tiempo, de lo más reciente a lo más viejo, armada desde lo que ya
+existía: transiciones de etapa, auditoría de la oportunidad y de su cotización, actividades **hechas**
+y el alta. No es una tabla nueva; es una lectura (decisiones §21).
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-37.1 Leer la historia | Quien alcance la oportunidad | Abre la pestaña | Cada evento con qué pasó, cuándo (en la zona de la oportunidad) y quién. La creación dice en qué etapa nació |
+| CU-37.2 Movimiento de etapa | — | Se cambió de etapa | «Etapa: Propuesta → Negociación», con la marca «Avanzó con advertencia» si saltó una compuerta (§8.3) |
+| CU-37.3 Cierre estimado | — | Se movió la fecha de cierre | «Cierre estimado: 20 dic 2026 → 15 ene 2027». Se anota desde el 22 de septiembre de 2026; los cambios anteriores no existen en la historia |
+| CU-37.4 Cotización | — | Se agregó, editó o quitó una línea | «Cotización: $80,000.00 → $95,000.00» y debajo qué línea y campo cambiaron. Sin `VER_COSTO`, un cambio de costo se nombra pero no se cifra (`INV-02`) |
+| CU-37.5 Actividad hecha | — | Se registró o completó una actividad | Entra con palomita. Las pendientes no: son agenda, no historia |
+| CU-37.6 Filtrar | Cualquiera | Pulsa Todo, Etapas, Cotización, Actividades o Cambios | El filtro vive en la URL (`INV-10`); cada pestaña dice cuántos hay |
 
 ## 4. Contactos · P-03 y P-04
 
@@ -340,7 +380,8 @@ administración las ven todas, sin importar la oficina activa; el vendedor ve la
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-28.1 Alta | Administración (`EDITAR_CATALOGOS`) | SKU, nombre, familia, unidad, modelo de precio, precio, costo | El SKU se fija al crear, como el folio: lo referencian líneas y reportes |
+| CU-28.1 Alta | Administración (`EDITAR_CATALOGOS`) | SKU, nombre, familia, unidad, modelo de precio; precio y costo **opcionales, pero juntos** | El SKU se fija al crear, como el folio: lo referencian líneas y reportes. Con precio y costo nace la primera vigencia; con los dos vacíos el producto queda **sin lista** y precio y costo se fijan en cada cotización (CU-16.2b). Uno sin el otro se rechaza: el piso `RN-08` se deriva de ambos (decisiones §22) |
+| CU-28.1b Estrenar lista | Administración | Edita un producto sin lista y captura precio y costo | Nace su primera vigencia desde hoy. Dejar los dos vacíos al editar no toca la lista; quitar una lista existente no está previsto |
 | CU-28.2 Cambiar precio | Administración | Edita el precio | Nace una vigencia nueva; las anteriores se conservan |
 | CU-28.3 Dar de baja | Administración | Desactiva | Nada se borra (`INV-15`). Un producto inactivo no se ofrece al cotizar |
 | CU-28.4 Carga masiva | — | — | **Pendiente** |

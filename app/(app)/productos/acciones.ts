@@ -24,17 +24,23 @@ async function umbrales() {
 /** Alta y edición comparten formulario, así que comparten tipo de resultado. */
 export type ResultadoDeProducto = ResultadoAccion<{ id: string } | null>;
 
-/** `INV-03` · el importe viaja como cadena. Se aceptan comas de miles. */
-const importe = z
+/**
+ * `INV-03` · el importe viaja como cadena. Se aceptan comas de miles.
+ *
+ * Vacío —o ausente, si la sesión no ve el costo y el campo no se pintó— es
+ * `null`: sin lista, precio y costo se fijan en cada cotización (decisiones §22).
+ */
+const importeOpcional = z
   .string()
-  .trim()
-  .transform((v) => v.replace(/,/g, ""))
+  .optional()
+  .transform((v) => (v ?? "").trim().replace(/,/g, ""))
   .pipe(
-    z
-      .string()
-      .regex(/^\d+(\.\d{1,4})?$/, "Escribe el importe en dólares, sin símbolo.")
-      .refine((v) => Number(v) >= 0, "No puede ser negativo."),
-  );
+    z.union([
+      z.literal(""),
+      z.string().regex(/^\d+(\.\d{1,4})?$/, "Escribe el importe en dólares, sin símbolo."),
+    ]),
+  )
+  .transform((v) => (v === "" ? null : v));
 
 const MODELOS = [
   "PRECIO_FIJO",
@@ -50,8 +56,8 @@ const camposComunes = {
   familyId: z.string().min(1, "Elige la familia."),
   unit: z.string().trim().min(1, "Di en qué unidad se vende."),
   priceModel: z.enum(MODELOS),
-  listPrice: importe,
-  standardCost: importe,
+  listPrice: importeOpcional,
+  standardCost: importeOpcional,
 };
 
 const esquemaAlta = z.object({ sku: z.string().trim().min(3, "El SKU necesita al menos tres caracteres."), ...camposComunes });
@@ -104,8 +110,9 @@ export async function editarProductoAccion(
       unit: d.unit,
       priceModel: d.priceModel,
       active: d.active ?? false,
-      listPrice: d.listPrice,
-      standardCost: d.standardCost,
+      // Vacíos = no se tocan. Quitar una lista existente no está previsto.
+      listPrice: d.listPrice ?? undefined,
+      standardCost: d.standardCost ?? undefined,
     },
     await umbrales(),
   );

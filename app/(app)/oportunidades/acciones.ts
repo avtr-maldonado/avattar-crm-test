@@ -10,6 +10,7 @@ import {
   buscarOrganizacionesParaAlta,
   buscarPersonasDeOrganizacion,
 } from "@/lib/scope/organizations";
+import { listPipelines } from "@/lib/scope/pipelines";
 
 /**
  * Sugerencias de organización mientras se teclea.
@@ -36,20 +37,25 @@ const ETIQUETA_TIPO: Record<string, string> = {
   PROVEEDOR: "Proveedor",
 };
 
-/** Las personas de la organización elegida. Aquí sí manda el alcance por rol. */
-export async function buscarPersonasAccion(organizationId: string, texto: string) {
+/**
+ * Los contactos de la organización elegida, para el desplegable de persona
+ * principal. Todos, ordenados por nombre: una cuenta tiene un puñado y verlos
+ * juntos es lo que evita crear un duplicado.
+ *
+ * Aquí sí manda el alcance por rol. Si la sesión no alcanza la cuenta, la
+ * lista llega vacía y solo queda capturar un contacto nuevo.
+ */
+export async function personasDeOrganizacionAccion(organizationId: string) {
   const session = await requireSession();
   const personas = await buscarPersonasDeOrganizacion(session, organizationId);
-  const termino = texto.trim().toLowerCase();
 
-  return personas
-    .filter((p) => !termino || p.name.toLowerCase().includes(termino))
-    .slice(0, 8)
-    .map((p) => ({
-      id: p.id,
-      nombre: p.name,
-      detalle: [p.jobTitle, p.committeeRole?.name].filter(Boolean).join(" · "),
-    }));
+  // Un solo calificador: en un <option> no hay segunda línea y con dos se
+  // corta. El cargo distingue mejor a dos homónimos; el rol, si no hay cargo.
+  return personas.map((p) => ({
+    id: p.id,
+    nombre: p.name,
+    detalle: p.jobTitle ?? p.committeeRole?.name ?? null,
+  }));
 }
 
 /**
@@ -102,12 +108,15 @@ export async function crearOportunidadAccion(
 
   const session = await requireSession();
 
-  // El país lo resuelve el dominio a partir de la organización; aquí solo se
-  // necesita para leer la política, y la del pipeline es la misma por la
-  // validación que el dominio hace después.
-  const pais = session.countryCodes[0];
-  if (!pais) return falla("AUTORIZACION", "Tu usuario no tiene país asignado.");
-  const politica = await getCommercialPolicy(pais);
+  // El país de la oportunidad es el del pipeline (decisiones §18), y la
+  // política que gatea su alta también. Quien opera en varios países no tiene
+  // «su» país: tomar el primero de la sesión aplicaría los umbrales de México
+  // a una oportunidad colombiana.
+  const pipeline = (await listPipelines(session)).find((p) => p.id === d.pipelineId);
+  if (!pipeline) {
+    return falla("VALIDACION", { campo: "pipelineId", mensaje: "Elige el pipeline." });
+  }
+  const politica = await getCommercialPolicy(pipeline.countryCode);
 
   // Los umbrales se leen **aquí** y no en el dominio: la prueba de AC-31
   // verifica que ningún archivo de `lib/domain` importe `lib/policy`, para que

@@ -5,7 +5,7 @@ import type { ResultadoAccion } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton } from "@/components/ui/primitivas";
 
-type Resultado = ResultadoAccion<{ id: string; version: number } | null>;
+type Resultado = ResultadoAccion<{ id: string } | null>;
 
 /**
  * Abre el borrador de cotización de una oportunidad que aún no tiene ninguna.
@@ -28,7 +28,7 @@ export function AbrirCotizacion({
         avisarSiCorresponde(r);
         return r;
       }
-      avisar.exito("Cotización abierta", `Versión ${r.datos?.version ?? 1}, en borrador.`);
+      avisar.exito("Cotización abierta", "Agrega líneas: el neto se vuelve el importe de la oportunidad.");
       return r;
     },
     null,

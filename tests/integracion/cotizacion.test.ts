@@ -6,10 +6,9 @@ import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
 import { getCotizacion } from "@/lib/scope/cotizaciones";
 import { crearOportunidad } from "@/lib/domain/opportunity";
 import {
-  borradorDeCotizacion,
-  congelarCotizacion,
+  abrirCotizacion,
+  guardarCambiosDeCotizacion,
   guardarLinea,
-  nuevaVersion,
   quitarLinea,
 } from "@/lib/domain/quoteService";
 
@@ -38,6 +37,7 @@ async function sesionDe(correo: string): Promise<Session> {
 let jorge: Session;
 let paulina: Session;
 let productoId: string;
+let sinListaId: string;
 const oportunidades: string[] = [];
 
 beforeAll(async () => {
@@ -50,6 +50,20 @@ beforeAll(async () => {
     select: { id: true },
   });
   productoId = p.id;
+
+  // Un producto sin lista: precio y costo se fijan en cada cotización.
+  const familia = await prisma.productFamily.findFirstOrThrow({ select: { id: true } });
+  const sinLista = await prisma.product.create({
+    data: {
+      sku: `TST-SL-${Date.now()}`,
+      name: "Servicio a medida",
+      familyId: familia.id,
+      unit: "servicio",
+      priceModel: "PRECIO_FIJO",
+    },
+    select: { id: true },
+  });
+  sinListaId = sinLista.id;
 });
 
 afterAll(async () => {
@@ -59,9 +73,11 @@ afterAll(async () => {
     select: { id: true },
   });
   await prisma.quoteLine.deleteMany({ where: { quoteId: { in: quotes.map((q) => q.id) } } });
+  await prisma.auditLog.deleteMany({ where: { entityId: { in: quotes.map((q) => q.id) } } });
   await prisma.quote.deleteMany({ where: { opportunityId: { in: oportunidades } } });
   await prisma.stageTransition.deleteMany({ where: { opportunityId: { in: oportunidades } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: oportunidades } } });
+  await prisma.product.deleteMany({ where: { id: sinListaId } });
 });
 
 async function unaOportunidadConBorrador() {
@@ -91,16 +107,16 @@ async function unaOportunidadConBorrador() {
 
   const detalle = await getOpportunityDetail(jorge, creada.datos.id);
   const pais = await getCountry("MX");
-  const borrador = await borradorDeCotizacion(jorge, detalle!, pais.taxRate);
-  if (!borrador.ok) throw new Error("no se pudo abrir el borrador");
+  const borrador = await abrirCotizacion(jorge, detalle!, pais.taxRate);
+  if (!borrador.ok) throw new Error("no se pudo abrir la cotización");
 
   return { opportunityId: creada.datos.id, quoteId: borrador.datos.id };
 }
 
 const UMBRALES = { lineMarginFloor: "0.10" };
 
-describe("borradorDeCotizacion · RN-24 y AC-11", () => {
-  it("abre la v1 y copia la tasa de impuesto del país", async () => {
+describe("abrirCotizacion · RN-24 y AC-11", () => {
+  it("abre la cotización y copia la tasa de impuesto del país", async () => {
     const { quoteId } = await unaOportunidadConBorrador();
     const q = await prisma.quote.findUniqueOrThrow({
       where: { id: quoteId },
@@ -132,11 +148,11 @@ describe("borradorDeCotizacion · RN-24 y AC-11", () => {
     }
   });
 
-  it("llamarlo dos veces devuelve el mismo borrador, no abre otro", async () => {
+  it("llamarlo dos veces devuelve la misma cotización: no hay versiones", async () => {
     const { opportunityId, quoteId } = await unaOportunidadConBorrador();
     const detalle = await getOpportunityDetail(jorge, opportunityId);
     const pais = await getCountry("MX");
-    const otra = await borradorDeCotizacion(jorge, detalle!, pais.taxRate);
+    const otra = await abrirCotizacion(jorge, detalle!, pais.taxRate);
     expect(otra.ok && otra.datos.id).toBe(quoteId);
   });
 });
@@ -276,121 +292,230 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
   });
 });
 
-describe("congelar y versionar · INV-06 y AC-10", () => {
-  async function conUnaLinea() {
+describe("una sola cotización, editable, con bitácora · INV-06 enmendado (decisiones §21)", () => {
+  async function conUnaLinea(session = jorge) {
     const { opportunityId, quoteId } = await unaOportunidadConBorrador();
-    const cotizacion = await getCotizacion(jorge, quoteId);
+    const cotizacion = await getCotizacion(session, quoteId);
     await guardarLinea(
-      jorge,
+      session,
       cotizacion!,
       { productId: productoId, quantity: "4", discountRate: "0" },
       UMBRALES,
     );
-    return { opportunityId, quoteId };
+    const linea = await prisma.quoteLine.findFirstOrThrow({ where: { quoteId }, select: { id: true } });
+    return { opportunityId, quoteId, lineId: linea.id };
   }
 
-  it("congelar sella quién y cuándo, y espeja el neto en la oportunidad", async () => {
-    const { opportunityId, quoteId } = await conUnaLinea();
-    const cotizacion = await getCotizacion(jorge, quoteId);
-    const r = await congelarCotizacion(jorge, cotizacion!);
-    expect(r.ok).toBe(true);
-
-    const q = await prisma.quote.findUniqueOrThrow({
-      where: { id: quoteId },
-      select: { status: true, frozenAt: true, frozenById: true, netSubtotal: true, grossMargin: true },
+  async function precioVigente() {
+    return prisma.priceListEntry.findFirstOrThrow({
+      where: { productId: productoId },
+      orderBy: { validFrom: "desc" },
+      select: { listPrice: true, minPrice: true, standardCost: true },
     });
-    expect(q.status).toBe("CONGELADA");
-    expect(q.frozenById).toBe(jorge.userId);
-    expect(q.frozenAt).not.toBeNull();
+  }
 
-    // El esquema lo dice: `amount` es espejo de la cotización activa. Sin esto
-    // el kanban seguiría mostrando el estimado y las banderas de riesgo
-    // calcularían sobre un margen que no existe.
+  async function entradasDeBitacora(quoteId: string) {
+    return prisma.auditLog.count({
+      where: { entity: "Quote", entityId: quoteId, action: "EDITAR_COTIZACION" },
+    });
+  }
+
+  it("guardar sin cambiar nada no escribe nada: ni totales, ni espejo, ni bitácora", async () => {
+    // Abrir la edición y guardar tal cual no es un cambio. Anotarlo llenaría
+    // la bitácora de ruido y la volvería inútil para lo que existe.
+    const { quoteId, lineId } = await conUnaLinea();
+    const antes = await entradasDeBitacora(quoteId);
+
+    const cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [{ lineId, campos: { quantity: "4", discountRate: "0" } }],
+      UMBRALES,
+    );
+
+    expect(r).toMatchObject({ ok: true, datos: { cambios: 0 } });
+    expect(await entradasDeBitacora(quoteId)).toBe(antes);
+  });
+
+  it("guardar una cantidad distinta recalcula los totales y espeja el neto en la oportunidad", async () => {
+    const { opportunityId, quoteId, lineId } = await conUnaLinea();
+    const antes = await prisma.quote.findUniqueOrThrow({
+      where: { id: quoteId },
+      select: { netSubtotal: true },
+    });
+
+    const cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [{ lineId, campos: { quantity: "8" } }],
+      UMBRALES,
+    );
+    expect(r).toMatchObject({ ok: true, datos: { cambios: 1 } });
+
+    const despues = await prisma.quote.findUniqueOrThrow({
+      where: { id: quoteId },
+      select: { netSubtotal: true, grossMargin: true },
+    });
+    expect(despues.netSubtotal.toString()).toBe(antes.netSubtotal.times(2).toString());
+
+    // `amount` es espejo de la cotización, en cada guardado.
     const o = await prisma.opportunity.findUniqueOrThrow({
       where: { id: opportunityId },
       select: { amount: true, grossMargin: true },
     });
-    expect(o.amount.toString()).toBe(q.netSubtotal.toString());
-    expect(o.grossMargin?.toString()).toBe(q.grossMargin.toString());
+    expect(o.amount.toString()).toBe(despues.netSubtotal.toString());
+    expect(o.grossMargin?.toString()).toBe(despues.grossMargin.toString());
   });
 
-  it("no se congela una cotización sin líneas", async () => {
-    const { quoteId } = await unaOportunidadConBorrador();
-    const cotizacion = await getCotizacion(jorge, quoteId);
-    const r = await congelarCotizacion(jorge, cotizacion!);
-    expect(r).toMatchObject({ motivo: "VALIDACION" });
-  });
-
-  it("AC-10 · editar una línea de la congelada falla", async () => {
-    const { quoteId } = await conUnaLinea();
+  it("varios cambios en un guardado son UNA entrada en la bitácora, con cada línea y campo", async () => {
+    const { quoteId, lineId } = await conUnaLinea();
     let cotizacion = await getCotizacion(jorge, quoteId);
-    await congelarCotizacion(jorge, cotizacion!);
+    await guardarLinea(
+      jorge,
+      cotizacion!,
+      { description: "Bolsa de horas", unit: "hora", quantity: "10", unitPrice: "1000", unitCost: "600", discountRate: "0" },
+      UMBRALES,
+    );
+    const segunda = await prisma.quoteLine.findFirstOrThrow({
+      where: { quoteId, description: "Bolsa de horas" },
+      select: { id: true },
+    });
+    const antes = await entradasDeBitacora(quoteId);
+    const netoAntes = (await prisma.quote.findUniqueOrThrow({ where: { id: quoteId }, select: { netSubtotal: true } })).netSubtotal;
 
     cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [
+        { lineId, campos: { quantity: "6", discountRate: "0.1000" } },
+        { lineId: segunda.id, campos: { quantity: "12", unitPrice: "1000" } },
+      ],
+      UMBRALES,
+    );
+    expect(r).toMatchObject({ ok: true, datos: { cambios: 3 } });
+    expect(await entradasDeBitacora(quoteId)).toBe(antes + 1);
+
+    const registro = await prisma.auditLog.findFirstOrThrow({
+      where: { entity: "Quote", entityId: quoteId, action: "EDITAR_COTIZACION" },
+      orderBy: { at: "desc" },
+      select: { before: true, after: true },
+    });
+    expect(registro.before).toMatchObject({ netSubtotal: netoAntes.toFixed(4) });
+    const despues = registro.after as { lineas: { campo: string; de: string; a: string }[] };
+    expect(despues.lineas.map((l) => l.campo).sort()).toEqual(["discountRate", "quantity", "quantity"]);
+    expect(despues.lineas.find((l) => l.campo === "discountRate")).toMatchObject({ de: "0", a: "10" });
+  });
+
+  it("el precio unitario se puede cambiar, pero no por debajo del piso del SKU · RN-08", async () => {
+    const { quoteId, lineId } = await conUnaLinea();
+    const precio = await precioVigente();
+
+    let cotizacion = await getCotizacion(jorge, quoteId);
+    const sube = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [{ lineId, campos: { unitPrice: precio.listPrice.plus(100).toString() } }],
+      UMBRALES,
+    );
+    expect(sube.ok).toBe(true);
+    const l = await prisma.quoteLine.findUniqueOrThrow({
+      where: { id: lineId },
+      select: { unitPrice: true, productId: true, quantity: true },
+    });
+    expect(l.unitPrice.toString()).toBe(precio.listPrice.plus(100).toString());
+    // Sigue siendo la línea de ese producto: cambiar el precio no la vuelve concepto libre.
+    expect(l.productId).toBe(productoId);
+
+    // Todo o nada: el precio bajo el piso tumba el guardado entero, también la cantidad.
+    cotizacion = await getCotizacion(jorge, quoteId);
+    const baja = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [{ lineId, campos: { unitPrice: precio.minPrice.minus(1).toString(), quantity: "9" } }],
+      UMBRALES,
+    );
+    expect(baja).toMatchObject({ ok: false, motivo: "VALIDACION" });
+    const intacta = await prisma.quoteLine.findUniqueOrThrow({
+      where: { id: lineId },
+      select: { quantity: true },
+    });
+    expect(intacta.quantity.toString()).toBe(l.quantity.toString());
+  });
+
+  it("el costo se fija con VER_COSTO; sin el permiso no se acepta · INV-02", async () => {
+    const { quoteId, lineId } = await conUnaLinea();
+
+    let cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [{ lineId, campos: { unitCost: "123" } }],
+      UMBRALES,
+    );
+    expect(r.ok).toBe(true);
+    const l = await prisma.quoteLine.findUniqueOrThrow({
+      where: { id: lineId },
+      select: { unitCost: true },
+    });
+    expect(Number(l.unitCost)).toBe(123);
+
+    // Paulina no ve costos: tampoco los fija. Se prueba con la cotización que
+    // cargó Jorge, igual que en el concepto libre.
+    cotizacion = await getCotizacion(jorge, quoteId);
+    const negado = await guardarCambiosDeCotizacion(
+      paulina,
+      cotizacion!,
+      [{ lineId, campos: { unitCost: "1" } }],
+      UMBRALES,
+    );
+    expect(negado).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+  });
+
+  it("al agregar del catálogo, precio y costo son referencia: se pueden fijar distintos", async () => {
+    const { quoteId } = await unaOportunidadConBorrador();
+    const precio = await precioVigente();
+    const cotizacion = await getCotizacion(jorge, quoteId);
+
     const r = await guardarLinea(
       jorge,
       cotizacion!,
-      { productId: productoId, quantity: "9", discountRate: "0" },
+      {
+        productId: productoId,
+        quantity: "2",
+        discountRate: "0",
+        unitPrice: precio.listPrice.plus(50).toString(),
+        unitCost: precio.standardCost.plus(5).toString(),
+      },
       UMBRALES,
     );
-    expect(r).toMatchObject({ motivo: "CONFLICTO" });
-  });
-
-  it("AC-10 · la versión siguiente funciona y la anterior queda REEMPLAZADA", async () => {
-    const { opportunityId, quoteId } = await conUnaLinea();
-    let cotizacion = await getCotizacion(jorge, quoteId);
-    await congelarCotizacion(jorge, cotizacion!);
-
-    cotizacion = await getCotizacion(jorge, quoteId);
-    const r = await nuevaVersion(jorge, cotizacion!);
     expect(r.ok).toBe(true);
-    if (!r.ok) return;
 
-    const versiones = await prisma.quote.findMany({
-      where: { opportunityId },
-      orderBy: { version: "asc" },
-      select: { version: true, status: true, netSubtotal: true, _count: { select: { lines: true } } },
+    const l = await prisma.quoteLine.findFirstOrThrow({
+      where: { quoteId },
+      select: { unitPrice: true, unitCost: true, productId: true },
     });
-    expect(versiones).toHaveLength(2);
-    expect(versiones[0]).toMatchObject({ version: 1, status: "REEMPLAZADA" });
-    expect(versiones[1]).toMatchObject({ version: 2, status: "BORRADOR" });
-    // La v2 nace con las líneas de la v1: se edita a partir de lo que había,
-    // no desde cero.
-    expect(versiones[1]!._count.lines).toBe(versiones[0]!._count.lines);
-    expect(versiones[1]!.netSubtotal.toString()).toBe(versiones[0]!.netSubtotal.toString());
+    expect(l.unitPrice.toString()).toBe(precio.listPrice.plus(50).toString());
+    expect(l.unitCost.toString()).toBe(precio.standardCost.plus(5).toString());
+    expect(l.productId).toBe(productoId);
   });
 
-  it("la v2 conserva la tasa de la v1, no la del país de hoy · RN-24", async () => {
-    const { quoteId } = await conUnaLinea();
-    let cotizacion = await getCotizacion(jorge, quoteId);
-    await congelarCotizacion(jorge, cotizacion!);
+  it("quitar la única línea devuelve el importe de la oportunidad al estimado", async () => {
+    // Con cero líneas la cotización no dice nada: el kanban debe volver a
+    // enseñar el estimado y no un cero.
+    const { opportunityId, quoteId, lineId } = await conUnaLinea();
+    const cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await quitarLinea(jorge, cotizacion!, lineId);
+    expect(r.ok).toBe(true);
 
-    await prisma.country.update({ where: { code: "MX" }, data: { taxRate: "0.18" } });
-    try {
-      cotizacion = await getCotizacion(jorge, quoteId);
-      const r = await nuevaVersion(jorge, cotizacion!);
-      if (!r.ok) return;
-      const v2 = await prisma.quote.findUniqueOrThrow({
-        where: { id: r.datos.id },
-        select: { taxRate: true },
-      });
-      expect(v2.taxRate.toString()).toBe("0.16");
-    } finally {
-      await prisma.country.update({ where: { code: "MX" }, data: { taxRate: "0.16" } });
-    }
-  });
-
-  it("no se abre una segunda versión mientras haya un borrador", async () => {
-    const { quoteId } = await conUnaLinea();
-    let cotizacion = await getCotizacion(jorge, quoteId);
-    await congelarCotizacion(jorge, cotizacion!);
-
-    cotizacion = await getCotizacion(jorge, quoteId);
-    await nuevaVersion(jorge, cotizacion!);
-
-    cotizacion = await getCotizacion(jorge, quoteId);
-    const otra = await nuevaVersion(jorge, cotizacion!);
-    expect(otra).toMatchObject({ motivo: "CONFLICTO" });
+    const o = await prisma.opportunity.findUniqueOrThrow({
+      where: { id: opportunityId },
+      select: { amount: true, estimatedAmount: true, grossMargin: true },
+    });
+    expect(o.amount.toString()).toBe(o.estimatedAmount.toString());
+    expect(o.grossMargin).toBeNull();
   });
 });
 
@@ -418,5 +543,41 @@ describe("INV-02 · AC-03 sobre datos reales", () => {
     expect(sinCosto).not.toContain("grossProfit");
     // RN-09 · el margen es permiso aparte, y el vendedor sí lo tiene.
     expect(sinCosto).toContain("grossMargin");
+  });
+});
+
+describe("producto sin lista · precio y costo por oportunidad", () => {
+  it("sin precio en la línea la rechaza y dice que aquí se fija", async () => {
+    const { quoteId } = await unaOportunidadConBorrador();
+    const cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await guardarLinea(
+      jorge,
+      cotizacion!,
+      { productId: sinListaId, quantity: "1", discountRate: "0" },
+      UMBRALES,
+    );
+    expect(r).toMatchObject({ ok: false, motivo: "VALIDACION" });
+    if (!r.ok) expect(r.problemas[0]?.campo).toBe("unitPrice");
+  });
+
+  it("con precio y costo capturados la línea nace con ellos y sin piso de SKU", async () => {
+    const { quoteId } = await unaOportunidadConBorrador();
+    const cotizacion = await getCotizacion(jorge, quoteId);
+    // 50 % de descuento: con lista habría piso RN-08; sin lista no hay contra qué.
+    const r = await guardarLinea(
+      jorge,
+      cotizacion!,
+      { productId: sinListaId, quantity: "2", discountRate: "0.5", unitPrice: "1000", unitCost: "400" },
+      UMBRALES,
+    );
+    expect(r.ok).toBe(true);
+
+    const linea = await prisma.quoteLine.findFirstOrThrow({
+      where: { quoteId, productId: sinListaId },
+      select: { unitPrice: true, unitCost: true, description: true },
+    });
+    expect(linea.unitPrice.toString()).toBe("1000");
+    expect(linea.unitCost.toString()).toBe("400");
+    expect(linea.description).toBe("Servicio a medida");
   });
 });

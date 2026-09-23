@@ -4,7 +4,9 @@ import type { Session } from "@/lib/auth/permissions";
 import { getCommercialPolicy } from "@/lib/policy";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
 import { crearOportunidad } from "@/lib/domain/opportunity";
-import { registrarActividad } from "@/lib/domain/activity";
+import { editarActividad, registrarActividad } from "@/lib/domain/activity";
+import type { Calendario, ResultadoDeCalendario } from "@/lib/graph/calendario";
+import type { EventoDeGraph } from "@/lib/graph/evento";
 
 async function sesionDe(correo: string): Promise<Session> {
   const u = await prisma.user.findUniqueOrThrow({
@@ -217,5 +219,321 @@ describe("registrarActividad · la actividad y su siguiente paso", () => {
       sinSeguimiento: true,
     });
     expect(r).toMatchObject({ motivo: "VALIDACION" });
+  });
+});
+
+describe("registrarActividad · agendar es distinto de registrar", () => {
+  it("una actividad por hacer no pregunta nada: ella misma es el siguiente paso", async () => {
+    // El origen de la confusión que reportó el negocio: tener que declarar un
+    // «siguiente paso» aparte cuando lo que estás haciendo ES agendar el paso
+    // siguiente. Agendada queda pendiente, así que §12.4 no tiene qué pedir.
+    const id = await unaOportunidad("Actividad · agendada");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const cuando = new Date("2026-10-15T17:00:00Z");
+
+    const r = await registrarActividad(jorge, detalle!, {
+      typeId: tipoLlamada,
+      subject: "Llamar para calificar presupuesto",
+      cuando,
+      hecha: false,
+    });
+
+    expect(r.ok).toBe(true);
+    const a = await prisma.activity.findFirstOrThrow({
+      where: { opportunityId: id },
+      select: { completedAt: true, startsAt: true },
+    });
+    expect(a.completedAt).toBeNull();
+    expect(a.startsAt.toISOString()).toBe(cuando.toISOString());
+
+    const o = await prisma.opportunity.findUniqueOrThrow({
+      where: { id },
+      select: { nextActivityAt: true, lastActivityAt: true },
+    });
+    expect(o.nextActivityAt?.toISOString()).toBe(cuando.toISOString());
+    // Agendar algo para octubre no es haber hablado con el cliente hoy: la
+    // bandera de «sin actividad reciente» quedaría apagada por una promesa.
+    expect(o.lastActivityAt).toBeNull();
+  });
+
+  it("con un pendiente ya agendado, registrar algo hecho no pregunta", async () => {
+    const id = await unaOportunidad("Actividad · con pendiente vivo");
+    const cuando = new Date("2026-10-20T17:00:00Z");
+
+    const detalle = await getOpportunityDetail(jorge, id);
+    await registrarActividad(jorge, detalle!, {
+      typeId: tipoReunion,
+      subject: "Demostración técnica",
+      cuando,
+      hecha: false,
+    });
+
+    const detalle2 = await getOpportunityDetail(jorge, id);
+    const r = await registrarActividad(jorge, detalle2!, {
+      typeId: tipoLlamada,
+      subject: "Llamada de seguimiento",
+      hecha: true,
+    });
+
+    // La oportunidad no se queda sin próximo paso, así que no hay nada que
+    // confirmar. Preguntar aquí era el regaño que sobraba.
+    expect(r.ok).toBe(true);
+    const o = await prisma.opportunity.findUniqueOrThrow({
+      where: { id },
+      select: { nextActivityAt: true },
+    });
+    expect(o.nextActivityAt?.toISOString()).toBe(cuando.toISOString());
+  });
+});
+
+// ───────────────────────────────────────────── responsable, duración y calendario
+
+/** Un calendario que apunta lo que le piden y contesta lo que se le diga. */
+function calendarioFalso(respuesta: ResultadoDeCalendario = { estado: "OK", eventId: "evt-1" }) {
+  const llamadas: {
+    que: "crear" | "actualizar" | "eliminar";
+    correo: string;
+    eventId?: string;
+    evento?: EventoDeGraph;
+  }[] = [];
+  const cal: Calendario = {
+    configurado: () => respuesta.estado !== "SIN_CONFIGURAR",
+    async crear(correo, evento) {
+      llamadas.push({ que: "crear", correo, evento });
+      return respuesta;
+    },
+    async actualizar(correo, eventId, evento) {
+      llamadas.push({ que: "actualizar", correo, eventId, evento });
+      return respuesta.estado === "OK" ? { estado: "OK", eventId } : respuesta;
+    },
+    async eliminar(correo, eventId) {
+      llamadas.push({ que: "eliminar", correo, eventId });
+      return { estado: "OK", eventId };
+    },
+  };
+  return { cal, llamadas };
+}
+
+async function otroUsuarioDeMexico(distintoDe: string) {
+  return prisma.user.findFirstOrThrow({
+    where: { active: true, deletedAt: null, countryCodes: { has: "MX" }, id: { not: distintoDe } },
+    select: { id: true, email: true },
+  });
+}
+
+describe("registrarActividad · responsable, duración y calendario", () => {
+  it("guarda el responsable elegido y la duración", async () => {
+    const id = await unaOportunidad("Actividad · responsable");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const otro = await otroUsuarioDeMexico(jorge.userId);
+
+    const r = await registrarActividad(jorge, detalle!, {
+      typeId: tipoReunion,
+      subject: "Demostración con preventa",
+      cuando: new Date("2026-10-06T16:00:00Z"),
+      durationMin: 45,
+      hecha: false,
+      userId: otro.id,
+    });
+    expect(r.ok).toBe(true);
+
+    const a = await prisma.activity.findFirstOrThrow({
+      where: { opportunityId: id },
+      select: { userId: true, durationMin: true },
+    });
+    expect(a.userId).toBe(otro.id);
+    expect(a.durationMin).toBe(45);
+  });
+
+  it("una actividad por hacer se agenda en el calendario del responsable", async () => {
+    const id = await unaOportunidad("Actividad · al calendario");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const otro = await otroUsuarioDeMexico(jorge.userId);
+    const { cal, llamadas } = calendarioFalso({ estado: "OK", eventId: "evt-agendada" });
+
+    const r = await registrarActividad(
+      jorge,
+      detalle!,
+      {
+        typeId: tipoReunion,
+        subject: "Demostración técnica",
+        cuando: new Date("2026-10-06T16:00:00Z"),
+        durationMin: 60,
+        hecha: false,
+        userId: otro.id,
+        zona: "America/Mexico_City",
+      },
+      cal,
+    );
+
+    expect(r).toMatchObject({ ok: true, datos: { calendario: "AGENDADA" } });
+    expect(llamadas).toHaveLength(1);
+    expect(llamadas[0]).toMatchObject({ que: "crear", correo: otro.email });
+    // Hora de pared en la zona de la oportunidad, no el instante.
+    expect(llamadas[0]!.evento?.start).toEqual({
+      dateTime: "2026-10-06T10:00:00",
+      timeZone: "America/Mexico_City",
+    });
+
+    const a = await prisma.activity.findFirstOrThrow({
+      where: { opportunityId: id },
+      select: { externalEventId: true },
+    });
+    expect(a.externalEventId).toBe("evt-agendada");
+  });
+
+  it("una actividad hecha no va al calendario: es historia", async () => {
+    const id = await unaOportunidad("Actividad · hecha sin calendario");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const { cal, llamadas } = calendarioFalso();
+
+    const r = await registrarActividad(
+      jorge,
+      detalle!,
+      { typeId: tipoLlamada, subject: "Llamada hecha", hecha: true, sinSeguimiento: true },
+      cal,
+    );
+
+    expect(r).toMatchObject({ ok: true, datos: { calendario: "NO_APLICA" } });
+    expect(llamadas).toHaveLength(0);
+  });
+
+  it("si el calendario falla, la actividad se guarda igual y lo dice", async () => {
+    // Guardar en el CRM no puede depender de que Microsoft conteste. El aviso
+    // dice que quedó sin agendar; la actividad existe y se puede reintentar.
+    const id = await unaOportunidad("Actividad · calendario caído");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const { cal } = calendarioFalso({ estado: "FALLO", detalle: "Graph 503" });
+
+    const r = await registrarActividad(
+      jorge,
+      detalle!,
+      {
+        typeId: tipoLlamada,
+        subject: "Llamar",
+        cuando: new Date("2026-10-06T16:00:00Z"),
+        hecha: false,
+      },
+      cal,
+    );
+
+    expect(r).toMatchObject({ ok: true, datos: { calendario: "FALLO" } });
+    expect(await prisma.activity.count({ where: { opportunityId: id } })).toBe(1);
+  });
+});
+
+describe("editarActividad", () => {
+  async function unaAgendada(nombre: string, cal?: Calendario) {
+    const id = await unaOportunidad(nombre);
+    const detalle = await getOpportunityDetail(jorge, id);
+    const r = await registrarActividad(
+      jorge,
+      detalle!,
+      {
+        typeId: tipoLlamada,
+        subject: "Primera llamada",
+        cuando: new Date("2026-10-06T16:00:00Z"),
+        durationMin: 30,
+        hecha: false,
+        zona: "America/Mexico_City",
+      },
+      cal,
+    );
+    if (!r.ok) throw new Error("no se pudo preparar la actividad");
+    return { oportunidadId: id, actividadId: r.datos.id };
+  }
+
+  it("cambia asunto, horario y duración, y recalcula la próxima actividad", async () => {
+    const { oportunidadId, actividadId } = await unaAgendada("Editar · horario");
+    const detalle = await getOpportunityDetail(jorge, oportunidadId);
+    const nuevaHora = new Date("2026-10-08T18:00:00Z");
+
+    const r = await editarActividad(jorge, detalle!, actividadId, {
+      subject: "Primera llamada, reprogramada",
+      cuando: nuevaHora,
+      durationMin: 45,
+    });
+    expect(r.ok).toBe(true);
+
+    const a = await prisma.activity.findUniqueOrThrow({
+      where: { id: actividadId },
+      select: { subject: true, startsAt: true, durationMin: true },
+    });
+    expect(a.subject).toBe("Primera llamada, reprogramada");
+    expect(a.startsAt.toISOString()).toBe(nuevaHora.toISOString());
+    expect(a.durationMin).toBe(45);
+
+    const o = await prisma.opportunity.findUniqueOrThrow({
+      where: { id: oportunidadId },
+      select: { nextActivityAt: true },
+    });
+    expect(o.nextActivityAt?.toISOString()).toBe(nuevaHora.toISOString());
+  });
+
+  it("completar la última pendiente pregunta antes, igual que al registrar", async () => {
+    const { oportunidadId, actividadId } = await unaAgendada("Editar · completar la última");
+    const detalle = await getOpportunityDetail(jorge, oportunidadId);
+
+    const r = await editarActividad(jorge, detalle!, actividadId, { hecha: true });
+
+    expect(r).toMatchObject({ ok: false, motivo: "CONFIRMACION" });
+    const a = await prisma.activity.findUniqueOrThrow({
+      where: { id: actividadId },
+      select: { completedAt: true },
+    });
+    expect(a.completedAt).toBeNull();
+  });
+
+  it("completarla con confirmación la marca hecha y deja la oportunidad sin próximo paso", async () => {
+    const { oportunidadId, actividadId } = await unaAgendada("Editar · completar confirmando");
+    const detalle = await getOpportunityDetail(jorge, oportunidadId);
+
+    const r = await editarActividad(jorge, detalle!, actividadId, {
+      hecha: true,
+      outcome: "Quieren propuesta la semana que entra.",
+      sinSeguimiento: true,
+    });
+    expect(r.ok).toBe(true);
+
+    const o = await prisma.opportunity.findUniqueOrThrow({
+      where: { id: oportunidadId },
+      select: { nextActivityAt: true, lastActivityAt: true },
+    });
+    expect(o.nextActivityAt).toBeNull();
+    expect(o.lastActivityAt).not.toBeNull();
+  });
+
+  it("con el evento ya en el calendario, editar lo actualiza", async () => {
+    const { cal, llamadas } = calendarioFalso({ estado: "OK", eventId: "evt-orig" });
+    const { oportunidadId, actividadId } = await unaAgendada("Editar · actualiza evento", cal);
+    const detalle = await getOpportunityDetail(jorge, oportunidadId);
+
+    const r = await editarActividad(
+      jorge,
+      detalle!,
+      actividadId,
+      { cuando: new Date("2026-10-07T16:00:00Z"), zona: "America/Mexico_City" },
+      cal,
+    );
+    expect(r).toMatchObject({ ok: true, datos: { calendario: "AGENDADA" } });
+
+    const ultima = llamadas.at(-1);
+    expect(ultima).toMatchObject({ que: "actualizar", eventId: "evt-orig" });
+    expect(ultima?.evento?.start.dateTime).toBe("2026-10-07T10:00:00");
+  });
+
+  it("cambiar de responsable mueve el evento de un calendario al otro", async () => {
+    const { cal, llamadas } = calendarioFalso({ estado: "OK", eventId: "evt-mov" });
+    const { oportunidadId, actividadId } = await unaAgendada("Editar · cambia responsable", cal);
+    const detalle = await getOpportunityDetail(jorge, oportunidadId);
+    const otro = await otroUsuarioDeMexico(jorge.userId);
+
+    const r = await editarActividad(jorge, detalle!, actividadId, { userId: otro.id }, cal);
+    expect(r.ok).toBe(true);
+
+    const despues = llamadas.slice(1);
+    expect(despues.map((l) => l.que)).toEqual(["eliminar", "crear"]);
+    expect(despues[0]).toMatchObject({ correo: jorge.email, eventId: "evt-mov" });
+    expect(despues[1]).toMatchObject({ correo: otro.email });
   });
 });

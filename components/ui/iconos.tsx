@@ -5,8 +5,8 @@ import { clsx } from "clsx";
  *
  * Un solo estilo —trazo de 1.6, puntas redondeadas, sin relleno— y
  * `currentColor`, para que hereden el color del texto que acompañan y se
- * apaguen o enciendan con él. Sin librería: son nueve dibujos, y una
- * dependencia por nueve dibujos no se justifica.
+ * apaguen o enciendan con él. Sin librería: son diecinueve dibujos, y una
+ * dependencia por diecinueve dibujos no se justifica.
  *
  * Cada nombre dice qué es la cosa, no cómo se ve: el día que Oportunidades
  * cambie de dibujo, nadie tiene que renombrar nada.
@@ -23,7 +23,14 @@ export type NombreDeIcono =
   | "contraer"
   | "expandir"
   | "chevron"
-  | "riesgo";
+  | "riesgo"
+  | "telefono"
+  | "video"
+  | "correo"
+  | "sitio"
+  | "reloj"
+  | "lapiz"
+  | "palomita";
 
 const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
   // Tres columnas de alturas distintas: el kanban.
@@ -98,6 +105,48 @@ const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
       <path d="M10 8v3.75M10 14.25v.01" />
     </>
   ),
+
+  // ── Tipos de actividad ──────────────────────────────────────────────────
+  // Un auricular descolgado.
+  telefono: (
+    <path d="M7.2 3.2 8.6 6 7.2 7.8c.9 1.8 2.2 3.1 4 4l1.8-1.4 2.8 1.4v2.4c0 .8-.7 1.4-1.5 1.3-2.9-.3-5.5-1.6-7.5-3.6S3.5 7.3 3.2 4.4c-.1-.8.5-1.5 1.3-1.5z" />
+  ),
+  // Una cámara: la reunión que no es presencial.
+  video: (
+    <>
+      <rect x="2.75" y="5.5" width="10" height="9" rx="1.5" />
+      <path d="m12.75 10.2 4.5-2.6v4.8l-4.5-2.6z" />
+    </>
+  ),
+  // Un sobre.
+  correo: (
+    <>
+      <rect x="2.5" y="4.75" width="15" height="10.5" rx="1.5" />
+      <path d="m3 6 7 4.75L17 6" />
+    </>
+  ),
+  // Un alfiler de mapa: la visita al sitio del cliente.
+  sitio: (
+    <>
+      <path d="M10 17.5s5.5-5 5.5-9a5.5 5.5 0 1 0-11 0c0 4 5.5 9 5.5 9z" />
+      <circle cx="10" cy="8.5" r="2" />
+    </>
+  ),
+  // Un reloj: el seguimiento es una promesa con hora.
+  reloj: (
+    <>
+      <circle cx="10" cy="10" r="6.75" />
+      <path d="M10 6v4.25l2.75 1.75" />
+    </>
+  ),
+  // Un lápiz: lo que se corrige sin salir de la ficha.
+  lapiz: (
+    <>
+      <path d="m12.8 3.7 3.5 3.5-8.4 8.4-4.2.7.7-4.2z" />
+      <path d="m11.2 5.3 3.5 3.5" />
+    </>
+  ),
+  palomita: <path d="m4.5 10.5 3.6 3.6 7.4-8.2" />,
 };
 
 export function Icono({ nombre, className }: { nombre: NombreDeIcono; className?: string }) {
