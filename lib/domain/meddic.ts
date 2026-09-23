@@ -105,21 +105,16 @@ export function computeMeddicScore(
 export type ResultadoValidacion = { ok: true } | { ok: false; motivo: string };
 
 /**
- * RN-30 · un componente en `PARCIAL` o `CONFIRMADO` exige evidencia no vacía, y
- * el decisor económico y el campeón en `CONFIRMADO` exigen además una persona.
+ * RN-30, enmendada el 23-sep-2026 (decisiones §24) · el decisor económico y el
+ * campeón en `CONFIRMADO` exigen una persona ligada. La evidencia **ya no
+ * bloquea**: el negocio prefiere calificar primero y documentar después, así
+ * que un componente en `PARCIAL` o `CONFIRMADO` sin evidencia se guarda y la
+ * tarjeta lo señala (`faltaEvidencia`).
  *
- * La evidencia no es burocracia: sin ella el puntaje es una opinión, y el gate
- * de «Compromiso» deja de significar algo.
+ * La evidencia sigue sin ser burocracia: sin ella el puntaje es una opinión, y
+ * por eso se ve dónde falta.
  */
 export function validarComponente(a: MeddicAssessment): ResultadoValidacion {
-  const requiereEvidencia = a.status === "PARCIAL" || a.status === "CONFIRMADO";
-  if (requiereEvidencia && !a.evidence?.trim()) {
-    return {
-      ok: false,
-      motivo: `${NOMBRE_COMPONENTE[a.component]} en ${NOMBRE_ESTADO[a.status]} necesita evidencia. Escribe en qué te basas.`,
-    };
-  }
-
   if (a.status === "CONFIRMADO" && ANCLADOS_A_PERSONA.includes(a.component) && !a.personId) {
     return {
       ok: false,
@@ -130,14 +125,26 @@ export function validarComponente(a: MeddicAssessment): ResultadoValidacion {
   return { ok: true };
 }
 
+/**
+ * Lo que la tarjeta señala en vez de bloquear (§24): un componente calificado
+ * —parcial o confirmado— cuya evidencia está en blanco.
+ */
+export function faltaEvidencia(a: { status: string; evidence: string | null | undefined }): boolean {
+  return (a.status === "PARCIAL" || a.status === "CONFIRMADO") && !a.evidence?.trim();
+}
+
 const COMPONENTES: readonly string[] = Object.keys(NOMBRE_COMPONENTE);
 const ESTADOS: readonly string[] = Object.keys(NOMBRE_ESTADO);
 
 /**
- * Si un estado se puede marcar **sin abrir el panel**: cuando RN-30 ya se
- * cumple con lo que hay guardado. Recibe cadenas porque lo llama la pantalla,
- * que no conoce los enums de Prisma; lo que no sea un componente o un estado
- * conocido no se califica de ninguna forma.
+ * Si un estado se puede marcar **sin abrir el panel**: cuando lo único que RN-30
+ * todavía exige —la persona del decisor económico o del campeón al confirmar—
+ * ya está en lo guardado. La evidencia no cuenta aquí: se pide, no se exige
+ * (§24).
+ *
+ * Recibe cadenas porque lo llama el cliente, que no conoce los enums de Prisma;
+ * lo que no sea un componente o un estado conocido no se califica de ninguna
+ * forma.
  */
 export function puedeCalificarDirecto(a: {
   component: string;

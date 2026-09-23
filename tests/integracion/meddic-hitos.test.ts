@@ -107,7 +107,9 @@ describe("guardarComponenteMeddic · AC-16, el puntaje en la misma transacción"
     expect(o.meddicScore).toBe(17);
   });
 
-  it("AC-13 · marcar PARCIAL con evidencia vacía falla", async () => {
+  it("RN-30 enmendada (§24) · marcar PARCIAL con evidencia vacía pasa y guarda la evidencia en blanco", async () => {
+    // AC-13 decía que fallaba. El negocio quitó el candado el 23-sep-2026: se
+    // guarda, y la tarjeta señala que falta la evidencia.
     const id = await unaOportunidad();
     const detalle = await getOpportunityDetail(jorge, id);
     const r = await guardarComponenteMeddic(
@@ -116,8 +118,13 @@ describe("guardarComponenteMeddic · AC-16, el puntaje en la misma transacción"
       { component: "DOLOR_IDENTIFICADO", status: "PARCIAL", evidence: "   " },
       PESOS_POR_OMISION,
     );
-    expect(r).toMatchObject({ motivo: "VALIDACION" });
-    expect(await prisma.meddicComponentAssessment.count({ where: { opportunityId: id } })).toBe(0);
+    expect(r.ok).toBe(true);
+    const guardado = await prisma.meddicComponentAssessment.findFirstOrThrow({
+      where: { opportunityId: id, component: "DOLOR_IDENTIFICADO" },
+      select: { status: true, evidence: true },
+    });
+    expect(guardado.status).toBe("PARCIAL");
+    expect(guardado.evidence).toBeNull();
   });
 
   it("AC-12 · confirmar CAMPEON sin ligar persona falla", async () => {

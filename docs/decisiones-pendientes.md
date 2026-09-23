@@ -1271,3 +1271,81 @@ negocio pidió que no se pueda capturar más del 100 %.
 Dónde vive: `lib/domain/milestone.ts` (`topeDeHitos`, puro, con tests),
 `lib/domain/milestoneService.ts` (`guardarHito` con `modo`), `tabs.acciones.ts`, `PanelHitos`.
 Pruebas en `lib/domain/milestone.test.ts` y `tests/integracion/meddic-hitos.test.ts`.
+
+## 23. La cotización se recalcula al teclear, y «Ganado» en el encabezado (23 de septiembre de 2026)
+
+### Aritmética de dinero en el navegador, con la misma librería
+
+INV-03 dice «con `Decimal`, nunca con `number`», y hasta hoy el navegador no calculaba dinero:
+cada cifra de la cotización llegaba formateada del servidor. El negocio pidió que, al editar,
+neto, importe, utilidad, margen y totales se muevan **mientras se teclea**, no al guardar.
+
+- `lib/domain/quote.ts` no puede correr en el cliente: `lib/money` es `Prisma.Decimal` y
+  `components/**` no alcanza `@prisma/client`. Y repetir RN-07 con `number` pintaría el margen
+  del color equivocado justo en el borde del piso, que es la señal más importante de la
+  interfaz (§13.1).
+- Por eso `components/cotizacion/calculoEnVivo.ts` repite las fórmulas con **`decimal.js`**, la
+  misma librería que Prisma empaqueta, agregada como dependencia directa. Una **prueba de
+  paridad** (`calculoEnVivo.test.ts`) compara, cadena por cadena, lo que el módulo formatea
+  contra lo que el dominio calcula sobre las mismas líneas: si un día divergen, falla.
+- **Lo guardado sigue siendo del servidor.** La vista previa no manda nada; «Guardar cambios»
+  manda las celdas y el servidor recalcula con `Prisma.Decimal` (§21).
+- Sin `VER_COSTO` no llega el costo (INV-02) y no se anticipan utilidad, margen ni piso: se
+  muestran los guardados, atenuados, con «se recalcula al guardar». Adivinarlos sería mentir.
+- **Agregar y quitar líneas viven solo en modo edición.** Son cambios de la cotización, y la
+  cotización se cambia editando. Siguen siendo inmediatos, con su propia entrada en la bitácora;
+  lo tecleado en otras celdas sobrevive porque el formulario no se remonta al agregar.
+
+Dónde vive: `calculoEnVivo.ts`, `estadoDeEdicion.ts` (reductor: modo, generación, borrador),
+`TablaDeCotizacion`, y `enVivo` desde `app/(app)/oportunidades/[id]/page.tsx`.
+
+### «Ganado» donde estaba «Cobertura»
+
+El negocio pidió ver el valor de las ganadas en el encabezado del pipeline, en la tarjeta que
+ocupaba «Cobertura».
+
+- **Ganado** = suma y conteo de las `GANADA` con `actualCloseDate` dentro del **año fiscal en
+  curso**, sobre el mismo conjunto acotado que las demás tarjetas (alcance por rol, oficina y
+  filtros de la URL): para un vendedor, lo suyo. Año fiscal y no trimestre porque la cuota se
+  mide acumulada (§17); cambiarlo a trimestre es una línea (`ESTE_TRIMESTRE`).
+- Una `GANADA` sin cierre real no cuenta: es un dato roto, no un cero.
+- El selector de tarjeta (`opportunityCardSelect`) ahora trae `actualCloseDate`; el detalle lo
+  hereda. El encabezado dejó de leer `avanceDeObjetivos`: una consulta menos por carga.
+- La cobertura contra la cuota **no desaparece del sistema**: sigue en Objetivos (P-08), que es
+  donde se decide sobre ella.
+
+Dónde vive: `wonInPeriod` en `lib/domain/pipeline.ts` (puro, con tests) e `Indicadores` en
+`app/(app)/oportunidades/page.tsx`.
+
+## 24. La evidencia MEDDIC se señala, no se exige · RN-30 enmendada (23 de septiembre de 2026)
+
+RN-30 decía: «un componente en `PARCIAL` o `CONFIRMADO` exige evidencia no vacía». `AC-13` lo
+probaba: marcar parcial con evidencia vacía fallaba. El negocio pidió quitar el candado: quien
+califica muchas veces sabe la respuesta antes de tener dónde apuntarla, y el bloqueo hacía que
+se dejara de calificar.
+
+- **Lo que cambia.** `validarComponente` ya no rechaza por evidencia vacía; `guardarComponenteMeddic`
+  guarda `evidence = null`. `puedeCalificarDirecto` deja pasar parcial y confirmado sin evidencia:
+  los cuatro estados se marcan al pulsar.
+- **Lo que no cambia.** La persona ligada para confirmar al decisor económico y al campeón (§2.1)
+  sigue siendo obligatoria: sin ella no hay a quién preguntarle. Los mínimos MEDDIC para cierre,
+  ganada y «Compromiso» siguen gateando igual (§2.1).
+- **Lo que lo sustituye.** `faltaEvidencia` (puro, con tests) es lo que la pantalla señala: marca
+  ámbar «⚠ Sin evidencia» junto al estado y, arriba, «N calificados sin evidencia». El botón
+  «Evidencia» no cambia de texto ni de aspecto (pedido del negocio): la señal es la marca. Sin evidencia el puntaje es una opinión; en vez de impedirla, se hace visible.
+- **Riesgo asumido.** El puntaje MEDDIC puede llegar al mínimo de cierre o de ganada con
+  componentes sin evidencia. Si el negocio quiere que la evidencia vuelva a contar en esas
+  compuertas —por ejemplo, no ganar con componentes sin evidencia—, el lugar es
+  `componentesFaltantesParaGanar`, no la validación por componente.
+- El spec §3 (tabla de `MeddicComponentAssessment`, RN-30 y AC-13) sigue con la redacción vieja:
+  actualizarlo.
+
+Dónde vive: `lib/domain/meddic.ts` (`validarComponente`, `faltaEvidencia`, `puedeCalificarDirecto`),
+`lib/domain/meddicService.ts`, `PanelMeddic`. Pruebas en `lib/domain/meddic.test.ts` y
+`tests/integracion/meddic-hitos.test.ts`.
+
+### Anotaciones fuera del alta de línea (misma tarde)
+
+Las anotaciones «de la lista» y «por oportunidad» a la derecha de precio y costo unitario en
+«Agregar línea» comprimían el campo hasta esconder la cifra. Se quitaron: el subtítulo del panel
+ya dice de dónde vienen precio y costo, y el campo vuelve a su ancho.

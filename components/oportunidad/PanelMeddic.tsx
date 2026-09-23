@@ -4,7 +4,8 @@ import { startTransition, useActionState, useState } from "react";
 import clsx from "clsx";
 import type { ResultadoAccion } from "@/lib/acciones";
 import { problemaDe } from "@/lib/acciones";
-import { puedeCalificarDirecto } from "@/lib/domain/meddic";
+import { faltaEvidencia, puedeCalificarDirecto } from "@/lib/domain/meddic";
+import { Icono } from "@/components/ui/iconos";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton, Pastilla } from "@/components/ui/primitivas";
 import {
@@ -72,11 +73,16 @@ function tonoDelPuntaje(puntaje: number): "peligro" | "alerta" | "exito" {
  *
  * ## Calificar sin entrar
  *
- * Cada fila dice qué es el componente y trae los cuatro estados como botones.
- * «No evaluado» y «Ausente» guardan al pulsar. «Parcial» y «Confirmado»
- * también, **si ya hay evidencia** (y persona, cuando aplica); si no, el botón
- * abre el panel con ese estado ya elegido y el foco en lo que falta. La regla
- * de RN-30 no se relaja: se le quita el clic de más cuando ya se cumplía.
+ * Cada fila dice qué es el componente y trae los cuatro estados como botones,
+ * y los cuatro guardan al pulsar. Solo confirmar al decisor económico o al
+ * campeón sin persona ligada abre el panel, con ese estado ya elegido (§2.1).
+ *
+ * ## La evidencia se señala, no se exige · RN-30 enmendada (§24)
+ *
+ * Un componente parcial o confirmado sin evidencia lleva la marca «Sin
+ * evidencia» junto a su estado y el encabezado cuenta cuántos van así; el
+ * botón «Evidencia» no cambia, para que siempre esté donde se espera. Sin evidencia el puntaje es una opinión:
+ * el sistema lo deja pasar y lo hace visible.
  */
 export function PanelMeddic({
   opportunityId,
@@ -139,6 +145,10 @@ export function PanelMeddic({
     startTransition(() => enviar(datos));
   }
 
+  const sinEvidencia = componentes.filter((c) =>
+    faltaEvidencia({ status: c.estado, evidence: c.evidencia }),
+  ).length;
+
   return (
     <div className="space-y-4">
       {/* ── Puntaje y umbrales ─────────────────────────────────────────── */}
@@ -164,11 +174,19 @@ export function PanelMeddic({
           <Umbral etiqueta="Marcar ganada" minimo={minimos.ganada} puntaje={puntaje} />
           <Umbral etiqueta="Compromiso" minimo={minimos.compromiso} puntaje={puntaje} />
         </dl>
+        {sinEvidencia > 0 ? (
+          <p className="ml-auto flex items-center gap-1.5 text-xs font-medium text-navy-700">
+            <Icono nombre="riesgo" className="size-4" />
+            {sinEvidencia} {sinEvidencia === 1 ? "calificado sin evidencia" : "calificados sin evidencia"}
+          </p>
+        ) : null}
       </div>
 
       {/* ── Los seis componentes ───────────────────────────────────────── */}
       <ul className="space-y-2">
-        {componentes.map((c) => (
+        {componentes.map((c) => {
+          const sinEvidencia = faltaEvidencia({ status: c.estado, evidence: c.evidencia });
+          return (
           <li
             key={c.clave}
             className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-md border border-borde bg-superficie-tarjeta px-4 py-3"
@@ -177,6 +195,12 @@ export function PanelMeddic({
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-medium text-texto-titulo">{c.nombre}</p>
                 <Pastilla tono={TONO_DE_ESTADO[c.estado]}>{ETIQUETA_DE_ESTADO[c.estado]}</Pastilla>
+                {sinEvidencia ? (
+                  <Pastilla tono="alerta" titulo="Calificado sin evidencia: sin ella el puntaje es una opinión.">
+                    <Icono nombre="riesgo" className="mr-1 size-3.5" />
+                    Sin evidencia
+                  </Pastilla>
+                ) : null}
                 {c.personaNombre && (
                   <span className="text-xs text-texto-tenue">· {c.personaNombre}</span>
                 )}
@@ -220,7 +244,8 @@ export function PanelMeddic({
               </div>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       <Panel
@@ -228,7 +253,7 @@ export function PanelMeddic({
         subtitulo={
           editando?.anclaPersona
             ? "Confirmarlo exige ligar a una persona real del comité de compra (§2.1)."
-            : "La evidencia es obligatoria en parcial y confirmado (RN-30)."
+            : "La evidencia no bloquea, pero sin ella el puntaje es una opinión: escribe en qué te basas."
         }
         abierto={editando !== null}
         alCerrar={() => setEditando(null)}

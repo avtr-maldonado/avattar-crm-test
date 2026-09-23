@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useActionState, useState } from "react";
+import { startTransition, useActionState, useReducer, useState } from "react";
 import clsx from "clsx";
 import type { ResultadoAccion } from "@/lib/acciones";
 import { problemaDe } from "@/lib/acciones";
@@ -14,11 +14,13 @@ import {
   Seleccion,
   useEnvioQueConserva,
 } from "@/components/ui/formulario";
+import { calcularEnVivo, type LineaEnVivo } from "./calculoEnVivo";
+import { INICIAL, reducirEdicion } from "./estadoDeEdicion";
 
 type Resultado = ResultadoAccion<{ id: string; cambios?: number } | null>;
 type Accion = (previo: Resultado | null, form: FormData) => Promise<Resultado>;
 
-/** Ya formateado en el servidor: aquí no se calcula dinero (INV-03). */
+/** Ya formateado en el servidor: lo que se guardó, calculado con Decimal (INV-03). */
 export type LineaCalculada = {
   id: string;
   descripcion: string;
@@ -62,25 +64,27 @@ export type ProductoElegible = {
   standardCost?: string;
 };
 
-type Campo = "quantity" | "unitPrice" | "discountPct" | "unitCost";
+type CampoDeLinea = "quantity" | "unitPrice" | "discountPct" | "unitCost";
 
 /**
  * El cotizador · §11 P-02, pestaña Cotización.
  *
- * ## Nada se calcula aquí
+ * ## Lo guardado lo calcula el servidor; lo que se teclea, la vista previa
  *
- * Cada celda que se ve —neto, importe, utilidad, margen, totales— la calculó el
- * servidor con `Decimal` y la persistió (`INV-03`). El navegador no hace
- * aritmética de dinero.
+ * Cada cifra que se lee —neto, importe, utilidad, margen, totales— la calculó
+ * el servidor con `Decimal` y la persistió (`INV-03`). En edición, `calcularEnVivo`
+ * las recalcula al teclear con `decimal.js`, la misma librería, y una prueba de
+ * paridad garantiza que dicen lo mismo. Nada de eso se guarda hasta «Guardar
+ * cambios».
  *
  * ## Leer, editar, guardar
  *
  * La tabla se lee. «Editar» la abre: cantidad, precio, descuento y costo se
- * vuelven campos, y agregar y quitar líneas se guardan para después, porque
- * mezclar cambios inmediatos con cambios pendientes es cómo se pierde lo
- * tecleado. «Guardar cambios» manda todas las celdas en un viaje; el servidor
- * aplica solo lo que cambió de valor y deja **una** entrada en la bitácora por
- * guardado. Si nada cambió, no escribe nada y lo dice (decisiones §21).
+ * vuelven campos, y **agregar y quitar líneas solo están aquí**: son cambios de
+ * la cotización, y la cotización se cambia en modo edición. «Guardar cambios»
+ * manda todas las celdas en un viaje; el servidor aplica solo lo que cambió de
+ * valor y deja **una** entrada en la bitácora por guardado. Si nada cambió, no
+ * escribe nada y lo dice (decisiones §21).
  */
 export function TablaDeCotizacion({
   quoteId,
@@ -91,6 +95,7 @@ export function TablaDeCotizacion({
   verMargen,
   puedeEditar,
   pisoDeLinea,
+  enVivo,
   acciones,
 }: {
   quoteId: string;
@@ -102,6 +107,8 @@ export function TablaDeCotizacion({
   puedeEditar: boolean;
   /** Ya formateado: «10 %». */
   pisoDeLinea: string;
+  /** Sin formato, para la vista previa: la tasa copiada en la cotización y el piso por línea. */
+  enVivo: { taxRate: string; pisoDeLinea: string };
   acciones: {
     guardarLinea: Accion;
     guardarCotizacion: Accion;
@@ -109,10 +116,8 @@ export function TablaDeCotizacion({
   };
 }) {
   const [agregando, setAgregando] = useState(false);
-  const [editando, setEditando] = useState(false);
-  // Cambia al cancelar o al guardar: remonta el formulario y los campos
-  // vuelven al valor guardado.
-  const [generacion, setGeneracion] = useState(0);
+  const [edicion, despacharEdicion] = useReducer(reducirEdicion, INICIAL);
+  const { editando, generacion, borrador } = edicion;
 
   const [resultado, enviar, enviando] = useActionState(
     async (previo: Resultado | null, form: FormData) => {
@@ -132,8 +137,7 @@ export function TablaDeCotizacion({
 
       if (cual === "guardarCotizacion") {
         const n = r.datos?.cambios ?? 0;
-        setEditando(false);
-        setGeneracion((g) => g + 1);
+        despacharEdicion({ tipo: "cerrar" });
         if (n === 0) avisar.informacion("Sin cambios", "Nada cambió de valor; no se anotó nada.");
         else avisar.exito("Cotización guardada", `${n} ${n === 1 ? "cambio" : "cambios"}, en la bitácora.`);
       }
@@ -152,13 +156,33 @@ export function TablaDeCotizacion({
     startTransition(() => enviar(datos));
   }
 
-  function cancelar() {
-    setEditando(false);
-    setGeneracion((g) => g + 1);
+  function empezarAAgregar() {
+    despacharEdicion({ tipo: "editar" });
+    setAgregando(true);
   }
 
-  const bajoElPiso = lineas.filter((l) => l.bajoElPiso);
-  const lectura = !editando;
+  // La vista previa: lo tecleado sobre lo guardado, recalculado al momento.
+  const vista = editando
+    ? calcularEnVivo(
+        lineas.map((l) => ({
+          id: l.id,
+          cantidad: borrador[`linea.${l.id}.quantity`] ?? l.cantidad,
+          precioUnitario: borrador[`linea.${l.id}.unitPrice`] ?? l.precioUnitario,
+          descuentoPct: borrador[`linea.${l.id}.discountPct`] ?? l.descuentoPct,
+          ...(l.costoUnitario !== undefined
+            ? { costoUnitario: borrador[`linea.${l.id}.unitCost`] ?? l.costoUnitario }
+            : {}),
+        })),
+        { taxRate: enVivo.taxRate, pisoDeLinea: enVivo.pisoDeLinea, verCosto, verMargen },
+      )
+    : null;
+  const filas = lineas.map((l, i) => fusionar(l, vista?.lineas[i]));
+  // La tasa no cambia editando: se conserva la formateada por el servidor.
+  const totalesVisibles = vista ? { ...vista.totales, taxPct: totales.taxPct } : totales;
+  // Sin VER_COSTO la vista previa no puede recalcular el margen (INV-02): se
+  // muestra el guardado, atenuado, y se dice que se recalcula al guardar.
+  const margenPendiente = editando && !verCosto;
+  const bajoElPiso = filas.filter((l) => l.bajoElPiso);
 
   return (
     <section className="rounded-md border border-borde bg-superficie-tarjeta">
@@ -166,21 +190,33 @@ export function TablaDeCotizacion({
         <h2 className="text-sm font-semibold text-texto-titulo">Cotización</h2>
         <p className="text-xs text-texto-tenue">
           {editando
-            ? "Cambia lo que haga falta y guarda una vez. Cada guardado con cambios queda en la bitácora."
+            ? "Las cifras se recalculan al teclear. Nada se guarda hasta «Guardar cambios»."
             : puedeEditar
               ? "Se corrige en su lugar. Cada guardado con cambios queda en la bitácora."
               : "Solo lectura."}
         </p>
-        {puedeEditar && lectura && lineas.length > 0 && (
+        {puedeEditar && !editando && (
           <div className="ml-auto">
-            <Boton variante="secundario" onClick={() => setEditando(true)}>
+            <Boton variante="secundario" onClick={() => despacharEdicion({ tipo: "editar" })}>
               Editar
             </Boton>
           </div>
         )}
       </header>
 
-      <form key={generacion} id="editar-cotizacion" onSubmit={alGuardar}>
+      <form
+        key={generacion}
+        id="editar-cotizacion"
+        onSubmit={alGuardar}
+        // Un solo manejador para todas las celdas: el evento sube desde cada
+        // campo con su nombre `linea.<id>.<campo>`, y el borrador lo recoge.
+        onChange={(e) => {
+          const control: EventTarget = e.target;
+          if (control instanceof HTMLInputElement) {
+            despacharEdicion({ tipo: "teclear", nombre: control.name, valor: control.value });
+          }
+        }}
+      >
         <input type="hidden" name="quoteId" value={quoteId} />
         <input type="hidden" name="__accion" value="guardarCotizacion" />
 
@@ -198,11 +234,11 @@ export function TablaDeCotizacion({
                 <Th alineacion="derecha">Importe</Th>
                 {verCosto && <Th alineacion="derecha">Utilidad</Th>}
                 {verMargen && <Th alineacion="derecha">Margen</Th>}
-                {puedeEditar && lectura && <Th alineacion="derecha">&nbsp;</Th>}
+                {puedeEditar && editando && <Th alineacion="derecha">&nbsp;</Th>}
               </tr>
             </thead>
             <tbody>
-              {lineas.map((l) => (
+              {filas.map((l) => (
                 <tr key={l.id} className="border-t border-borde">
                   <td className="px-3 py-2 text-texto-titulo">{l.descripcion}</td>
                   <td className="px-3 py-2 text-xs text-texto-tenue">{l.unidad}</td>
@@ -228,14 +264,21 @@ export function TablaDeCotizacion({
                         // §13.1 · verde en o sobre el piso, coral debajo. Es la
                         // señal más importante de la interfaz.
                         l.bajoElPiso ? "text-coral" : "text-exito",
+                        margenPendiente && "opacity-60",
                       )}
-                      title={l.bajoElPiso ? `Bajo el piso por línea de ${pisoDeLinea}` : undefined}
+                      title={
+                        margenPendiente
+                          ? "Se recalcula al guardar: sin ver el costo no se puede anticipar."
+                          : l.bajoElPiso
+                            ? `Bajo el piso por línea de ${pisoDeLinea}`
+                            : undefined
+                      }
                     >
                       {l.margen}
                     </td>
                   )}
 
-                  {puedeEditar && lectura && (
+                  {puedeEditar && editando && (
                     <td className="px-3 py-2 text-right">
                       <button
                         type="button"
@@ -257,6 +300,18 @@ export function TablaDeCotizacion({
                 <tr className="border-t border-borde">
                   <td colSpan={12} className="px-5 py-8 text-center text-sm text-texto-tenue">
                     Sin líneas todavía. Mientras no haya, la oportunidad vale su estimado.
+                    {puedeEditar && !agregando ? (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          onClick={empezarAAgregar}
+                          className="font-medium text-acento transition-colors duration-rapido hover:text-acento-hover focus:shadow-ring focus:outline-none"
+                        >
+                          Agregar la primera línea
+                        </button>
+                      </>
+                    ) : null}
                   </td>
                 </tr>
               )}
@@ -266,12 +321,27 @@ export function TablaDeCotizacion({
 
         {editando && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-borde bg-superficie-tinte px-5 py-3">
-            <p className="text-xs text-texto-cuerpo">
-              Solo lo que cambie de valor se guarda. Un precio bajo el piso del producto detiene el
-              guardado completo.
-            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <button
+                type="button"
+                onClick={() => setAgregando(true)}
+                disabled={enviando}
+                className="text-sm font-medium text-acento transition-colors duration-rapido hover:text-acento-hover focus:shadow-ring focus:outline-none disabled:opacity-50"
+              >
+                + Agregar línea
+              </button>
+              <p className="text-xs text-texto-cuerpo">
+                Solo lo que cambie de valor se anota. Un precio bajo el piso del producto detiene
+                el guardado completo.
+              </p>
+            </div>
             <div className="flex items-center gap-2">
-              <Boton variante="fantasma" type="button" onClick={cancelar} disabled={enviando}>
+              <Boton
+                variante="fantasma"
+                type="button"
+                onClick={() => despacharEdicion({ tipo: "cerrar" })}
+                disabled={enviando}
+              >
                 Cancelar
               </Boton>
               <Boton type="submit" disabled={enviando}>
@@ -282,53 +352,14 @@ export function TablaDeCotizacion({
         )}
       </form>
 
-      {puedeEditar && lectura && (
-        <div className="border-t border-borde px-5 py-3">
-          <button
-            type="button"
-            onClick={() => setAgregando(true)}
-            className="text-sm font-medium text-acento transition-colors duration-rapido hover:text-acento-hover focus:shadow-ring focus:outline-none"
-          >
-            + Agregar línea
-          </button>
-        </div>
-      )}
+      <ResumenDeTotales
+        totales={totalesVisibles}
+        verCosto={verCosto}
+        verMargen={verMargen}
+        margenPendiente={margenPendiente}
+      />
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-borde bg-superficie-sutil px-5 py-4 md:grid-cols-4">
-        <Total etiqueta="Subtotal bruto" valor={totales.grossSubtotal} />
-        <Total
-          etiqueta="Descuento"
-          valor={`− ${totales.descuento} (${totales.descuentoPct})`}
-          tono="coral"
-        />
-        <Total etiqueta="Subtotal neto" valor={totales.netSubtotal} />
-        <Total etiqueta={`IVA ${totales.taxPct}`} valor={totales.taxAmount} />
-
-        <Total etiqueta="Total con impuesto" valor={totales.total} />
-        {verCosto && <Total etiqueta="Costo total" valor={totales.totalCost!} />}
-        {verCosto && <Total etiqueta="Utilidad bruta" valor={totales.grossProfit!} tono="exito" />}
-        {verMargen && <Total etiqueta="Margen bruto" valor={totales.grossMargin!} tono="exito" />}
-      </div>
-
-      {/* ── Franja de alertas de política · RN-05 ────────────────────────── */}
-      {bajoElPiso.length > 0 && (
-        <div
-          role="status"
-          className="flex flex-col gap-1 border-t border-borde bg-coral/[0.06] px-5 py-3"
-        >
-          {bajoElPiso.map((l) => (
-            <p key={l.id} className="flex items-center gap-2 text-sm text-texto-cuerpo">
-              <span aria-hidden className="size-1.5 shrink-0 rounded-pill bg-coral" />
-              Línea «{l.descripcion}»{verMargen ? ` con margen ${l.margen}` : ""}, bajo el piso por
-              línea de {pisoDeLinea}.
-            </p>
-          ))}
-          <p className="mt-1 text-xs text-texto-tenue">
-            Se señala, no bloquea: la solicitud de autorización llega con el módulo de
-            autorizaciones.
-          </p>
-        </div>
-      )}
+      <AlertasDePiso lineas={bajoElPiso} verMargen={verMargen} pisoDeLinea={pisoDeLinea} />
 
       <AgregarLinea
         quoteId={quoteId}
@@ -347,6 +378,21 @@ export function TablaDeCotizacion({
 // ───────────────────────────────────────────────────────────── Auxiliares
 
 /**
+ * Lo guardado con la vista previa encima. Sin costo (INV-02) la vista previa no
+ * trae margen: se conservan el margen y el piso guardados.
+ */
+function fusionar(guardada: LineaCalculada, viva: LineaEnVivo | undefined): LineaCalculada {
+  if (!viva) return guardada;
+  return {
+    ...guardada,
+    precioNeto: viva.precioNeto,
+    importe: viva.importe,
+    ...(viva.utilidad !== undefined ? { utilidad: viva.utilidad } : {}),
+    ...(viva.margen !== undefined ? { margen: viva.margen, bajoElPiso: viva.bajoElPiso } : {}),
+  };
+}
+
+/**
  * Una celda que en lectura es texto y en edición es un campo del formulario,
  * con el nombre que la acción espera: `linea.<id>.<campo>`. No guarda por su
  * cuenta: guarda «Guardar cambios», con todas las demás.
@@ -361,7 +407,7 @@ function Celda({
   ancho = "angosta",
 }: {
   lineId: string;
-  campo: Campo;
+  campo: CampoDeLinea;
   valor: string;
   /** Qué se está editando y de qué línea: un lector de pantalla solo oye esto. */
   etiqueta: string;
@@ -393,14 +439,82 @@ function Celda({
   );
 }
 
+function ResumenDeTotales({
+  totales,
+  verCosto,
+  verMargen,
+  margenPendiente,
+}: {
+  totales: TotalesFormateados;
+  verCosto: boolean;
+  verMargen: boolean;
+  margenPendiente: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-borde bg-superficie-sutil px-5 py-4 md:grid-cols-4">
+      <Total etiqueta="Subtotal bruto" valor={totales.grossSubtotal} />
+      <Total
+        etiqueta="Descuento"
+        valor={`− ${totales.descuento} (${totales.descuentoPct})`}
+        tono="coral"
+      />
+      <Total etiqueta="Subtotal neto" valor={totales.netSubtotal} />
+      <Total etiqueta={`IVA ${totales.taxPct}`} valor={totales.taxAmount} />
+
+      <Total etiqueta="Total con impuesto" valor={totales.total} />
+      {verCosto && <Total etiqueta="Costo total" valor={totales.totalCost!} />}
+      {verCosto && <Total etiqueta="Utilidad bruta" valor={totales.grossProfit!} tono="exito" />}
+      {verMargen && (
+        <Total
+          etiqueta="Margen bruto"
+          valor={totales.grossMargin!}
+          tono="exito"
+          nota={margenPendiente ? "se recalcula al guardar" : undefined}
+        />
+      )}
+    </div>
+  );
+}
+
+/** La franja de alertas de política · RN-05. Señala, no bloquea. */
+function AlertasDePiso({
+  lineas,
+  verMargen,
+  pisoDeLinea,
+}: {
+  lineas: LineaCalculada[];
+  verMargen: boolean;
+  pisoDeLinea: string;
+}) {
+  if (lineas.length === 0) return null;
+  return (
+    <div role="status" className="flex flex-col gap-1 border-t border-borde bg-coral/[0.06] px-5 py-3">
+      {lineas.map((l) => (
+        <p key={l.id} className="flex items-center gap-2 text-sm text-texto-cuerpo">
+          <span aria-hidden className="size-1.5 shrink-0 rounded-pill bg-coral" />
+          Línea «{l.descripcion}»{verMargen ? ` con margen ${l.margen}` : ""}, bajo el piso por
+          línea de {pisoDeLinea}.
+        </p>
+      ))}
+      <p className="mt-1 text-xs text-texto-tenue">
+        Se señala, no bloquea: la solicitud de autorización llega con el módulo de
+        autorizaciones.
+      </p>
+    </div>
+  );
+}
+
 function Total({
   etiqueta,
   valor,
   tono = "neutro",
+  nota,
 }: {
   etiqueta: string;
   valor: string;
   tono?: "neutro" | "coral" | "exito";
+  /** Cuando la cifra no es la definitiva: «se recalcula al guardar». */
+  nota?: string;
 }) {
   return (
     <div>
@@ -411,10 +525,12 @@ function Total({
         className={clsx(
           "tabular mt-0.5 text-lg font-semibold",
           { neutro: "text-texto-titulo", coral: "text-coral", exito: "text-exito" }[tono],
+          nota && "opacity-60",
         )}
       >
         {valor}
       </p>
+      {nota ? <p className="text-xs text-texto-tenue">{nota}</p> : null}
     </div>
   );
 }
@@ -551,7 +667,6 @@ function AgregarLinea({
           <Campo
             etiqueta="Precio unitario"
             htmlFor="unitPrice"
-            anotacion={!libre && producto ? (sinLista ? "por oportunidad" : "de la lista") : undefined}
             problema={problemaDe(resultado, "unitPrice")}
           >
             <Entrada
@@ -567,9 +682,6 @@ function AgregarLinea({
             <Campo
               etiqueta="Costo unitario"
               htmlFor="unitCost"
-              anotacion={
-                !libre && producto ? (sinLista ? "por oportunidad" : producto.standardCost ? "de la lista" : undefined) : undefined
-              }
               problema={problemaDe(resultado, "unitCost")}
             >
               <Entrada

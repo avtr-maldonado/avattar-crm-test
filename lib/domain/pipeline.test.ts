@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { money, toClient } from "@/lib/money";
-import { openTotal, weightedAmount, weightedTotal } from "./pipeline";
+import { openTotal, weightedAmount, weightedTotal, wonInPeriod } from "./pipeline";
 
 describe("weightedAmount · RN-01", () => {
   it("es importe por probabilidad de etapa", () => {
@@ -59,5 +59,36 @@ describe("weightedAmount · RN-01", () => {
 
     expect(toClient(openTotal(oportunidades))).toBe("12621000");
     expect(toClient(weightedTotal(oportunidades))).toBe("7362350");
+  });
+});
+
+describe("wonInPeriod · lo ganado del periodo, por actualCloseDate", () => {
+  const periodo = { from: new Date("2026-01-01"), to: new Date("2026-12-31T23:59:59.999Z") };
+  const ganada = (cierre: string | null) => ({
+    status: "GANADA" as const,
+    actualCloseDate: cierre ? new Date(cierre) : null,
+    amount: money(100),
+  });
+
+  it("toma solo GANADA con cierre real dentro del periodo", () => {
+    const r = wonInPeriod(
+      [
+        ganada("2026-03-15"),
+        { ...ganada("2026-03-15"), status: "ABIERTA" as const },
+        { ...ganada("2026-03-15"), status: "PERDIDA" as const },
+        ganada("2025-12-31"),
+      ],
+      periodo,
+    );
+    expect(r).toHaveLength(1);
+  });
+
+  it("una GANADA sin cierre real no cuenta: es un dato roto, no un cero", () => {
+    expect(wonInPeriod([ganada(null)], periodo)).toHaveLength(0);
+  });
+
+  it("sin límite inferior, todo lo cerrado hasta `to` cuenta", () => {
+    const r = wonInPeriod([ganada("2019-01-01"), ganada("2027-01-01")], { from: null, to: periodo.to });
+    expect(r).toHaveLength(1);
   });
 });

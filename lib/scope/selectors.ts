@@ -90,6 +90,8 @@ export function opportunityCardSelect(session: Session): Prisma.OpportunitySelec
     status: true,
     forecastCategory: true,
     expectedCloseDate: true,
+    // El indicador «Ganado» de P-01 mide con el cierre real, no el estimado (§10.2).
+    actualCloseDate: true,
     countryCode: true,
     // Insumos de las banderas de riesgo (RN-13). No hay campo «en riesgo».
     stageEnteredAt: true,
@@ -109,7 +111,6 @@ export function opportunityDetailSelect(session: Session): Prisma.OpportunitySel
     estimatedAmount: true,
     businessType: true,
     partnerName: true,
-    actualCloseDate: true,
     lossCompetitor: true,
     createdAt: true,
     updatedAt: true,
