@@ -103,7 +103,7 @@ const ETIQUETA_REQUISITO: Record<GateRequirement, string> = {
   PERSONA_CON_ROL_DECLARADO: "Contacto principal con rol en el comité de compra",
   PROPUESTA_CARGADA: "Propuesta comercial cargada",
   CONTRATO_O_OC_CARGADO: "Contrato u orden de compra cargados",
-  COTIZACION_CONGELADA: "Cotización congelada",
+  COTIZACION_CONGELADA: "Cotización con líneas",
   HITOS_CAPTURADOS: "Calendario de facturación capturado",
   HITOS_CUADRADOS: "Los hitos cuadran contra el neto de la cotización",
   MEDDIC_E_CONFIRMADO: "Decisor económico confirmado en MEDDIC",

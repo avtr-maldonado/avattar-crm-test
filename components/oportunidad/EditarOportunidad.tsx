@@ -36,8 +36,8 @@ export type DatosEditables = {
   forecastCategory: string;
   sourceId: string | null;
   ownerId: string;
-  /** INV-06 · con cotización congelada el importe deja de ser editable. */
-  tieneCotizacionCongelada: boolean;
+  /** Con cotización con líneas, el neto manda y el estimado deja de editarse (decisiones §21). */
+  tieneCotizacion: boolean;
   meddicScore: number | null;
 };
 
@@ -155,10 +155,10 @@ export function EditarOportunidad({
             <Campo
               etiqueta="Valor estimado"
               htmlFor="estimatedAmount"
-              anotacion={datos.tieneCotizacionCongelada ? "manda la cotización" : undefined}
+              anotacion={datos.tieneCotizacion ? "manda la cotización" : undefined}
               ayuda={
-                datos.tieneCotizacionCongelada
-                  ? "Hay una cotización congelada: el importe vigente sale de ella (INV-06)."
+                datos.tieneCotizacion
+                  ? "Hay cotización con líneas: el importe vigente sale de ella."
                   : undefined
               }
               problema={problemaDe(resultado, "estimatedAmount")}
@@ -168,7 +168,7 @@ export function EditarOportunidad({
                 name="estimatedAmount"
                 inputMode="decimal"
                 defaultValue={datos.estimatedAmount}
-                disabled={datos.tieneCotizacionCongelada}
+                disabled={datos.tieneCotizacion}
                 placeholder="Monto sin símbolo"
                 className="[font-variant-numeric:tabular-nums]"
                 problema={problemaDe(resultado, "estimatedAmount")}

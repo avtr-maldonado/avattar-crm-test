@@ -986,3 +986,288 @@ oportunidades, actividades y objetivos; deja de aplicar a cuentas y personas.
 §5.3 (alcance de organizaciones por país para el gerente) queda superado. El
 catálogo del negocio (`listado-funcionalidades-mvp-v2.md`, `AV-201`) hablaba de
 «datos fiscales por país»; el campo existe, con nombre genérico.
+
+---
+
+## 19. La actividad se agenda, y la pregunta de §12.4 se hace cuando toca (22 de septiembre de 2026)
+
+**Lo que reportó el negocio.** Que el formulario de actividades del detalle era
+confuso, y sobre todo el tener que declarar un «siguiente paso» aparte cada vez.
+Además borraba lo capturado cuando faltaba un campo, igual que el alta de
+oportunidad antes del 18 de septiembre.
+
+### La actividad nace por hacer
+
+El formulario ya no es «registra lo que pasó y, de paso, agenda lo que sigue».
+Es un composer de actividad: tipo, asunto, cuándo, notas, y una casilla
+**«Marcar como hecha»** en el pie. Sin marcarla, la actividad queda **agendada**,
+que es lo que el equipo hace la mayor parte del tiempo. El campo «Resultado»
+solo aparece al marcarla: lo que salió de una conversación no se puede escribir
+antes de tenerla.
+
+Es la forma de la herramienta que el equipo venía usando, y eso es deliberado:
+la captura de actividad es el hábito que decide si el CRM se adopta (§12.4), y
+no es donde conviene que aprendan una mecánica nueva.
+
+### Regla nueva, que no está en el spec
+
+§12.4 dice: «una actividad que se completa sin agendar la siguiente **DEBE**
+preguntar de forma explícita si se cierra sin seguimiento». La implementación
+preguntaba **siempre** que no se llenara el siguiente paso. Ahora pregunta solo
+cuando la oportunidad se queda de verdad sin nada pendiente:
+
+- Si la actividad queda **por hacer**, ella misma es el próximo paso.
+- Si la oportunidad **ya tenía** algo agendado, tampoco se queda sin él.
+- Si se marca hecha y no queda nada, la pregunta sale como hasta ahora:
+  `CONFIRMACION`, sin escribir nada, y se responde en el mismo formulario.
+
+Es más fiel a la letra del DEBE —habla de quedarse sin siguiente— y quita el
+regaño en los dos casos donde el dato ya estaba. **Candidata a entrar al spec.**
+
+**Efecto de lado, buscado:** `lastActivityAt` solo avanza con actividades
+hechas. Agendar una reunión para octubre no puede apagar la bandera de «sin
+actividad reciente» con una promesa.
+
+### Los tipos, en botones
+
+Los seis tipos con dibujo —llamada, reunión, videollamada, correo, visita,
+seguimiento— son botones; los otros siete del catálogo viven en «Otro…». El
+mapa es por nombre y con hueco: Administración puede renombrar un tipo y lo
+único que pasa es que se va al desplegable. Elegir el tipo **sugiere el asunto**
+con su nombre, y no lo pisa si ya escribiste el tuyo.
+
+### Edición rápida en la ficha
+
+Los cinco datos de «Datos de la oportunidad» que se corrigen solos —tipo de
+negocio, pronóstico, cierre estimado, origen y propietario— se editan en su
+lugar: se pulsa, se elige, se guardó. Mover el cierre una semana costaba abrir
+un formulario de nueve campos y guardar los nueve.
+
+La lista de campos editables es **cerrada** (`lib/domain/opportunityField.ts`):
+el nombre del campo llega del cliente, y sin lista bastaría cambiarlo en el
+navegador para escribir en algo que la pantalla nunca ofreció. Todo lo demás
+—autorización, `RN-29`, `INV-06`— sigue decidiéndose en `editarOportunidad`.
+
+El nombre, el importe y la persona principal **no** están ahí: se escriben
+mirando el resto del formulario, y para eso sigue el panel «Editar» del
+encabezado.
+
+---
+
+## 20. Actividades con hora de inicio y fin, responsable y calendario de Microsoft 365 (22 de septiembre de 2026)
+
+**Lo que pidió el negocio.** Hora de inicio y de fin en la actividad, como en la
+herramienta anterior; que la actividad se agende en el calendario de Microsoft
+365 de un usuario elegible; y poder editar una actividad ya creada.
+
+### Las horas son de pared, en la zona del país de la oportunidad
+
+`startsAt` es un instante y `durationMin` la duración: no hubo migración. Entre
+la hora que se teclea y el instante hace falta una zona, y la que se usa es la
+del **país de la oportunidad** (`Country.timezone`, ya en la base). La etiqueta
+del formulario lo dice —«Hora de Ciudad de México»— y la pestaña, la agenda y
+el calendario leen en esa misma zona.
+
+**Defecto que esto corrige.** Hasta hoy la hora se interpretaba en la zona del
+**servidor** y se mostraba en UTC. En Vercel, que corre en UTC, una llamada
+capturada a las 10:30 en México se guardaba a las 10:30Z y se leía como 10:30 en
+la agenda: coincidía por casualidad, pero era falso, y cualquier cálculo con la
+hora real la habría corrido seis horas. La agenda semanal agrupaba por día UTC:
+una reunión a las 22:00 en CDMX caía en el día siguiente.
+
+**Por qué no la zona del navegador.** Sería la de quien captura, no la de la
+reunión; se perdería al renderizar en el servidor; y una directora en México
+leyendo una oportunidad chilena vería «10:30» sin saber de quién. La zona de la
+oportunidad es una sola, se conoce con certeza y es la que el cliente entiende.
+
+### El responsable
+
+Un desplegable fija de quién es la actividad (`userId`) y en cuyo calendario se
+agenda. Cualquier usuario activo que opere en el país de la oportunidad es
+elegible; **no hay puerta por rol**. Asignarle una demostración a preventa es
+coordinar, no transferir la oportunidad, así que `Q-13` (reasignar es de
+Gerencia) no aplica. **Regla nueva, candidata a confirmar con el negocio.**
+
+### Calendario de Microsoft 365 · F-605
+
+- **Flujo de aplicación (client credentials), no delegado.** El inicio de sesión
+  pasa por Supabase Auth, que entrega el token de Entra una vez y no lo renueva;
+  y un token delegado solo escribe en el calendario de quien lo obtuvo. Agendar
+  en el calendario de **otra** persona exige un permiso de aplicación.
+- **Permisos.** `Calendars.ReadWrite` como *Application permission*, con
+  consentimiento de administrador. `OnlineMeetings.ReadWrite` **no hace falta**:
+  la videollamada se crea marcando el evento como reunión de Teams
+  (`isOnlineMeeting`), y Graph genera el enlace.
+- **Variables.** `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`.
+  Sin ellas, el CRM no toca el calendario y nada más cambia.
+- **Qué se sincroniza.** Solo las actividades **por hacer**: las hechas son
+  historia. El evento vive en el calendario del responsable
+  (`/users/{correo}/events`), su id queda en `externalEventId`, editar lo
+  actualiza y cambiar de responsable lo mueve de un calendario a otro. Al
+  marcarla hecha, el evento se queda: ya ocurrió.
+- **Nunca manda.** La actividad se escribe primero, en su transacción; el
+  calendario va después. Si Graph falla, la actividad existe y el aviso lo dice.
+  El calendario entra al dominio por parámetro, y las pruebas le pasan uno falso.
+- **Se usa el correo, no `entraObjectId`.** Ese campo guarda hoy el id de
+  Supabase Auth (§15); el UPN es el correo.
+
+**Lo que no se verificó.** La llamada real a Graph: no hay secreto en el repo
+ni acceso al tenant. Queda construida y apagada hasta que existan las variables.
+Al encenderla conviene probar con una actividad de prueba y revisar que el
+evento aparezca en el calendario del responsable elegido.
+
+### Editar una actividad
+
+El lápiz de cada fila abre el mismo composer con los datos cargados. La última
+y la próxima actividad de la oportunidad se **recalculan desde la base** (al
+registrar «solo avanzan»; al editar puede haber que retroceder). Completar la
+última pendiente dispara la misma pregunta de §12.4 que al registrar.
+
+---
+
+## 21. Una sola cotización, editable, con bitácora · INV-06 enmendado (22 de septiembre de 2026)
+
+**Lo que pidió el negocio.** Quitar el versionado de la cotización: una sola por
+oportunidad, que se corrija en su lugar, y que cada cambio quede en la
+bitácora. Cantidad, precio, descuento y costo editables; al agregar del
+catálogo, precio y costo como referencia y no como imposición. Y corregir que
+editar cantidad o descuento «no actualizaba» la cotización.
+
+### Qué decía INV-06 y qué dice ahora
+
+**Antes:** «una cotización congelada es inmutable; editar es versión nueva».
+Congelar espejaba el neto y el margen en la oportunidad; la congelada gateaba
+etapas, cuadraba hitos y fijaba el importe.
+
+**Ahora:** **una cotización por oportunidad, editable mientras la oportunidad
+está abierta. Cada cambio de línea escribe en `AuditLog` (`EDITAR_COTIZACION`)
+el neto antes y después y qué línea y campo cambiaron, en la misma transacción
+(INV-09). El espejo en la oportunidad —`amount`, `grossMargin`— se escribe en
+cada cambio.** Con cero líneas, la oportunidad vuelve a valer su estimado y su
+margen queda en blanco: una cotización vacía no dice nada.
+
+La trazabilidad que INV-06 protegía no se pierde; cambia de forma. Con versiones
+se sabía qué se ofreció en cada momento; con la bitácora se sabe **quién cambió
+qué y cuándo**, que es lo que el negocio dijo necesitar.
+
+**Es un cambio al contrato, decidido por el negocio y anotado en `CLAUDE.md`.**
+El spec (`docs/CRM-AVTR-SPEC.md` §3) sigue diciendo lo anterior hasta que se
+actualice; manda este documento.
+
+### Lo que se toca y lo que no
+
+- `Quote.version`, `status`, `frozenAt`, `frozenById` siguen en la base **sin
+  uso**. No hubo migración: los datos anteriores quedan, y la cotización vigente
+  es la de mayor versión, sin importar su estatus. Las versiones viejas son
+  historia que nadie lee.
+- El requisito de etapa `COTIZACION_CONGELADA` **se sigue llamando así en los
+  datos** (`Stage.gateRequires`), pero significa «hay cotización con al menos
+  una línea». Se renombró el campo del contexto (`tieneCotizacion`) y el mensaje;
+  renombrar la clave sería una migración de datos para nada.
+- Los hitos (RN-06) cuadran contra el neto de la cotización con líneas.
+- `EditarOportunidad` bloquea el importe estimado cuando hay cotización con
+  líneas, como antes con la congelada.
+- El piso del SKU (RN-08) aplica al precio que quede, también al editar.
+
+### El defecto que se corrigió
+
+La celda de cantidad o descuento mandaba la línea **sin `productId`**; el
+servidor la tomaba por concepto libre y la rechazaba por falta de descripción; y
+la pantalla no mostraba ese rechazo. Parecía que «no actualizaba». Ahora editar
+una línea es su propia operación (`editarLinea`): relee la línea en la base,
+cambia solo el campo que llegó y avisa cuando el servidor rechaza.
+
+### Precio y costo al agregar
+
+Del catálogo, precio y costo **llenan** los campos al elegir el producto y se
+pueden corregir antes de guardar. El costo solo aparece y solo se acepta con
+`VER_COSTO`, al agregar y al editar: probar costos hasta que el margen cuadre es
+deducirlo (§9.2, INV-02).
+
+### La bitácora
+
+Una lectura, no una tabla nueva: se arma desde las transiciones de etapa, la
+auditoría de la oportunidad y de su cotización, las actividades **hechas** y el
+alta. `editarOportunidad` empieza a auditar el cambio de cierre estimado
+(`CAMBIAR_CIERRE_ESTIMADO`), porque es lo que más explica, meses después, por
+qué un trimestre no cerró. Los filtros viven en la URL (INV-10). Sin `VER_COSTO`,
+un cambio de costo se nombra pero no se cifra (INV-02).
+
+### MEDDIC
+
+Cada componente lleva una explicación de una línea debajo del nombre
+(`DESCRIPCION_COMPONENTE`). Los cuatro estados son botones en la fila: «No
+evaluado» y «Ausente» guardan al pulsar; «Parcial» y «Confirmado» también si ya
+hay evidencia (y persona cuando aplica), y si no, abren el panel con ese estado
+elegido. RN-30 no se relaja: se le quita el clic de más cuando ya se cumplía.
+
+### Editar y Guardar, no guardar por celda (misma tarde)
+
+La primera versión guardaba cada celda al salir del campo y anotaba una entrada
+por campo. El negocio pidió un botón «Editar» y uno «Guardar», y que la
+bitácora se escriba **solo al guardar y solo si algo cambió de valor**. Tiene
+razón: corregir tres celdas es un cambio, no tres, y abrir la edición para
+mirar no es nada.
+
+- La tabla se lee. «Editar» abre las celdas; «Guardar cambios» manda todas en
+  un viaje. Mientras se edita, agregar y quitar líneas se ocultan: mezclar
+  cambios inmediatos con pendientes es cómo se pierde lo tecleado.
+- El servidor compara cada campo con lo guardado (`guardarCambiosDeCotizacion`)
+  y aplica solo lo distinto. Cero cambios: no escribe nada y devuelve
+  `cambios: 0`; la pantalla dice «Sin cambios».
+- **Una entrada por guardado**, con `after.lineas`: cada línea y campo, de qué
+  a qué. Agregar y quitar línea siguen inmediatos y con su propia entrada,
+  porque cambian el valor por definición.
+- Todo o nada: un precio bajo el piso del SKU rechaza el guardado entero.
+
+## 22. Productos sin lista, y los hitos no rebasan el neto (22 de septiembre de 2026)
+
+Dos pedidos del negocio de la misma tarde. Ninguno está en el spec; los dos cambian una regla
+que el código daba por sentada.
+
+### Un producto puede existir sin precio de lista ni costo estándar
+
+Hay servicios cuyo precio y costo se fijan en cada oportunidad. Hasta hoy, `crearProducto`
+exigía ambos y abría la primera vigencia al crear.
+
+- **Sin migración.** La ausencia de `PriceListEntry` ya es el estado: un producto sin lista es
+  un producto sin vigencias. `Product.costUpdatedAt` queda `null` hasta que se capture un costo.
+- **Precio y costo van juntos o no van.** El piso RN-08 se deriva de los dos
+  (`costo ÷ (1 − piso)`, topado a lista); una lista con uno solo no significa nada. Uno sin el
+  otro se rechaza con `VALIDACION` en el campo que falta.
+- **Al cotizar**, el producto aparece marcado «sin lista»; precio y costo llegan vacíos y se
+  fijan para esa oportunidad, obligatorios los dos, igual que el concepto libre de Q-07. **No hay
+  piso de SKU** (no hay lista de la que derivarlo); RN-05 sigue señalando el margen de la línea.
+  Quien no tiene `VER_COSTO` no puede capturar el costo, así que tampoco puede agregar la línea:
+  es el mismo límite que ya tenía el concepto libre.
+- **Editar** un producto sin lista con precio y costo abre su primera vigencia desde hoy. Dejar
+  los dos vacíos al editar no toca la lista existente: quitar una lista no está previsto, y hacerlo
+  por omisión de campos sería peligroso.
+
+Dónde vive: `lib/domain/product.ts` (`validarPrecios` acepta el par vacío),
+`lib/domain/quoteService.ts` (`guardarLinea` sin `precio`), `app/(app)/productos/acciones.ts`
+(`importeOpcional`), `EditarProducto`, `TablaDeCotizacion`. Pruebas en
+`tests/integracion/productos-edicion.test.ts` y `cotizacion.test.ts`.
+
+### La suma de hitos no supera el neto
+
+`cuadreDeHitos` (RN-06) sabía decir «sobran $200,000», pero nada impedía guardar ese estado. El
+negocio pidió que no se pueda capturar más del 100 %.
+
+- **Al guardar** (crear o editar), `topeDeHitos` compara la suma de los demás hitos más el nuevo
+  contra el neto de la cotización con líneas. Si se pasa, `VALIDACION` en `amount` con las tres
+  cifras: lo que sumarían, cuánto de más y contra qué neto. Al editar, el monto anterior del hito
+  no cuenta.
+- **Sin cotización con líneas no hay tope**: no hay contra qué comparar. Capturar en monto sigue
+  permitido, como antes; capturar en porcentaje no, porque no hay neto que porcentuar.
+- **«Sobran» sigue existiendo** en el cuadre: aparece solo si la cotización bajó después de
+  capturar los hitos. Es justo el aviso que §4 quería conservar al guardar montos y no
+  porcentajes.
+- **La conversión de % a monto pasa al servidor**, con `Decimal` (INV-03). Antes la hacía el
+  navegador con `number` antes de enviar.
+- **El panel muestra el neto**: neto a repartir, ya asignado (o «en los otros hitos», al editar) y
+  por asignar, con «Usar lo que falta». Era lo que faltaba para repartir sin adivinar.
+
+Dónde vive: `lib/domain/milestone.ts` (`topeDeHitos`, puro, con tests),
+`lib/domain/milestoneService.ts` (`guardarHito` con `modo`), `tabs.acciones.ts`, `PanelHitos`.
+Pruebas en `lib/domain/milestone.test.ts` y `tests/integracion/meddic-hitos.test.ts`.

@@ -26,6 +26,11 @@ const VARIABLES = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  // El calendario de Microsoft 365 (F-605) se enciende con las tres juntas;
+  // verlas aquí es la forma de saber que llegaron al despliegue.
+  "AZURE_TENANT_ID",
+  "AZURE_CLIENT_ID",
+  "AZURE_CLIENT_SECRET",
 ] as const;
 
 export async function GET() {

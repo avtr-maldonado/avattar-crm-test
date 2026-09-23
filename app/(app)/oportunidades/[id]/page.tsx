@@ -3,19 +3,28 @@ import { requireSession } from "@/lib/auth/session";
 import { listActivities } from "@/lib/scope";
 import {
   contextoDeCompuerta,
+  cotizacionConLineas,
   getOpportunityDetail,
   type DetalleOportunidad,
 } from "@/lib/scope/opportunityDetail";
-import { getCommercialPolicy } from "@/lib/policy";
-import { getCotizacion, listCotizaciones } from "@/lib/scope/cotizaciones";
+import { getCommercialPolicy, getCountry } from "@/lib/policy";
+import { configurado as calendarioConfigurado } from "@/lib/graph/token";
+import { ciudadDe, etiquetaDeDuracion, fechaCortaEn, horaEn } from "@/lib/tiempo";
+import { cotizacionVigente } from "@/lib/scope/cotizaciones";
+import { bitacoraDeOportunidad } from "@/lib/scope/bitacora";
 import { listProductos } from "@/lib/scope/productos";
 import { calcularLinea, lineasBajoElPiso } from "@/lib/domain/quote";
-import { TablaDeCotizacion, type LineaCalculada } from "@/components/cotizacion/TablaDeCotizacion";
+import {
+  TablaDeCotizacion,
+  type LineaCalculada,
+  type ProductoElegible,
+} from "@/components/cotizacion/TablaDeCotizacion";
+import { Bitacora } from "@/components/oportunidad/Bitacora";
 import { AbrirCotizacion } from "@/components/cotizacion/AbrirCotizacion";
 import { PanelMeddic, type ComponenteMeddic } from "@/components/oportunidad/PanelMeddic";
 import { PanelHitos, type HitoDeLista } from "@/components/oportunidad/PanelHitos";
 import { PanelDocumentos, type DocumentoDeLista } from "@/components/oportunidad/PanelDocumentos";
-import { NOMBRE_COMPONENTE } from "@/lib/domain/meddic";
+import { DESCRIPCION_COMPONENTE, NOMBRE_COMPONENTE } from "@/lib/domain/meddic";
 import { cuadreDeHitos, porcentajeDelNeto } from "@/lib/domain/milestone";
 import { sum } from "@/lib/money";
 import {
@@ -29,9 +38,8 @@ import {
 } from "./tabs.acciones";
 import {
   abrirCotizacionAccion,
-  congelarAccion,
+  guardarCotizacionAccion,
   guardarLineaAccion,
-  nuevaVersionAccion,
   quitarLineaAccion,
 } from "./cotizacion.acciones";
 import { formatPercent, formatUSD, money, toClient } from "@/lib/money";
@@ -44,7 +52,11 @@ import { Avatar, Boton, EstadoVacio, Pastilla, StatTile } from "@/components/ui/
 import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
 import { ListaDeRequisitos } from "@/components/oportunidad/ListaDeRequisitos";
 import { CambioDeEtapa } from "@/components/oportunidad/CambioDeEtapa";
-import { RegistrarActividad } from "@/components/oportunidad/RegistrarActividad";
+import {
+  ComposerDeActividad,
+  type ActividadEditable,
+} from "@/components/oportunidad/ComposerDeActividad";
+import { DatoEditable } from "@/components/oportunidad/DatoEditable";
 import { EditarPersona } from "@/components/contactos/EditarPersona";
 import { crearPersonaAccion, editarPersonaAccion } from "../../contactos/acciones";
 import { EditarOportunidad } from "@/components/oportunidad/EditarOportunidad";
@@ -53,8 +65,9 @@ import { destinatariosValidos } from "@/lib/domain/opportunity";
 import { can, type Session } from "@/lib/auth/permissions";
 import {
   cambiarEtapaAccion,
+  editarCampoAccion,
   editarOportunidadAccion,
-  registrarActividadAccion,
+  guardarActividadAccion,
 } from "./acciones";
 
 /**
@@ -108,18 +121,33 @@ export default async function DetalleOportunidadPage({
     oportunidad.status === "ABIERTA" &&
     (oportunidad.owner.id === session.userId || puedeReasignar);
 
-  const [politica, actividades, catalogos, tiposActividad, propietarios, cotizaciones] = await Promise.all([
-    getCommercialPolicy(oportunidad.pipeline.countryCode),
-    listActivities(session, { where: { opportunityId: oportunidad.id }, take: 30 }),
-    catalogosParaAlta(),
-    tiposDeActividad(),
-    // Solo si de verdad puede reasignar: pedir la lista para deshabilitar un
-    // control sería pagar por algo que nadie va a poder usar (Q-13).
-    puedeReasignar
-      ? destinatariosValidos(oportunidad.countryCode)
-      : Promise.resolve([]),
-    listCotizaciones(session, oportunidad.id),
-  ]);
+  const [politica, pais, actividades, catalogos, tiposActividad, propietarios, cotizacion, bitacora] =
+    await Promise.all([
+      getCommercialPolicy(oportunidad.pipeline.countryCode),
+      // La zona horaria de la oportunidad: las actividades se capturan y se
+      // leen como hora de pared de esa ciudad.
+      getCountry(oportunidad.countryCode),
+      listActivities(session, { where: { opportunityId: oportunidad.id }, take: 30 }),
+      catalogosParaAlta(),
+      tiposDeActividad(),
+      // Siempre, no solo para quien reasigna: el composer de actividad ofrece
+      // al responsable entre quienes operan en el país, sin puerta por rol
+      // (decisiones §20). Reasignar la oportunidad sigue gateado más abajo.
+      destinatariosValidos(oportunidad.countryCode),
+      cotizacionVigente(session, oportunidad.id),
+      bitacoraDeOportunidad(session, oportunidad),
+    ]);
+
+  const composer = {
+    opportunityId: oportunidad.id,
+    tipos: tiposActividad,
+    usuarios: propietarios.map((u) => ({ id: u.id, name: u.name })),
+    usuarioActual: session.userId,
+    zona: pais.timezone,
+    zonaEtiqueta: ciudadDe(pais.timezone),
+    calendarioConfigurado: calendarioConfigurado(),
+    accion: guardarActividadAccion,
+  };
 
   const pestanaActiva = typeof sp.p === "string" ? sp.p : "resumen";
   const hrefDe = (clave: string) => `/oportunidades/${oportunidad.id}?p=${clave}`;
@@ -127,7 +155,7 @@ export default async function DetalleOportunidadPage({
   const pestanas: Pestana[] = [
     { clave: "resumen", etiqueta: "Resumen" },
     { clave: "actividades", etiqueta: "Actividades", contador: actividades.length },
-    { clave: "cotizacion", etiqueta: "Cotización", contador: cotizaciones.length },
+    { clave: "cotizacion", etiqueta: "Cotización", contador: cotizacion?.lines.length ?? 0 },
     {
       clave: "meddic",
       etiqueta: "MEDDIC",
@@ -139,10 +167,11 @@ export default async function DetalleOportunidadPage({
     },
     { clave: "hitos", etiqueta: "Hitos", contador: oportunidad.milestones.length },
     { clave: "documentos", etiqueta: "Documentos", contador: oportunidad.documents.length },
+    { clave: "bitacora", etiqueta: "Bitácora", contador: bitacora.length },
   ];
 
   const banderas = computeRiskFlags(oportunidad, oportunidad.stage, politica, new Date());
-  const congelada = oportunidad.quotes[0];
+  const conCotizacion = cotizacionConLineas(oportunidad) != null;
 
   return (
     <>
@@ -188,28 +217,32 @@ export default async function DetalleOportunidadPage({
             <TabCotizacion
               session={session}
               oportunidad={oportunidad}
-              cotizaciones={cotizaciones}
+              cotizacion={cotizacion}
               politica={politica}
+            />
+          ) : pestanaActiva === "bitacora" ? (
+            <Bitacora
+              eventos={bitacora}
+              filtro={typeof sp.f === "string" ? sp.f : "todo"}
+              zona={pais.timezone}
+              hrefDe={(f) => `/oportunidades/${oportunidad.id}?p=bitacora&f=${f}`}
             />
           ) : pestanaActiva === "actividades" ? (
             <TabActividades
               actividades={actividades}
-              acciones={
-                oportunidad.status === "ABIERTA" ? (
-                  <RegistrarActividad
-                    opportunityId={oportunidad.id}
-                    tipos={tiposActividad}
-                    accion={registrarActividadAccion}
-                  />
-                ) : null
-              }
+              zona={pais.timezone}
+              composer={oportunidad.status === "ABIERTA" ? composer : null}
             />
           ) : (
             <TabResumen
               o={oportunidad}
               politica={politica}
-              congeladaExiste={congelada != null}
+              conCotizacion={conCotizacion}
               rolesDeComite={catalogos.rolesComite}
+              origenes={catalogos.origenes}
+              propietarios={propietarios.map((u) => ({ id: u.id, name: u.name }))}
+              puedeEditar={puedeEditarDetalle}
+              puedeReasignar={puedeReasignar}
             />
           )}
         </div>
@@ -250,7 +283,7 @@ function Encabezado({
   // autorización de verdad vive en `lib/domain`.
   const puedeEditar = o.status === "ABIERTA" && (o.owner.id === sesion.userId || puedeReasignar);
 
-  const congelada = o.quotes[0];
+  const cotizacion = cotizacionConLineas(o);
   // `grossMargin` solo viene si el usuario tiene VER_MARGEN: el selector lo
   // omite del `select`, no lo oculta después (INV-02).
   const margen = "grossMargin" in o ? o.grossMargin : null;
@@ -289,7 +322,7 @@ function Encabezado({
                 forecastCategory: o.forecastCategory,
                 sourceId: o.source?.id ?? null,
                 ownerId: o.owner.id,
-                tieneCotizacionCongelada: o.quotes.length > 0,
+                tieneCotizacion: cotizacionConLineas(o) != null,
                 meddicScore: o.meddicScore,
               }}
               personas={o.organization.people.map((p) => ({
@@ -323,9 +356,9 @@ function Encabezado({
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile denso
-          etiqueta={congelada ? "Valor neto" : "Valor estimado"}
-          valor={formatUSD(congelada?.netSubtotal ?? o.amount)}
-          subtexto={congelada ? `Cotización v${congelada.version}` : "Sin cotización congelada"}
+          etiqueta={cotizacion ? "Valor neto" : "Valor estimado"}
+          valor={formatUSD(cotizacion?.netSubtotal ?? o.amount)}
+          subtexto={cotizacion ? "Neto de la cotización" : "Sin cotización con líneas"}
         />
         <StatTile denso
           etiqueta="Ponderado"
@@ -369,14 +402,26 @@ function Encabezado({
 function TabResumen({
   o,
   politica,
-  congeladaExiste,
+  conCotizacion,
   rolesDeComite,
+  origenes,
+  propietarios,
+  puedeEditar,
+  puedeReasignar,
 }: {
   o: DetalleOportunidad;
   politica: Politica;
-  congeladaExiste: boolean;
+  conCotizacion: boolean;
   rolesDeComite: { id: string; name: string }[];
+  origenes: { id: string; name: string }[];
+  propietarios: { id: string; name: string }[];
+  puedeEditar: boolean;
+  puedeReasignar: boolean;
 }) {
+  // La oportunidad viaja atada a la acción una sola vez, aquí: cada dato
+  // editable solo manda su campo y su valor.
+  const guardarCampo = editarCampoAccion.bind(null, o.id);
+
   // La etapa siguiente es la accionable: los requisitos de la actual ya se
   // cumplieron al entrar (§8.3).
   const siguiente = o.pipeline.stages.find((e) => e.position === o.stage.position + 1);
@@ -390,15 +435,65 @@ function TabResumen({
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
             <Dato etiqueta="Folio" valor={o.folio} mono />
             <Dato etiqueta="Cuenta" valor={o.organization.name} />
-            <Dato etiqueta="Tipo de negocio" valor={ETIQUETA_TIPO[o.businessType]} />
-            <Dato etiqueta="Pronóstico" valor={ETIQUETA_PRONOSTICO[o.forecastCategory]} />
-            <Dato
-              etiqueta="Cierre estimado"
-              valor={FECHA.format(o.expectedCloseDate)}
-              tabular
+            {/* Los cinco que se corrigen sin abrir nada. El panel completo del
+                encabezado sigue para el nombre, el importe y la persona. */}
+            <DatoEditable
+              etiqueta="Tipo de negocio"
+              campo="businessType"
+              valor={o.businessType}
+              texto={ETIQUETA_TIPO[o.businessType] ?? o.businessType}
+              opciones={opcionesDe(ETIQUETA_TIPO)}
+              editable={puedeEditar}
+              guardar={guardarCampo}
             />
-            <Dato etiqueta="Origen" valor={o.source?.name ?? "Sin registrar"} />
-            <Dato etiqueta="Propietario" valor={o.owner.name} />
+            <DatoEditable
+              etiqueta="Pronóstico"
+              campo="forecastCategory"
+              valor={o.forecastCategory}
+              texto={ETIQUETA_PRONOSTICO[o.forecastCategory] ?? o.forecastCategory}
+              // RN-29 · «Compromiso» se ofrece deshabilitada mientras el puntaje
+              // no llegue: esconderla dejaría sin respuesta a quien la busca.
+              opciones={opcionesDe(ETIQUETA_PRONOSTICO).map((c) => ({
+                ...c,
+                deshabilitada:
+                  c.valor === "COMPROMISO" &&
+                  (o.meddicScore ?? 0) < Number(politica.meddicMinToCommit),
+              }))}
+              editable={puedeEditar}
+              guardar={guardarCampo}
+            />
+            <DatoEditable
+              etiqueta="Cierre estimado"
+              campo="expectedCloseDate"
+              tipo="date"
+              valor={o.expectedCloseDate.toISOString().slice(0, 10)}
+              texto={FECHA.format(o.expectedCloseDate)}
+              editable={puedeEditar}
+              guardar={guardarCampo}
+            />
+            <DatoEditable
+              etiqueta="Origen"
+              campo="sourceId"
+              valor={o.source?.id ?? ""}
+              texto={o.source?.name ?? "Sin registrar"}
+              opciones={[
+                { valor: "", etiqueta: "Sin registrar" },
+                ...origenes.map((s) => ({ valor: s.id, etiqueta: s.name })),
+              ]}
+              editable={puedeEditar}
+              guardar={guardarCampo}
+            />
+            <DatoEditable
+              etiqueta="Propietario"
+              campo="ownerId"
+              valor={o.owner.id}
+              texto={o.owner.name}
+              opciones={propietarios.map((u) => ({ valor: u.id, etiqueta: u.name }))}
+              // Q-13 · reasignar es de Gerencia, así que para el vendedor su
+              // propio nombre es un dato, no un control.
+              editable={puedeEditar && puedeReasignar}
+              guardar={guardarCampo}
+            />
             <Dato etiqueta="Creada por" valor={o.createdBy.name} />
             <Dato etiqueta="En esta etapa desde" valor={FECHA.format(o.stageEnteredAt)} tabular />
           </dl>
@@ -513,10 +608,10 @@ function TabResumen({
           )}
         </Tarjeta>
 
-        {!congeladaExiste && (
+        {!conCotizacion && (
           <p className="text-xs text-texto-tenue">
             El importe mostrado es el estimado. Se reemplaza por el neto de la
-            cotización cuando exista una congelada.
+            cotización cuando esta tenga líneas.
           </p>
         )}
       </div>
@@ -529,22 +624,22 @@ function TabResumen({
 // ───────────────────────────────────────────────────────────── Cotización
 
 /**
- * La pestaña de cotización · E2.
+ * La pestaña de cotización · E2, decisiones §21.
  *
- * Carga la versión vigente —el borrador si lo hay, si no la última congelada—
- * y **formatea aquí** cada cifra. El componente cliente recibe cadenas ya
- * hechas: la aritmética de dinero es `Decimal` del lado del servidor (INV-03),
- * y lo que cruza la frontera no es un número, es un texto.
+ * Una sola cotización, editable en su lugar. Las líneas se calculan con
+ * `Decimal` y se formatean aquí, antes de cruzar al cliente (INV-03); el costo
+ * y el precio se mandan sin formato porque son celdas editables. El costo solo
+ * viaja con `VER_COSTO` (INV-02).
  */
 async function TabCotizacion({
   session,
   oportunidad,
-  cotizaciones,
+  cotizacion,
   politica,
 }: {
   session: Session;
   oportunidad: DetalleOportunidad;
-  cotizaciones: Awaited<ReturnType<typeof listCotizaciones>>;
+  cotizacion: Awaited<ReturnType<typeof cotizacionVigente>>;
   politica: Politica;
 }) {
   const verCosto = can(session, "VER_COSTO");
@@ -553,10 +648,7 @@ async function TabCotizacion({
     oportunidad.status === "ABIERTA" &&
     (oportunidad.owner.id === session.userId || can(session, "VER_OPORTUNIDADES_OFICINA"));
 
-  // La vigente: el borrador si existe, si no la última —congelada o no—.
-  const vigente = cotizaciones.find((c) => c.status === "BORRADOR") ?? cotizaciones[0];
-
-  if (!vigente) {
+  if (!cotizacion) {
     return (
       <EstadoVacio
         titulo="Sin cotización"
@@ -573,9 +665,6 @@ async function TabCotizacion({
       />
     );
   }
-
-  const cotizacion = await getCotizacion(session, vigente.id);
-  if (!cotizacion) notFound();
 
   const productos = puedeEditar ? await listProductos(session) : [];
 
@@ -600,74 +689,68 @@ async function TabCotizacion({
       descripcion: l.description,
       unidad: l.unit,
       cantidad: toClient(l.quantity),
-      precioLista: formatUSD(l.unitPrice),
+      precioUnitario: toClient(l.unitPrice),
       descuentoPct: l.discountRate.times(100).toFixed(2).replace(/\.?0+$/, ""),
       precioNeto: formatUSD(calculo.neto),
       importe: formatUSD(calculo.importe),
       ...(verCosto && "unitCost" in l
-        ? { costoUnitario: formatUSD(l.unitCost), utilidad: formatUSD(calculo.utilidad) }
+        ? { costoUnitario: toClient(l.unitCost), utilidad: formatUSD(calculo.utilidad) }
         : {}),
       ...(verMargen ? { margen: formatPercent(toClient(calculo.margen)) } : {}),
       bajoElPiso: bajas.has(l.description),
     };
   });
 
-  return (
-    <div className="space-y-4">
-      {cotizaciones.length > 1 && (
-        <p className="text-xs text-texto-tenue">
-          {cotizaciones.length} versiones ·{" "}
-          {cotizaciones
-            .map((c) => `v${c.version} ${ETIQUETA_ESTADO_COTIZACION[c.status]}`)
-            .join(" · ")}
-        </p>
-      )}
+  // Todo el catálogo activo. Sin lista vigente (§22), precio y costo se fijan
+  // en la línea: el campo llega vacío y el panel lo dice.
+  const elegibles: ProductoElegible[] = productos.map((p) => {
+    const precio = p.prices[0] ?? null;
+    return {
+      id: p.id,
+      sku: p.sku,
+      name: p.name,
+      listPrice: precio ? toClient(precio.listPrice) : null,
+      ...(verCosto && precio && "standardCost" in precio
+        ? { standardCost: toClient(precio.standardCost) }
+        : {}),
+    };
+  });
 
-      <TablaDeCotizacion
-        quoteId={cotizacion.id}
-        version={cotizacion.version}
-        status={cotizacion.status}
-        congeladaEl={cotizacion.frozenAt ? FECHA.format(cotizacion.frozenAt) : null}
-        lineas={lineas}
-        totales={{
-          grossSubtotal: formatUSD(cotizacion.grossSubtotal),
-          descuento: formatUSD(cotizacion.grossSubtotal.minus(cotizacion.netSubtotal)),
-          descuentoPct: formatPercent(toClient(cotizacion.discountRate)),
-          netSubtotal: formatUSD(cotizacion.netSubtotal),
-          taxPct: formatPercent(toClient(cotizacion.taxRate), 0),
-          taxAmount: formatUSD(cotizacion.taxAmount),
-          total: formatUSD(cotizacion.total),
-          ...(verCosto && "totalCost" in cotizacion
-            ? {
-                totalCost: formatUSD(cotizacion.totalCost),
-                grossProfit: formatUSD(cotizacion.grossProfit),
-              }
-            : {}),
-          ...(verMargen && "grossMargin" in cotizacion
-            ? { grossMargin: formatPercent(toClient(cotizacion.grossMargin)) }
-            : {}),
-        }}
-        productos={productos.map((p) => ({ id: p.id, sku: p.sku, name: p.name }))}
-        verCosto={verCosto}
-        verMargen={verMargen}
-        puedeEditar={puedeEditar}
-        pisoDeLinea={formatPercent(toClient(politica.lineMarginFloor), 0)}
-        acciones={{
-          guardarLinea: guardarLineaAccion,
-          quitarLinea: quitarLineaAccion,
-          congelar: congelarAccion,
-          nuevaVersion: nuevaVersionAccion,
-        }}
-      />
-    </div>
+  return (
+    <TablaDeCotizacion
+      quoteId={cotizacion.id}
+      lineas={lineas}
+      totales={{
+        grossSubtotal: formatUSD(cotizacion.grossSubtotal),
+        descuento: formatUSD(cotizacion.grossSubtotal.minus(cotizacion.netSubtotal)),
+        descuentoPct: formatPercent(toClient(cotizacion.discountRate)),
+        netSubtotal: formatUSD(cotizacion.netSubtotal),
+        taxPct: formatPercent(toClient(cotizacion.taxRate), 0),
+        taxAmount: formatUSD(cotizacion.taxAmount),
+        total: formatUSD(cotizacion.total),
+        ...(verCosto && "totalCost" in cotizacion
+          ? {
+              totalCost: formatUSD(cotizacion.totalCost),
+              grossProfit: formatUSD(cotizacion.grossProfit),
+            }
+          : {}),
+        ...(verMargen && "grossMargin" in cotizacion
+          ? { grossMargin: formatPercent(toClient(cotizacion.grossMargin)) }
+          : {}),
+      }}
+      productos={elegibles}
+      verCosto={verCosto}
+      verMargen={verMargen}
+      puedeEditar={puedeEditar}
+      pisoDeLinea={formatPercent(toClient(politica.lineMarginFloor), 0)}
+      acciones={{
+        guardarLinea: guardarLineaAccion,
+        guardarCotizacion: guardarCotizacionAccion,
+        quitarLinea: quitarLineaAccion,
+      }}
+    />
   );
 }
-
-const ETIQUETA_ESTADO_COTIZACION: Record<string, string> = {
-  BORRADOR: "borrador",
-  CONGELADA: "congelada",
-  REEMPLAZADA: "reemplazada",
-};
 
 // ───────────────────────────────────────────────────────────────── MEDDIC
 
@@ -699,6 +782,7 @@ function TabMeddic({
     return {
       clave,
       nombre: NOMBRE_COMPONENTE[clave],
+      descripcion: DESCRIPCION_COMPONENTE[clave],
       estado: guardado?.status ?? "NO_EVALUADO",
       evidencia: guardado?.evidence ?? null,
       personaId: guardado?.person?.id ?? null,
@@ -731,10 +815,9 @@ function TabMeddic({
 // ────────────────────────────────────────────────────────────────── Hitos
 
 function TabHitos({ o, puedeEditar }: { o: DetalleOportunidad; puedeEditar: boolean }) {
-  // RN-06 · se cuadra contra el neto de la cotización CONGELADA. Sin ella no
+  // RN-06 · se cuadra contra el neto de la cotización con líneas. Sin ellas no
   // hay total que repartir, y eso es distinto de «cuadra en cero».
-  const congelada = o.quotes[0];
-  const neto = congelada?.netSubtotal ?? null;
+  const neto = cotizacionConLineas(o)?.netSubtotal ?? null;
 
   const montos = o.milestones.map((h) => h.amount);
   const r = cuadreDeHitos(montos, neto);
@@ -761,6 +844,8 @@ function TabHitos({ o, puedeEditar }: { o: DetalleOportunidad; puedeEditar: bool
         cuadra: r.cuadra,
         mensaje: r.mensaje,
         asignado: formatUSD(asignado),
+        // Sin formato: el panel calcula en vivo lo que queda por asignar.
+        asignadoCrudo: toClient(asignado),
         porcentaje: neto && !neto.isZero() ? Number(asignado.div(neto).times(100)) : 0,
       }}
       puedeEditar={puedeEditar}
@@ -817,21 +902,31 @@ function TabDocumentos({
   );
 }
 
+type PropsDelComposer = Omit<
+  React.ComponentProps<typeof ComposerDeActividad>,
+  "actividad"
+>;
+
 function TabActividades({
   actividades,
-  acciones,
+  zona,
+  composer,
 }: {
   actividades: Awaited<ReturnType<typeof listActivities>>;
-  /** El botón de registrar, cuando la oportunidad admite escritura. */
-  acciones: React.ReactNode;
+  /** La zona de la oportunidad: las horas se leen como en la captura. */
+  zona: string;
+  /** Lo que necesita el composer; `null` cuando la oportunidad ya no admite escritura. */
+  composer: PropsDelComposer | null;
 }) {
+  const nueva = composer ? <ComposerDeActividad {...composer} /> : null;
+
   if (actividades.length === 0) {
     return (
       <EstadoVacio
         titulo="Sin actividades registradas"
         explicacion="Toda oportunidad abierta debería tener una próxima actividad agendada. Sin ella, el negocio depende de que alguien se acuerde."
         accion={
-          acciones ?? (
+          nueva ?? (
             <Boton variante="secundario" href="/actividades">
               Ir a la agenda
             </Boton>
@@ -841,29 +936,54 @@ function TabActividades({
     );
   }
 
+  const fecha = fechaCortaEn(zona);
+
   return (
     <>
-      {acciones && <div className="mb-4 flex justify-end">{acciones}</div>}
+      {nueva && <div className="mb-4 flex justify-end">{nueva}</div>}
       <ol className="space-y-3">
-      {actividades.map((a) => (
-        <li
-          key={a.id}
-          className="rounded-md border border-borde bg-superficie-tarjeta p-4"
-        >
-          <div className="flex flex-wrap items-baseline gap-2">
-            <Pastilla>{a.type.name}</Pastilla>
-            <p className="text-sm font-medium text-texto-titulo">{a.subject}</p>
-            <span className="tabular ml-auto text-xs text-texto-tenue">
-              {FECHA.format(a.startsAt)}
-            </span>
-          </div>
-          {a.notes && <p className="mt-2 text-sm text-texto-cuerpo">{a.notes}</p>}
-          <p className="mt-2 text-xs text-texto-tenue">
-            {a.user.name}
-            {a.completedAt ? " · realizada" : " · pendiente"}
-          </p>
-        </li>
-        ))}
+        {actividades.map((a) => {
+          const fin = a.durationMin
+            ? new Date(a.startsAt.getTime() + a.durationMin * 60_000)
+            : null;
+          return (
+            <li key={a.id} className="rounded-md border border-borde bg-superficie-tarjeta p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Pastilla>{a.type.name}</Pastilla>
+                <p className="text-sm font-medium text-texto-titulo">{a.subject}</p>
+                <span className="tabular ml-auto text-xs text-texto-tenue">
+                  {fecha.format(a.startsAt)} · {horaEn(a.startsAt, zona)}
+                  {fin && `–${horaEn(fin, zona)}`}
+                  {a.durationMin ? ` · ${etiquetaDeDuracion(a.durationMin)}` : ""}
+                </span>
+                {composer && (
+                  <ComposerDeActividad
+                    {...composer}
+                    actividad={{
+                      id: a.id,
+                      typeId: a.type.id,
+                      subject: a.subject,
+                      notes: a.notes,
+                      outcome: a.outcome,
+                      startsAt: a.startsAt.toISOString(),
+                      durationMin: a.durationMin,
+                      hecha: a.completedAt != null,
+                      userId: a.user.id,
+                      enCalendario: a.externalEventId != null,
+                    } satisfies ActividadEditable}
+                  />
+                )}
+              </div>
+              {a.notes && <p className="mt-2 text-sm text-texto-cuerpo">{a.notes}</p>}
+              {a.outcome && <p className="mt-1 text-sm text-texto-cuerpo">{a.outcome}</p>}
+              <p className="mt-2 text-xs text-texto-tenue">
+                {a.user.name}
+                {a.completedAt ? " · realizada" : " · pendiente"}
+                {a.externalEventId && " · en el calendario"}
+              </p>
+            </li>
+          );
+        })}
       </ol>
     </>
   );
@@ -923,11 +1043,17 @@ const FECHA = new Intl.DateTimeFormat("es-MX", {
   timeZone: "UTC",
 });
 
+
 const ETIQUETA_TIPO: Record<string, string> = {
   NUEVO: "Cliente nuevo",
   EXPANSION: "Expansión",
   RENOVACION: "Renovación",
 };
+
+/** Un mapa de etiquetas, como lo quiere un desplegable. */
+function opcionesDe(mapa: Record<string, string>) {
+  return Object.entries(mapa).map(([valor, etiqueta]) => ({ valor, etiqueta }));
+}
 
 const ETIQUETA_PRONOSTICO: Record<string, string> = {
   PIPELINE: "Pipeline",

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { oficinaActiva, requireSession } from "@/lib/auth/session";
 import { agendaSemanal, bandejaDeTrabajo } from "@/lib/scope/agenda";
+import { getCountry } from "@/lib/policy";
 import { formatUSD } from "@/lib/money";
 import { iniciales } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
@@ -55,9 +56,17 @@ export default async function ActividadesPage({
   // mismo que el contador de Actividades del menú.
   const pais = await oficinaActiva(session);
   const ahora = new Date();
+
+  // Las horas se leen en la zona de la oficina: «hoy» y «las 10:30» son los de
+  // esa ciudad, igual que al capturarlas. Un viaje más a la base, antes de las
+  // lecturas que dependen de él.
+  const codigoDeZona = pais ?? session.countryCodes[0];
+  const zona = codigoDeZona ? (await getCountry(codigoDeZona)).timezone : "UTC";
+  const f = formatos(zona);
+
   const [bandeja, semana] = await Promise.all([
-    bandejaDeTrabajo(session, ahora, pais),
-    agendaSemanal(session, ahora, pais),
+    bandejaDeTrabajo(session, ahora, pais, zona),
+    agendaSemanal(session, ahora, pais, zona),
   ]);
 
   const pendientes = bandeja.vencidas.length + bandeja.hoy.length;
@@ -115,9 +124,9 @@ export default async function ActividadesPage({
 
         <div className="mt-6">
           {vista === "semana" ? (
-            <VistaSemana semana={semana} />
+            <VistaSemana semana={semana} f={f} />
           ) : (
-            <VistaBandeja bandeja={bandeja} />
+            <VistaBandeja bandeja={bandeja} f={f} />
           )}
         </div>
       </div>
@@ -129,8 +138,10 @@ export default async function ActividadesPage({
 
 function VistaBandeja({
   bandeja,
+  f,
 }: {
   bandeja: Awaited<ReturnType<typeof bandejaDeTrabajo>>;
+  f: Formatos;
 }) {
   const todoResuelto =
     bandeja.vencidas.length === 0 &&
@@ -161,7 +172,7 @@ function VistaBandeja({
         vacio="Sin actividades vencidas."
       >
         {bandeja.vencidas.map((a) => (
-          <FilaActividad key={a.id} a={a} vencida />
+          <FilaActividad key={a.id} a={a} f={f} vencida />
         ))}
       </Grupo>
 
@@ -173,7 +184,7 @@ function VistaBandeja({
         vacio="Nada agendado para hoy."
       >
         {bandeja.hoy.map((a) => (
-          <FilaActividad key={a.id} a={a} />
+          <FilaActividad key={a.id} a={a} f={f} />
         ))}
       </Grupo>
 
@@ -199,7 +210,7 @@ function VistaBandeja({
               <p className="truncate text-xs text-texto-tenue">
                 {o.organization.name} · {o.stage.name}
                 {o.lastActivityAt
-                  ? ` · última actividad ${FECHA.format(o.lastActivityAt)}`
+                  ? ` · última actividad ${f.fecha.format(o.lastActivityAt)}`
                   : " · sin actividad registrada"}
               </p>
             </div>
@@ -253,15 +264,17 @@ function Grupo({
 
 function FilaActividad({
   a,
+  f,
   vencida = false,
 }: {
   a: Awaited<ReturnType<typeof bandejaDeTrabajo>>["hoy"][number];
+  f: Formatos;
   vencida?: boolean;
 }) {
   return (
     <li className="flex items-center gap-3 rounded-md border border-borde bg-superficie-tarjeta px-4 py-3">
       <span className="tabular w-24 shrink-0 text-xs text-texto-tenue">
-        {vencida ? FECHA.format(a.startsAt) : HORA.format(a.startsAt)}
+        {vencida ? f.fecha.format(a.startsAt) : f.hora.format(a.startsAt)}
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-texto-titulo">{a.subject}</p>
@@ -288,7 +301,13 @@ function FilaActividad({
 
 // ─────────────────────────────────────────────────────────────── Semana
 
-function VistaSemana({ semana }: { semana: Awaited<ReturnType<typeof agendaSemanal>> }) {
+function VistaSemana({
+  semana,
+  f,
+}: {
+  semana: Awaited<ReturnType<typeof agendaSemanal>>;
+  f: Formatos;
+}) {
   if (semana.total === 0) {
     return (
       <EstadoVacio
@@ -309,16 +328,16 @@ function VistaSemana({ semana }: { semana: Awaited<ReturnType<typeof agendaSeman
           }`}
         >
           <p className={`eyebrow ${d.esHoy ? "text-acento" : ""}`}>
-            {DIA_SEMANA.format(d.fecha)}
+            {f.diaSemana.format(d.fecha)}
           </p>
           <p className="tabular text-sm font-semibold text-texto-titulo">
-            {d.fecha.getUTCDate()}
+            {d.dia}
           </p>
 
           <ul className="mt-3 space-y-2">
             {d.actividades.map((a) => (
               <li key={a.id} className="text-xs">
-                <span className="tabular text-texto-tenue">{HORA.format(a.startsAt)}</span>
+                <span className="tabular text-texto-tenue">{f.hora.format(a.startsAt)}</span>
                 <p
                   className={
                     a.completedAt
@@ -348,19 +367,21 @@ function VistaSemana({ semana }: { semana: Awaited<ReturnType<typeof agendaSeman
   );
 }
 
-const FECHA = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  timeZone: "UTC",
-});
+/**
+ * Los formatos de la pantalla, en la zona de la oficina. Antes eran constantes
+ * en UTC, y en Vercel eso corría seis horas cada actividad mexicana.
+ */
+function formatos(zona: string) {
+  return {
+    fecha: new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", timeZone: zona }),
+    hora: new Intl.DateTimeFormat("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: zona,
+    }),
+    diaSemana: new Intl.DateTimeFormat("es-MX", { weekday: "short", timeZone: zona }),
+  };
+}
 
-const HORA = new Intl.DateTimeFormat("es-MX", {
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "UTC",
-});
-
-const DIA_SEMANA = new Intl.DateTimeFormat("es-MX", {
-  weekday: "short",
-  timeZone: "UTC",
-});
+type Formatos = ReturnType<typeof formatos>;

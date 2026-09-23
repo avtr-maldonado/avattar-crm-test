@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { requireSession } from "@/lib/auth/session";
-import { registrarActividad } from "@/lib/domain/activity";
+import { editarActividad, registrarActividad } from "@/lib/domain/activity";
 import { cambiarEtapa, editarOportunidad } from "@/lib/domain/opportunity";
-import { getCommercialPolicy } from "@/lib/policy";
+import { cambioDeCampo } from "@/lib/domain/opportunityField";
+import { getCommercialPolicy, getCountry } from "@/lib/policy";
+import { duracionEnMinutos, instanteEn } from "@/lib/tiempo";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
 
 /**
@@ -133,28 +135,82 @@ export async function editarOportunidadAccion(
   return ok(null);
 }
 
+/**
+ * Un solo dato de la ficha · la edición rápida de P-02.
+ *
+ * Recibe argumentos y no un `FormData` porque no viene de un formulario: viene
+ * de un control que se pulsa y se guarda. Lo que **no** cambia es el camino:
+ * carga el detalle por `lib/scope`, traduce el campo con una función pura y
+ * delega en el mismo `editarOportunidad` que usa el panel completo. `RN-29`,
+ * `INV-06` y quién puede reasignar siguen decidiéndose ahí.
+ */
+export async function editarCampoAccion(
+  opportunityId: string,
+  campo: string,
+  valor: string,
+): Promise<ResultadoAccion> {
+  const cambio = cambioDeCampo(campo, valor);
+  if (!cambio.ok) return cambio;
+
+  const { session, detalle, umbrales } = await cargar(opportunityId);
+  if (!detalle || !umbrales) return falla("AUTORIZACION", NO_ALCANZA);
+
+  const r = await editarOportunidad(session, detalle, cambio.datos, umbrales);
+  if (!r.ok) return r;
+
+  revalidatePath(`/oportunidades/${opportunityId}`);
+  revalidatePath("/oportunidades");
+  return ok(null);
+}
+
+const HORA = /^\d{2}:\d{2}$/;
+
 const esquemaActividad = z.object({
   opportunityId: z.string().min(1),
+  /** Presente cuando se edita una que ya existe. */
+  activityId: z.string().optional(),
   typeId: z.string().min(1, "Elige el tipo de actividad."),
-  subject: z.string().trim().min(3, "Escribe de qué se trató la actividad."),
+  subject: z.string().trim().min(3, "Escribe de qué se trata la actividad."),
+  notas: z.string().trim().optional(),
   outcome: z.string().trim().optional(),
-  ocurrioEn: z.string().optional(),
+  fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pon la fecha."),
+  inicio: z.string().regex(HORA, "Pon la hora de inicio."),
+  fin: z.string().regex(HORA, "Pon la hora de fin."),
+  userId: z.string().min(1, "Elige al responsable."),
+  /** La casilla del pie. Ausente es «por hacer»: agendar es lo normal. */
+  hecha: z.coerce.boolean().optional(),
   siguienteTypeId: z.string().optional(),
   siguienteSubject: z.string().trim().optional(),
   siguienteStartsAt: z.string().optional(),
   sinSeguimiento: z.coerce.boolean().optional(),
 });
 
-export async function registrarActividadAccion(
-  _previo: ResultadoAccion<{ siguienteEn: Date | null }> | null,
+type ResultadoDeActividad = ResultadoAccion<{
+  id: string;
+  siguienteEn: Date | null;
+  calendario: "AGENDADA" | "SIN_CALENDARIO" | "FALLO" | "NO_APLICA";
+}>;
+
+/**
+ * Guarda una actividad: nueva, o la edición de una si viene `activityId`.
+ *
+ * Las horas llegan como hora de pared y se convierten en la **zona del país
+ * de la oportunidad** (`Country.timezone`). Es la única zona que el sistema
+ * conoce con certeza, y la que el calendario de Microsoft 365 necesita para
+ * poner la reunión a la hora correcta en cada calendario.
+ */
+export async function guardarActividadAccion(
+  _previo: ResultadoDeActividad | null,
   form: FormData,
-): Promise<ResultadoAccion<{ siguienteEn: Date | null }>> {
+): Promise<ResultadoDeActividad> {
   const datos = esquemaActividad.safeParse(Object.fromEntries(form));
   if (!datos.success) return deZod(datos.error);
   const d = datos.data;
 
   const { session, detalle } = await cargar(d.opportunityId);
   if (!detalle) return falla("AUTORIZACION", NO_ALCANZA);
+
+  const { timezone: zona } = await getCountry(detalle.countryCode);
 
   // El siguiente paso es todo o nada: con asunto y fecha, o no hay siguiente.
   // Medio paso agendado es una actividad que nadie sabe cuándo ocurre.
@@ -163,18 +219,28 @@ export async function registrarActividadAccion(
       ? {
           typeId: d.siguienteTypeId,
           subject: d.siguienteSubject,
-          startsAt: new Date(`${d.siguienteStartsAt}T12:00:00`),
+          startsAt: instanteEn(d.siguienteStartsAt, d.inicio, zona),
         }
       : undefined;
 
-  const r = await registrarActividad(session, detalle, {
+  const comunes = {
     typeId: d.typeId,
     subject: d.subject,
+    notes: d.notas,
     outcome: d.outcome,
-    ocurrioEn: d.ocurrioEn ? new Date(`${d.ocurrioEn}T12:00:00`) : undefined,
+    cuando: instanteEn(d.fecha, d.inicio, zona),
+    // El dominio rechaza un fin antes del inicio con su campo; aquí solo se mide.
+    durationMin: duracionEnMinutos(d.inicio, d.fin),
+    hecha: d.hecha === true,
+    userId: d.userId,
+    zona,
     siguiente,
     sinSeguimiento: d.sinSeguimiento,
-  });
+  };
+
+  const r = d.activityId
+    ? await editarActividad(session, detalle, d.activityId, comunes)
+    : await registrarActividad(session, detalle, comunes);
   if (!r.ok) return r;
 
   revalidatePath(`/oportunidades/${d.opportunityId}`);

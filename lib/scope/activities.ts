@@ -72,6 +72,8 @@ export async function listActivities(
       durationMin: true,
       completedAt: true,
       outcome: true,
+      /** Si está en el calendario de Microsoft 365 (F-605). Solo el hecho, no el id. */
+      externalEventId: true,
       type: { select: { id: true, name: true } },
       user: { select: { id: true, name: true, initials: true } },
       opportunity: { select: { id: true, folio: true, name: true } },

@@ -64,6 +64,8 @@ lib/
   scope/                  alcance por rol → INV-01. Un lector por pantalla
   domain/                 reglas de negocio: puras con tests, y servicios con transacción
   acciones.ts             el contrato ResultadoAccion de todas las acciones
+  tiempo.ts               horas de pared y zonas, puro: la zona es la del país de la oportunidad
+  graph/                  calendario de Microsoft 365 (token de aplicación, eventos); apagado sin AZURE_*
   auth/ policy/ money/ filters/ audit/ supabase/
 middleware.ts             refresca la sesión en cada request; no autoriza
 prisma/
@@ -110,7 +112,7 @@ que revisar cuando el inicio de sesión no entra, en este orden:
    solo IPv6 y las funciones de Vercel no la alcanzan; `could not locate the
    Query Engine` es el motor de Prisma fuera del paquete.
 2. **Variables** en Settings → Environment Variables, para *Production* y
-   *Preview*: las cinco de `.env.example`. `DATABASE_URL` va al pooler en
+   *Preview*: las cinco de `.env.example`, más las tres `AZURE_*` si se quiere el calendario de Microsoft 365. `DATABASE_URL` va al pooler en
    6543 con `?pgbouncer=true`. Un cambio de variables **no aplica al despliegue
    vigente**: hay que redesplegar.
 3. **Redirect URLs** en Supabase → Authentication → URL Configuration. El Site
@@ -172,6 +174,14 @@ que revisar cuando el inicio de sesión no entra, en este orden:
 - **Los objetivos se miden acumulados**, no trimestre por trimestre: vender de más
   en el T2 salda lo que faltó del T1. Es una regla que el negocio pidió después
   del spec; está razonada en `docs/decisiones-pendientes.md` §17.
+- **La cotización no se congela ni se versiona.** Es una por oportunidad y se
+  corrige en su lugar; cada cambio de línea queda en la bitácora con el neto
+  antes y después. Es una enmienda a INV-06 decidida por el negocio el 22 de
+  septiembre de 2026; razonada en `decisiones-pendientes.md` §21.
+- **Las horas de una actividad son de la ciudad de la oportunidad**, no del
+  navegador ni del servidor, y así llegan al calendario de Microsoft 365. El
+  calendario se sincroniza con **permiso de aplicación** (`Calendars.ReadWrite`)
+  y solo para lo agendado; sin las variables `AZURE_*`, no se toca. Decisiones §20.
 - **Las cuentas no son de un país.** Se ven desde todas las oficinas y se les
   venden oportunidades en cualquier pipeline; el país de la oportunidad es el del
   pipeline. La sede de la cuenta es informativa y opcional. Decidido con el

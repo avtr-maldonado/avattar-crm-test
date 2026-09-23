@@ -578,8 +578,8 @@ model Quote {
   status        QuoteStatus @default(BORRADOR)
   currency      Currency    @default(USD)
 
-  /// Totales persistidos, no calculados en vista: hay que poder congelarlos.
-  /// Se recalculan mientras el estatus es BORRADOR.
+  /// Totales persistidos, no calculados en vista. Se recalculan en cada cambio
+  /// de línea y se espejan en la oportunidad (decisiones §21).
   grossSubtotal Decimal @map("gross_subtotal") @db.Decimal(18, 4)
   netSubtotal   Decimal @map("net_subtotal") @db.Decimal(18, 4)
   discountRate  Decimal @map("discount_rate") @db.Decimal(7, 4)
@@ -593,7 +593,8 @@ model Quote {
   grossProfit   Decimal @map("gross_profit") @db.Decimal(18, 4)
   grossMargin   Decimal @map("gross_margin") @db.Decimal(7, 4)
 
-  /// INV-06 · a partir de aquí es inmutable. Editar crea la versión siguiente.
+  /// Sin uso desde el 22-sep-2026 (decisiones §21): la cotización es una sola y
+  /// editable; `version`, `status` y estos dos quedan como historia de antes.
   frozenAt   DateTime? @map("frozen_at")
   frozenById String?   @map("frozen_by_id")
   createdAt  DateTime  @default(now()) @map("created_at")

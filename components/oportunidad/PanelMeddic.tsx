@@ -4,9 +4,17 @@ import { startTransition, useActionState, useState } from "react";
 import clsx from "clsx";
 import type { ResultadoAccion } from "@/lib/acciones";
 import { problemaDe } from "@/lib/acciones";
+import { puedeCalificarDirecto } from "@/lib/domain/meddic";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton, Pastilla } from "@/components/ui/primitivas";
-import { AreaDeTexto, AvisosDeAccion, Campo, Panel, Seleccion } from "@/components/ui/formulario";
+import {
+  AreaDeTexto,
+  AvisosDeAccion,
+  Campo,
+  Panel,
+  Seleccion,
+  useEnvioQueConserva,
+} from "@/components/ui/formulario";
 
 type Resultado = ResultadoAccion<{ puntaje?: number; url?: string } | null>;
 type Accion = (previo: Resultado | null, form: FormData) => Promise<Resultado>;
@@ -16,6 +24,8 @@ export type EstadoMeddic = "NO_EVALUADO" | "AUSENTE" | "PARCIAL" | "CONFIRMADO";
 export type ComponenteMeddic = {
   clave: string;
   nombre: string;
+  /** Qué hay que haber averiguado para poder marcarlo, en una línea. */
+  descripcion: string;
   estado: EstadoMeddic;
   evidencia: string | null;
   personaId: string | null;
@@ -25,13 +35,8 @@ export type ComponenteMeddic = {
 };
 
 /**
- * Un `Record`, no un arreglo con `.find()`.
- *
- * El estado llega de la base. Con un arreglo, agregar un estado al enum de
- * Prisma sin tocar esta lista devolvía `undefined` y el `!` lo convertía en una
- * excepción **dentro del `map` de render**: la pestaña MEDDIC completa en
- * blanco, en producción. Como `Record` indexado por la unión, ese mismo olvido
- * es un error de compilación.
+ * Un `Record`, no un arreglo con `.find()`: agregar un estado al enum de Prisma
+ * sin tocar esta lista sería error de compilación, no una pestaña en blanco.
  */
 const ETIQUETA_DE_ESTADO: Record<EstadoMeddic, string> = {
   NO_EVALUADO: "No evaluado",
@@ -42,6 +47,13 @@ const ETIQUETA_DE_ESTADO: Record<EstadoMeddic, string> = {
 
 /** El orden de captura, que es el de la progresión. */
 const ESTADOS = Object.entries(ETIQUETA_DE_ESTADO) as [EstadoMeddic, string][];
+
+const TONO_DE_ESTADO: Record<EstadoMeddic, "neutro" | "peligro" | "alerta" | "exito"> = {
+  NO_EVALUADO: "neutro",
+  AUSENTE: "peligro",
+  PARCIAL: "alerta",
+  CONFIRMADO: "exito",
+};
 
 /** §7.4 · rojo bajo 50, ámbar 50–69, verde 70 o más. */
 function tonoDelPuntaje(puntaje: number): "peligro" | "alerta" | "exito" {
@@ -56,16 +68,15 @@ function tonoDelPuntaje(puntaje: number): "peligro" | "alerta" | "exito" {
  * ## El puntaje arriba, y con color
  *
  * «Rojo bajo 50, ámbar 50–69, verde 70 o más.» El número solo no dice si está
- * bien: 62 puede ser bueno en descubrimiento y malo en cierre, y el color es lo
- * que traduce eso de un vistazo.
+ * bien: 62 puede ser bueno en descubrimiento y malo en cierre.
  *
- * ## Los mínimos se muestran, no se esconden
+ * ## Calificar sin entrar
  *
- * Debajo del puntaje van los tres umbrales que gatean —cierre, ganada y
- * compromiso— con su distancia. §7.4 lo pide sin rodeos: «al intentar avanzar
- * sin cumplir, el sistema DEBE decir exactamente qué componente falta y a qué
- * estado tiene que llegar. Nunca un "no se puede" genérico». Enseñar el umbral
- * antes evita llegar a ese momento.
+ * Cada fila dice qué es el componente y trae los cuatro estados como botones.
+ * «No evaluado» y «Ausente» guardan al pulsar. «Parcial» y «Confirmado»
+ * también, **si ya hay evidencia** (y persona, cuando aplica); si no, el botón
+ * abre el panel con ese estado ya elegido y el foco en lo que falta. La regla
+ * de RN-30 no se relaja: se le quita el clic de más cuando ya se cumplía.
  */
 export function PanelMeddic({
   opportunityId,
@@ -100,6 +111,34 @@ export function PanelMeddic({
     null,
   );
 
+  // El panel envía desde onSubmit: un rechazo por evidencia vacía no debe
+  // borrar lo que ya se había escrito (useEnvioQueConserva).
+  const alEnviar = useEnvioQueConserva(enviar);
+
+  function calificar(c: ComponenteMeddic, estado: EstadoMeddic) {
+    if (estado === c.estado) return;
+
+    const directo = puedeCalificarDirecto({
+      component: c.clave,
+      status: estado,
+      evidence: c.evidencia,
+      personId: c.personaId,
+    });
+    if (!directo) {
+      // Falta evidencia o persona: el panel abre con el estado ya elegido.
+      setEditando({ ...c, estado });
+      return;
+    }
+
+    const datos = new FormData();
+    datos.set("opportunityId", opportunityId);
+    datos.set("component", c.clave);
+    datos.set("status", estado);
+    datos.set("evidence", c.evidencia ?? "");
+    datos.set("personId", c.personaId ?? "");
+    startTransition(() => enviar(datos));
+  }
+
   return (
     <div className="space-y-4">
       {/* ── Puntaje y umbrales ─────────────────────────────────────────── */}
@@ -132,44 +171,53 @@ export function PanelMeddic({
         {componentes.map((c) => (
           <li
             key={c.clave}
-            className="flex flex-wrap items-start gap-x-4 gap-y-2 rounded-md border border-borde bg-superficie-tarjeta px-4 py-3"
+            className="flex flex-wrap items-start gap-x-4 gap-y-3 rounded-md border border-borde bg-superficie-tarjeta px-4 py-3"
           >
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-medium text-texto-titulo">{c.nombre}</p>
-                <Pastilla
-                  tono={
-                    c.estado === "CONFIRMADO"
-                      ? "exito"
-                      : c.estado === "PARCIAL"
-                        ? "alerta"
-                        : c.estado === "AUSENTE"
-                          ? "peligro"
-                          : "neutro"
-                  }
-                >
-                  {ETIQUETA_DE_ESTADO[c.estado]}
-                </Pastilla>
+                <Pastilla tono={TONO_DE_ESTADO[c.estado]}>{ETIQUETA_DE_ESTADO[c.estado]}</Pastilla>
                 {c.personaNombre && (
                   <span className="text-xs text-texto-tenue">· {c.personaNombre}</span>
                 )}
               </div>
-              <p className="mt-1 text-xs text-texto-tenue">
-                {c.evidencia || (
-                  <span className="italic">
-                    Sin evidencia.{" "}
-                    {c.estado === "PARCIAL" || c.estado === "CONFIRMADO"
-                      ? "Este estado la exige (RN-30)."
-                      : "Se pide al pasar a parcial o confirmado."}
-                  </span>
-                )}
-              </p>
+              <p className="mt-0.5 text-xs text-texto-cuerpo">{c.descripcion}</p>
             </div>
 
             {puedeEditar && (
-              <Boton variante="fantasma" onClick={() => setEditando(c)}>
-                Calificar
-              </Boton>
+              <div className="flex flex-wrap items-center gap-2">
+                <div
+                  role="group"
+                  aria-label={`Calificar ${c.nombre}`}
+                  className="inline-flex rounded-sm border border-borde bg-superficie-sutil p-0.5"
+                >
+                  {ESTADOS.map(([valor, etiqueta]) => (
+                    <button
+                      key={valor}
+                      type="button"
+                      aria-pressed={c.estado === valor}
+                      disabled={enviando}
+                      onClick={() => calificar(c, valor)}
+                      className={clsx(
+                        "rounded-xs px-2.5 py-1 text-xs transition-colors duration-rapido ease-estandar focus:shadow-ring focus:outline-none",
+                        c.estado === valor
+                          ? "bg-superficie-pagina font-semibold text-texto-titulo shadow-xs"
+                          : "text-texto-tenue hover:text-texto-cuerpo",
+                      )}
+                    >
+                      {etiqueta}
+                    </button>
+                  ))}
+                </div>
+                {/* La evidencia no ocupa renglón en la tarjeta: vive en el panel y, de paso, en el tooltip. */}
+                <Boton
+                  variante="fantasma"
+                  onClick={() => setEditando(c)}
+                  title={c.evidencia || "Sin evidencia todavía"}
+                >
+                  Evidencia
+                </Boton>
+              </div>
             )}
           </li>
         ))}
@@ -203,13 +251,14 @@ export function PanelMeddic({
         {editando && (
           <form
             id="calificar-meddic"
+            key={`${editando.clave}-${editando.estado}`}
             className="flex flex-col gap-5"
-            action={(datos: FormData) => {
-              datos.set("opportunityId", opportunityId);
-              datos.set("component", editando.clave);
-              startTransition(() => enviar(datos));
-            }}
+            onSubmit={alEnviar}
           >
+            <input type="hidden" name="opportunityId" value={opportunityId} />
+            <input type="hidden" name="component" value={editando.clave} />
+            <p className="text-sm text-texto-cuerpo">{editando.descripcion}</p>
+
             <Campo etiqueta="Estado" htmlFor="status" problema={problemaDe(resultado, "status")}>
               <Seleccion id="status" name="status" defaultValue={editando.estado}>
                 {ESTADOS.map(([valor, etiqueta]) => (
@@ -228,6 +277,7 @@ export function PanelMeddic({
               <AreaDeTexto
                 id="evidence"
                 name="evidence"
+                autoFocus={!editando.evidencia}
                 defaultValue={editando.evidencia ?? ""}
                 placeholder="En qué se apoya esta calificación"
               />

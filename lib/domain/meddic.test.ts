@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  DESCRIPCION_COMPONENTE,
+  puedeCalificarDirecto,
   PESOS_POR_OMISION,
   componentesFaltantesParaGanar,
   computeMeddicScore,
@@ -188,5 +190,37 @@ describe("componentesFaltantesParaGanar · RN-28, AC-14", () => {
     const puntaje = computeMeddicScore(sinCampeon, PESOS_POR_OMISION);
     expect(puntaje).toBeGreaterThanOrEqual(80);
     expect(componentesFaltantesParaGanar(sinCampeon, puntaje, minimos)).not.toEqual([]);
+  });
+});
+
+describe("DESCRIPCION_COMPONENTE · qué es cada una, en una línea", () => {
+  it("los seis tienen explicación, corta y sin punto final colgando", () => {
+    // Va debajo del nombre en la pestaña, para que nadie tenga que entrar a
+    // calificar para saber qué está calificando.
+    for (const componente of TODOS) {
+      const texto = DESCRIPCION_COMPONENTE[componente];
+      expect(texto.length).toBeGreaterThan(20);
+      expect(texto.length).toBeLessThan(120);
+    }
+  });
+});
+
+describe("puedeCalificarDirecto · la calificación rápida respeta RN-30", () => {
+  it("No evaluado y Ausente se marcan sin más", () => {
+    expect(puedeCalificarDirecto({ component: "METRICAS", status: "AUSENTE", evidence: null, personId: null })).toBe(true);
+  });
+
+  it("Parcial sin evidencia no: hay que abrir el panel y escribirla", () => {
+    expect(puedeCalificarDirecto({ component: "METRICAS", status: "PARCIAL", evidence: "", personId: null })).toBe(false);
+    expect(puedeCalificarDirecto({ component: "METRICAS", status: "PARCIAL", evidence: "Lo dijo el CIO", personId: null })).toBe(true);
+  });
+
+  it("Confirmar al campeón exige además la persona", () => {
+    expect(puedeCalificarDirecto({ component: "CAMPEON", status: "CONFIRMADO", evidence: "x", personId: null })).toBe(false);
+    expect(puedeCalificarDirecto({ component: "CAMPEON", status: "CONFIRMADO", evidence: "x", personId: "p1" })).toBe(true);
+  });
+
+  it("un componente o estado que no existen no se califican", () => {
+    expect(puedeCalificarDirecto({ component: "OTRA_COSA", status: "AUSENTE", evidence: null, personId: null })).toBe(false);
   });
 });

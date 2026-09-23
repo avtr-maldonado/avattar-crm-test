@@ -253,3 +253,98 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
     expect(p.active).toBe(false);
   });
 });
+
+describe("productos sin lista · precio por oportunidad", () => {
+  const SIN_LISTA = { ...BASE, listPrice: null, standardCost: null };
+
+  it("con precio y costo vacíos nace sin vigencia y sin fecha de costo", async () => {
+    const r = await crearProducto(
+      admin,
+      { ...SIN_LISTA, sku: `TST-SL-${Date.now()}`, familyId },
+      { lineMarginFloor: piso },
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    creados.push(r.datos.id);
+
+    const p = await prisma.product.findUniqueOrThrow({
+      where: { id: r.datos.id },
+      select: { costUpdatedAt: true, _count: { select: { prices: true } } },
+    });
+    expect(p._count.prices).toBe(0);
+    // Sin costo capturado no hay fecha de costo que envejecer (C-01).
+    expect(p.costUpdatedAt).toBeNull();
+  });
+
+  it("precio sin costo, o costo sin precio, no pasa: van juntos", async () => {
+    // El piso RN-08 se deriva de los dos; con uno solo no hay lista que valga.
+    const a = await crearProducto(
+      admin,
+      { ...SIN_LISTA, sku: `TST-SL-A-${Date.now()}`, familyId, listPrice: "1000" },
+      { lineMarginFloor: piso },
+    );
+    expect(a).toMatchObject({ ok: false, motivo: "VALIDACION" });
+    if (!a.ok) expect(a.problemas[0]?.campo).toBe("standardCost");
+
+    const b = await crearProducto(
+      admin,
+      { ...SIN_LISTA, sku: `TST-SL-B-${Date.now()}`, familyId, standardCost: "600" },
+      { lineMarginFloor: piso },
+    );
+    expect(b).toMatchObject({ ok: false, motivo: "VALIDACION" });
+    if (!b.ok) expect(b.problemas[0]?.campo).toBe("listPrice");
+  });
+
+  it("editar el nombre de un producto sin lista no exige precio", async () => {
+    const r = await crearProducto(
+      admin,
+      { ...SIN_LISTA, sku: `TST-SL-N-${Date.now()}`, familyId },
+      { lineMarginFloor: piso },
+    );
+    if (!r.ok) throw new Error("no se pudo crear");
+    creados.push(r.datos.id);
+
+    const producto = await getProducto(admin, r.datos.id);
+    const e = await editarProducto(admin, producto!, { name: "Servicio a medida" }, { lineMarginFloor: piso });
+    expect(e.ok).toBe(true);
+    const p = await prisma.product.findUniqueOrThrow({
+      where: { id: r.datos.id },
+      select: { name: true, _count: { select: { prices: true } } },
+    });
+    expect(p.name).toBe("Servicio a medida");
+    expect(p._count.prices).toBe(0);
+  });
+
+  it("un producto sin lista recibe su primera vigencia al editarlo con precio y costo", async () => {
+    const r = await crearProducto(
+      admin,
+      { ...SIN_LISTA, sku: `TST-SL-V-${Date.now()}`, familyId },
+      { lineMarginFloor: piso },
+    );
+    if (!r.ok) throw new Error("no se pudo crear");
+    creados.push(r.datos.id);
+
+    const producto = await getProducto(admin, r.datos.id);
+    const e = await editarProducto(
+      admin,
+      producto!,
+      { listPrice: "1000", standardCost: "600" },
+      { lineMarginFloor: piso },
+    );
+    expect(e.ok).toBe(true);
+
+    const p = await prisma.product.findUniqueOrThrow({
+      where: { id: r.datos.id },
+      select: {
+        costUpdatedAt: true,
+        prices: { select: { listPrice: true, minPrice: true, validFrom: true } },
+      },
+    });
+    expect(p.prices).toHaveLength(1);
+    expect(p.prices[0]!.listPrice.toString()).toBe("1000");
+    expect(p.prices[0]!.minPrice.toString()).toBe(
+      pisoDePrecio(money("600"), money("1000"), money(piso)).toFixed(4).replace(/\.?0+$/, ""),
+    );
+    expect(p.costUpdatedAt).not.toBeNull();
+  });
+});

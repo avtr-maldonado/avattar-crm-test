@@ -80,10 +80,51 @@ describe("la persona cuelga de la organización", () => {
   });
 });
 
+describe("los contactos de la cuenta elegida", () => {
+  const LISTA = [{ id: "p1", nombre: "Luis Cantú", detalle: "Director de sistemas" }];
+
+  it("se guardan cuando llegan para la cuenta elegida", () => {
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "RECIBIR_CONTACTOS", de: "o1", lista: LISTA });
+    expect(e.contactos).toEqual(LISTA);
+  });
+
+  it("se descartan si llegan para otra cuenta", () => {
+    // Se eligió Aceros, se pidieron sus contactos y, antes de que llegaran, se
+    // cambió a Hidrosistemas. Pintar la lista de Aceros ofrecería gente que no
+    // trabaja en la empresa que se ve en pantalla.
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: HIDRO });
+    e = reducir(e, { tipo: "RECIBIR_CONTACTOS", de: "o1", lista: LISTA });
+    expect(e.contactos).toBeNull();
+  });
+
+  it("cambiar de cuenta olvida los de la anterior", () => {
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "RECIBIR_CONTACTOS", de: "o1", lista: LISTA });
+    e = reducir(e, { tipo: "ELEGIR_ORGANIZACION", eleccion: HIDRO });
+    expect(e.contactos).toBeNull();
+  });
+
+  it("una cuenta nueva no tiene contactos", () => {
+    let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
+    e = reducir(e, { tipo: "RECIBIR_CONTACTOS", de: "o1", lista: LISTA });
+    e = reducir(e, { tipo: "ELEGIR_ORGANIZACION", eleccion: NUEVA });
+    expect(e.contactos).toBeNull();
+  });
+});
+
 describe("limpiar", () => {
-  it("devuelve el formulario a como estaba", () => {
+  it("devuelve el formulario a como estaba y avanza la generación", () => {
     let e = reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: ACEROS });
     e = reducir(e, { tipo: "ESCRIBIR_NOMBRE", nombre: "Algo" });
-    expect(reducir(e, { tipo: "LIMPIAR" })).toEqual(ESTADO_INICIAL);
+    expect(reducir(e, { tipo: "LIMPIAR" })).toEqual({ ...ESTADO_INICIAL, generacion: 1 });
+  });
+
+  it("cada limpieza remonta el formulario con una generación nueva", () => {
+    // La generación es la `key` del <form>: cambiarla es lo que devuelve a su
+    // valor por omisión los campos no controlados que un envío rechazado conserva.
+    const una = reducir(ESTADO_INICIAL, { tipo: "LIMPIAR" });
+    const dos = reducir(una, { tipo: "LIMPIAR" });
+    expect(dos.generacion).toBe(una.generacion + 1);
   });
 });

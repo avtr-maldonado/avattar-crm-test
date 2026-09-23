@@ -1,6 +1,7 @@
 import type { CountryCode } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
+import { fechaEn, instanteEn } from "@/lib/tiempo";
 import { actividadEnOficina, activityScope } from "./activities";
 import { opportunityScope } from "./opportunities";
 
@@ -32,12 +33,11 @@ export async function bandejaDeTrabajo(
   session: Session,
   ahora = new Date(),
   pais?: CountryCode,
+  /** La zona de la oficina: «hoy» es el día de esa ciudad, no el de UTC. */
+  zona = "UTC",
 ) {
   const enOficina = pais ? actividadEnOficina(pais) : {};
-  const inicioDeHoy = new Date(
-    Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate()),
-  );
-  const finDeHoy = new Date(inicioDeHoy.getTime() + 86_400_000 - 1);
+  const { inicio: inicioDeHoy, fin: finDeHoy } = diaEn(fechaEn(ahora, zona), zona);
 
   const seleccion = {
     id: true,
@@ -121,13 +121,18 @@ export async function agendaSemanal(
   session: Session,
   ahora = new Date(),
   pais?: CountryCode,
+  /** La zona de la oficina: los días de la semana son los de esa ciudad. */
+  zona = "UTC",
 ) {
   // La semana arranca en lunes: es una agenda de trabajo, no un calendario.
-  const diaDeLaSemana = (ahora.getUTCDay() + 6) % 7;
-  const lunes = new Date(
-    Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth(), ahora.getUTCDate() - diaDeLaSemana),
-  );
-  const domingo = new Date(lunes.getTime() + 7 * 86_400_000 - 1);
+  // Se calcula sobre la fecha local de la oficina, y cada cubeta va de la
+  // medianoche local a la siguiente: una reunión a las 22:00 en CDMX es del
+  // 29, aunque en UTC ya sea el 30.
+  const hoy = fechaEn(ahora, zona);
+  const diaDeLaSemana = (new Date(`${hoy}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const fechas = Array.from({ length: 7 }, (_, i) => sumarDias(hoy, i - diaDeLaSemana));
+  const lunes = diaEn(fechas[0]!, zona).inicio;
+  const domingo = diaEn(fechas[6]!, zona).fin;
 
   const actividades = await prisma.activity.findMany({
     where: {
@@ -152,16 +157,26 @@ export async function agendaSemanal(
 
   // Siete cubetas siempre, aunque un día quede vacío: un calendario al que le
   // faltan días deja de leerse como semana.
-  const dias = Array.from({ length: 7 }, (_, i) => {
-    const fecha = new Date(lunes.getTime() + i * 86_400_000);
-    return {
-      fecha,
-      esHoy: fecha.toISOString().slice(0, 10) === ahora.toISOString().slice(0, 10),
-      actividades: actividades.filter(
-        (a) => a.startsAt.toISOString().slice(0, 10) === fecha.toISOString().slice(0, 10),
-      ),
-    };
-  });
+  const dias = fechas.map((clave) => ({
+    fecha: diaEn(clave, zona).inicio,
+    /** El día del mes, ya en la zona: la pantalla no tiene que volver a calcularlo. */
+    dia: Number(clave.slice(8)),
+    esHoy: clave === hoy,
+    actividades: actividades.filter((a) => fechaEn(a.startsAt, zona) === clave),
+  }));
 
   return { lunes, domingo, dias, total: actividades.length };
+}
+
+/** El primer y el último instante de una fecha `YYYY-MM-DD` en una zona. */
+function diaEn(fecha: string, zona: string) {
+  const inicio = instanteEn(fecha, "00:00", zona);
+  const fin = new Date(instanteEn(sumarDias(fecha, 1), "00:00", zona).getTime() - 1);
+  return { inicio, fin };
+}
+
+function sumarDias(fecha: string, dias: number): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
 }

@@ -23,7 +23,7 @@ export type ResultadoDeCuadre = {
 };
 
 /**
- * Compara la suma de los hitos contra el neto de la cotización congelada.
+ * Compara la suma de los hitos contra el neto de la cotización (con líneas).
  *
  * `AC-18` es explícito sobre el mensaje: **«faltan $200,000 por asignar»**, no
  * «los hitos no cuadran». Decir que no cuadra obliga a quien lee a sacar la
@@ -33,14 +33,14 @@ export function cuadreDeHitos(montos: readonly Money[], neto: Money | null): Res
   const asignado = sum([...montos]);
 
   if (neto === null) {
-    // Sin cotización congelada no hay total contra el cual repartir. Eso es
+    // Sin cotización con líneas no hay total contra el cual repartir. Eso es
     // distinto de «cuadra en cero»: confundirlos dejaría pasar una oportunidad
     // sin calendario de cobro.
     return {
       cuadra: false,
       diferencia: money(0),
       asignado,
-      mensaje: "Todavía no hay cotización congelada contra la cual cuadrar los hitos.",
+      mensaje: "Todavía no hay cotización con líneas contra la cual cuadrar los hitos.",
     };
   }
 
@@ -66,4 +66,47 @@ export function montoDesdePorcentaje(porcentaje: Money, neto: Money): Money {
 /** Y de vuelta, solo para mostrar. Un neto en cero no es una división por cero. */
 export function porcentajeDelNeto(monto: Money, neto: Money): Money {
   return neto.isZero() ? money(0) : monto.div(neto).times(100);
+}
+
+export type ResultadoDeTope = {
+  /** La suma con el hito nuevo (o corregido) incluido. */
+  suma: Money;
+  /** Lo que se puede asignar sin pasarse, sin contar el hito nuevo. `null` sin neto. */
+  disponible: Money | null;
+  excede: boolean;
+  /** `null` cuando cabe. Con las tres cifras cuando no. */
+  mensaje: string | null;
+};
+
+/**
+ * La suma de hitos no supera el neto (regla del negocio del 22-sep-2026,
+ * decisiones §22). El cuadre de `RN-06` ya sabía decir «sobran»; esto lo impide
+ * antes de guardar.
+ *
+ * `otros` son los demás hitos: al editar, quien llama saca el que se corrige,
+ * si no su monto anterior contaría dos veces. Sin neto no hay tope: no hay
+ * contra qué comparar, y capturar en monto sigue permitido.
+ */
+export function topeDeHitos(
+  otros: readonly Money[],
+  nuevo: Money,
+  neto: Money | null,
+): ResultadoDeTope {
+  const asignado = sum([...otros]);
+  const suma = asignado.plus(nuevo);
+  if (neto === null) return { suma, disponible: null, excede: false, mensaje: null };
+
+  const disponible = neto.minus(asignado);
+  if (suma.lte(neto)) return { suma, disponible, excede: false, mensaje: null };
+
+  const exceso = suma.minus(neto);
+  const cola = disponible.gt(0)
+    ? `Quedan ${formatUSD(disponible)} por asignar.`
+    : "Ya no queda nada por asignar.";
+  return {
+    suma,
+    disponible,
+    excede: true,
+    mensaje: `Con este hito los hitos sumarían ${formatUSD(suma)}: ${formatUSD(exceso)} más que el neto de ${formatUSD(neto)}. ${cola}`,
+  };
 }

@@ -48,6 +48,22 @@ export const NOMBRE_COMPONENTE: Record<MeddicComponent, string> = {
   CAMPEON: "Campeón",
 };
 
+/**
+ * Qué es cada componente, en una línea y en el idioma del vendedor.
+ *
+ * Va debajo del nombre en la pestaña, para que nadie tenga que abrir el panel
+ * de calificar para saber qué está calificando. Es la definición operativa,
+ * no la del manual: dice qué hay que haber averiguado para poder marcarlo.
+ */
+export const DESCRIPCION_COMPONENTE: Record<MeddicComponent, string> = {
+  METRICAS: "El beneficio medible que el cliente espera: ahorro, ingreso o tiempo, con cifra.",
+  DECISOR_ECONOMICO: "Quien autoriza el presupuesto y puede decir sí sin pedir permiso a nadie.",
+  CRITERIOS_DECISION: "Con qué van a comparar las propuestas: técnicos, económicos, de servicio.",
+  PROCESO_DECISION: "Los pasos y fechas hasta la firma: quién revisa, quién aprueba y cuándo.",
+  DOLOR_IDENTIFICADO: "El problema concreto que les duele hoy y lo que les cuesta no resolverlo.",
+  CAMPEON: "La persona de adentro que quiere que ganemos y tiene influencia para empujarlo.",
+};
+
 export const NOMBRE_ESTADO: Record<MeddicStatus, string> = {
   NO_EVALUADO: "No evaluado",
   AUSENTE: "Ausente",
@@ -112,6 +128,30 @@ export function validarComponente(a: MeddicAssessment): ResultadoValidacion {
   }
 
   return { ok: true };
+}
+
+const COMPONENTES: readonly string[] = Object.keys(NOMBRE_COMPONENTE);
+const ESTADOS: readonly string[] = Object.keys(NOMBRE_ESTADO);
+
+/**
+ * Si un estado se puede marcar **sin abrir el panel**: cuando RN-30 ya se
+ * cumple con lo que hay guardado. Recibe cadenas porque lo llama la pantalla,
+ * que no conoce los enums de Prisma; lo que no sea un componente o un estado
+ * conocido no se califica de ninguna forma.
+ */
+export function puedeCalificarDirecto(a: {
+  component: string;
+  status: string;
+  evidence: string | null;
+  personId: string | null;
+}): boolean {
+  if (!COMPONENTES.includes(a.component) || !ESTADOS.includes(a.status)) return false;
+  return validarComponente({
+    component: a.component as MeddicComponent,
+    status: a.status as MeddicStatus,
+    evidence: a.evidence,
+    personId: a.personId,
+  }).ok;
 }
 
 /**

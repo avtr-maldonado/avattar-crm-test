@@ -1,7 +1,5 @@
 "use client";
 
-import type { ResultadoAccion } from "@/lib/acciones";
-import { problemaDe } from "@/lib/acciones";
 import { etiquetaDeTrimestre } from "@/lib/etiquetas";
 import { Campo, Entrada, Seleccion } from "@/components/ui/formulario";
 import { SelectorDeEtapa, type EtapaElegible } from "./SelectorDeEtapa";
@@ -33,7 +31,7 @@ export function CamposComerciales({
   propietarios,
   usuarioActual,
   puedeAsignar,
-  resultado,
+  problema,
   alCambiarPipeline,
   alCambiarEtapa,
   alCambiarCierre,
@@ -47,7 +45,8 @@ export function CamposComerciales({
   propietarios: { id: string; name: string }[];
   usuarioActual: { id: string; name: string };
   puedeAsignar: boolean;
-  resultado: ResultadoAccion<unknown> | null;
+  /** El problema vigente de un campo, ya apagado si el usuario lo corrigió. */
+  problema: (campo: string) => string | undefined;
   alCambiarPipeline: (id: string) => void;
   alCambiarEtapa: (id: string) => void;
   alCambiarCierre: (iso: string) => void;
@@ -57,7 +56,7 @@ export function CamposComerciales({
   return (
     <>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <Campo etiqueta="Pipeline" htmlFor="pipelineId" problema={problemaDe(resultado, "pipelineId")}>
+        <Campo etiqueta="Pipeline" htmlFor="pipelineId" problema={problema("pipelineId")}>
           <Seleccion
             id="pipelineId"
             name="pipelineId"
@@ -76,7 +75,7 @@ export function CamposComerciales({
           etiqueta="Valor estimado"
           htmlFor="estimatedAmount"
           anotacion="se recalcula al cotizar"
-          problema={problemaDe(resultado, "estimatedAmount")}
+          problema={problema("estimatedAmount")}
         >
           <Entrada
             id="estimatedAmount"
@@ -84,7 +83,7 @@ export function CamposComerciales({
             inputMode="decimal"
             placeholder="Monto sin símbolo"
             className="[font-variant-numeric:tabular-nums]"
-            problema={problemaDe(resultado, "estimatedAmount")}
+            problema={problema("estimatedAmount")}
           />
         </Campo>
       </div>
@@ -106,7 +105,7 @@ export function CamposComerciales({
           etiqueta="Cierre estimado"
           htmlFor="expectedCloseDate"
           anotacion={cierre ? etiquetaDeTrimestre(cierre) : null}
-          problema={problemaDe(resultado, "expectedCloseDate")}
+          problema={problema("expectedCloseDate")}
         >
           <Entrada
             id="expectedCloseDate"
@@ -114,7 +113,7 @@ export function CamposComerciales({
             type="date"
             value={cierre}
             onChange={(e) => alCambiarCierre(e.target.value)}
-            problema={problemaDe(resultado, "expectedCloseDate")}
+            problema={problema("expectedCloseDate")}
           />
         </Campo>
 
@@ -144,7 +143,7 @@ export function CamposComerciales({
         <Campo
           etiqueta="Propietario"
           htmlFor="ownerId"
-          problema={problemaDe(resultado, "ownerId")}
+          problema={problema("ownerId")}
           ayuda={puedeAsignar ? undefined : "Las oportunidades que das de alta son tuyas."}
         >
           <Seleccion

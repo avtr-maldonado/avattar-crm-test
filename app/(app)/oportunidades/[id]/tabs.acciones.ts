@@ -108,6 +108,8 @@ const esquemaHito = z.object({
   description: z.string().trim().min(3, "Di qué se factura en este hito."),
   dueDate: z.string().min(1, "Pon la fecha de facturación."),
   amount: importe,
+  // El conmutador de la captura. La conversión a monto es del dominio (INV-03).
+  modo: z.enum(["monto", "porcentaje"]).default("monto"),
 });
 
 export async function guardarHitoAccion(
@@ -126,6 +128,7 @@ export async function guardarHitoAccion(
     description: d.description,
     dueDate: new Date(`${d.dueDate}T12:00:00`),
     amount: d.amount,
+    modo: d.modo,
   });
   if (!r.ok) return r;
 

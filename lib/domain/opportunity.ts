@@ -4,7 +4,11 @@ import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { ETIQUETA_ESTATUS, iniciales } from "@/lib/etiquetas";
-import { contextoDeCompuerta, type DetalleOportunidad } from "@/lib/scope/opportunityDetail";
+import {
+  contextoDeCompuerta,
+  cotizacionConLineas,
+  type DetalleOportunidad,
+} from "@/lib/scope/opportunityDetail";
 import { evaluateGate, type GateContext, type GateFailure, type GateResult } from "./stageGate";
 import { nextFolio } from "./folio";
 
@@ -72,7 +76,7 @@ export function contextoDeCompuertaNueva(input: {
     tienePersonaConRol: input.tienePersonaConRol,
     tienePropuestaCargada: false,
     tieneContratoOrdenCompra: false,
-    tieneCotizacionCongelada: false,
+    tieneCotizacion: false,
     cantidadHitos: 0,
     diferenciaHitos: null,
     meddicScore: 0,
@@ -494,10 +498,10 @@ export async function editarOportunidad(
   if (cambios.businessType !== undefined) datos.businessType = cambios.businessType;
 
   if (cambios.estimatedAmount !== undefined) {
-    // INV-06 · una cotización congelada es inmutable, y `amount` es su espejo.
-    // Con cotización, el estimado deja de mandar sobre el importe vigente.
+    // Con cotización con líneas, `amount` es su espejo y el estimado deja de
+    // mandar sobre el importe vigente (decisiones §21).
     datos.estimatedAmount = cambios.estimatedAmount;
-    if (!detalle.quotes[0]) datos.amount = cambios.estimatedAmount;
+    if (!cotizacionConLineas(detalle)) datos.amount = cambios.estimatedAmount;
   }
 
   if (cambios.forecastCategory !== undefined) {
@@ -545,11 +549,18 @@ export async function editarOportunidad(
 
   if (Object.keys(datos).length === 0) return ok(null);
 
-  // El cambio de propietario SÍ está en INV-09, así que va con su bitácora en
-  // la misma transacción. El resto de la edición no lo está.
-  if (reasigna) {
-    await auditedTransaction(async (tx, audit) => {
-      await tx.opportunity.update({ where: { id: detalle.id }, data: datos });
+  // Mover el cierre es lo que más se edita y lo que más explica, meses
+  // después, por qué un trimestre no cerró como se prometió. Sin rastro nadie
+  // sabe cuántas veces se corrió (decisiones §21).
+  const cambiaCierre =
+    cambios.expectedCloseDate !== undefined &&
+    cambios.expectedCloseDate.getTime() !== detalle.expectedCloseDate.getTime();
+
+  // El cambio de propietario SÍ está en INV-09; el cierre entró con la
+  // bitácora. Los dos van en la misma transacción que el cambio.
+  await auditedTransaction(async (tx, audit) => {
+    await tx.opportunity.update({ where: { id: detalle.id }, data: datos });
+    if (reasigna) {
       await audit({
         entity: "Opportunity",
         entityId: detalle.id,
@@ -558,10 +569,18 @@ export async function editarOportunidad(
         before: { ownerId: detalle.owner.id },
         after: { ownerId: cambios.ownerId! },
       });
-    });
-  } else {
-    await prisma.opportunity.update({ where: { id: detalle.id }, data: datos });
-  }
+    }
+    if (cambiaCierre) {
+      await audit({
+        entity: "Opportunity",
+        entityId: detalle.id,
+        action: "CAMBIAR_CIERRE_ESTIMADO",
+        byUserId: session.userId,
+        before: { expectedCloseDate: detalle.expectedCloseDate.toISOString() },
+        after: { expectedCloseDate: cambios.expectedCloseDate!.toISOString() },
+      });
+    }
+  });
 
   return ok(null);
 }

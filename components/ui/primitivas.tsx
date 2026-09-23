@@ -85,6 +85,7 @@ export function Boton({
   name,
   value,
   form,
+  title,
 }: {
   children: React.ReactNode;
   variante?: "primario" | "secundario" | "fantasma" | "peligro";
@@ -102,6 +103,8 @@ export function Boton({
   value?: string;
   /** Para enviar un formulario que está fuera del botón, como el pie de un modal. */
   form?: string;
+  /** Tooltip nativo: lo que el botón abre o hace, cuando la etiqueta sola no lo dice todo. */
+  title?: string;
 }) {
   const estilo = clsx(
     "inline-flex items-center justify-center gap-2 rounded-sm px-4 py-2 text-sm font-semibold",
@@ -118,7 +121,7 @@ export function Boton({
 
   if (href) {
     return (
-      <Link href={href} className={estilo}>
+      <Link href={href} className={estilo} title={title}>
         {children}
       </Link>
     );
@@ -132,6 +135,7 @@ export function Boton({
       name={name}
       value={value}
       form={form}
+      title={title}
     >
       {children}
     </button>

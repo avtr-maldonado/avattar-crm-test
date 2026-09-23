@@ -60,7 +60,13 @@ export type AuditAction =
   // Objetivos: la cuota es contra lo que se mide a una persona y de lo que
   // puede depender su variable. Cambiarla a mitad del año sin rastro sería la
   // clase de cosa que INV-09 existe para impedir.
-  | "FIJAR_OBJETIVO";
+  | "FIJAR_OBJETIVO"
+  // Bitácora de la oportunidad (decisiones §21): la cotización ya no se
+  // versiona, así que cada cambio de línea deja aquí el neto antes y después;
+  // y el cierre estimado se anota porque explica, meses después, por qué un
+  // trimestre no cerró como se prometió.
+  | "EDITAR_COTIZACION"
+  | "CAMBIAR_CIERRE_ESTIMADO";
 
 export type AuditEntry = {
   /** El modelo, en singular y como lo llama Prisma: "Opportunity", "Quote". */

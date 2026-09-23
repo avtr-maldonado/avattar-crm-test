@@ -1,11 +1,17 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useActionState, useEffect, useReducer, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ResultadoAccion } from "@/lib/acciones";
-import { problemaDe } from "@/lib/acciones";
 import { Boton } from "@/components/ui/primitivas";
-import { AvisosDeAccion, Campo, Entrada, Panel } from "@/components/ui/formulario";
+import {
+  AvisosDeAccion,
+  Campo,
+  Entrada,
+  Panel,
+  useEnvioQueConserva,
+  useProblemas,
+} from "@/components/ui/formulario";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import type { Eleccion, Sugerencia } from "@/components/ui/Autocompletado";
 import { CamposDeContacto } from "./CamposDeContacto";
@@ -49,7 +55,7 @@ export function NuevaOportunidad({
   usuarioActual,
   puedeAsignar,
   buscarOrganizaciones,
-  buscarPersonas,
+  cargarPersonas,
   accion,
 }: {
   pipelines: PipelineElegible[];
@@ -59,7 +65,7 @@ export function NuevaOportunidad({
   usuarioActual: { id: string; name: string };
   puedeAsignar: boolean;
   buscarOrganizaciones: (texto: string) => Promise<Sugerencia[]>;
-  buscarPersonas: (organizationId: string, texto: string) => Promise<Sugerencia[]>;
+  cargarPersonas: (organizationId: string) => Promise<Sugerencia[]>;
   accion: (previo: Resultado | null, form: FormData) => Promise<Resultado>;
 }) {
   const router = useRouter();
@@ -67,6 +73,10 @@ export function NuevaOportunidad({
   const [resultado, enviar, enviando] = useActionState(accion, null);
   const [estado, despachar] = useReducer(reducir, ESTADO_INICIAL);
   const yaAtendido = useRef<Resultado | null>(null);
+
+  const problemas = useProblemas(resultado);
+  const alEnviar = useEnvioQueConserva(enviar);
+  const [cargandoContactos, iniciarCarga] = useTransition();
 
   const [pipelineId, setPipelineId] = useState(() => pipelines[0]?.id ?? "");
   const [stageId, setStageId] = useState(() => primeraEtapaDe(pipelines[0]));
@@ -88,13 +98,23 @@ export function NuevaOportunidad({
     resultado.motivo === "COMPUERTA" &&
     etapaElegida?.gateMode === "ADVERTENCIA";
 
-  const buscarPersonasDeEsta = useCallback(
-    async (texto: string) =>
-      estado.organizacion.tipo === "EXISTENTE"
-        ? buscarPersonas(estado.organizacion.id, texto)
-        : [],
-    [estado.organizacion, buscarPersonas],
-  );
+  /**
+   * Elegir cuenta trae sus contactos para el desplegable de persona principal.
+   * La respuesta viaja etiquetada con la cuenta que la pidió y el reductor la
+   * descarta si ya se eligió otra: quien cambia de empresa antes de que llegue
+   * no ve los contactos de la anterior.
+   */
+  function elegirOrganizacion(eleccion: Eleccion) {
+    despachar({ tipo: "ELEGIR_ORGANIZACION", eleccion });
+    problemas.corregir("organizacionNombre");
+    if (eleccion.tipo !== "EXISTENTE") return;
+
+    const de = eleccion.id;
+    iniciarCarga(async () => {
+      const lista = await cargarPersonas(de);
+      despachar({ tipo: "RECIBIR_CONTACTOS", de, lista });
+    });
+  }
 
   function cambiarPipeline(id: string) {
     setPipelineId(id);
@@ -137,6 +157,9 @@ export function NuevaOportunidad({
   function limpiar() {
     despachar({ tipo: "LIMPIAR" });
     setCierre("");
+    setPipelineId(pipelines[0]?.id ?? "");
+    setStageId(primeraEtapaDe(pipelines[0]));
+    problemas.reiniciar();
     setAbierto(false);
   }
 
@@ -198,8 +221,18 @@ export function NuevaOportunidad({
           </>
         }
       >
-        <form id="alta-oportunidad" action={enviar} className="flex flex-col gap-5">
-          {/* Lo que el autocompletado resolvió, para que viaje en el FormData. */}
+        {/* Se envía desde onSubmit y no con action=: ver useEnvioQueConserva. La key
+            cambia al cancelar y remonta el formulario: así vuelven a su valor por
+            omisión los campos no controlados —importe, tipo, cargo— que un envío
+            rechazado, en cambio, conserva. */}
+        <form
+          key={estado.generacion}
+          id="alta-oportunidad"
+          onSubmit={alEnviar}
+          onChange={problemas.alCambiar}
+          className="flex flex-col gap-5"
+        >
+          {/* Lo que el autocompletado y el desplegable resolvieron, para que viaje en el FormData. */}
           <input
             type="hidden"
             name="organizationId"
@@ -211,22 +244,16 @@ export function NuevaOportunidad({
             name="primaryPersonId"
             value={estado.persona.tipo === "EXISTENTE" ? estado.persona.id : ""}
           />
-          <input
-            type="hidden"
-            name="personaNombre"
-            value={estado.persona.tipo === "NUEVA" ? estado.persona.nombre : ""}
-          />
 
           <CamposDeContacto
             organizacion={estado.organizacion}
             persona={estado.persona}
             rolesDeComite={rolesDeComite}
-            resultado={resultado}
+            contactos={estado.contactos}
+            cargandoContactos={cargandoContactos}
+            problema={problemas.problema}
             buscarOrganizaciones={buscarOrganizaciones}
-            buscarPersonas={buscarPersonasDeEsta}
-            alElegirOrganizacion={(eleccion: Eleccion) =>
-              despachar({ tipo: "ELEGIR_ORGANIZACION", eleccion })
-            }
+            alElegirOrganizacion={elegirOrganizacion}
             alElegirPersona={(eleccion: Eleccion) => despachar({ tipo: "ELEGIR_PERSONA", eleccion })}
           />
 
@@ -234,7 +261,7 @@ export function NuevaOportunidad({
             etiqueta="Nombre de la oportunidad"
             htmlFor="name"
             anotacion={nombreEsSugerido(estado) && prefijo ? "sugerido" : null}
-            problema={problemaDe(resultado, "name")}
+            problema={problemas.problema("name")}
             ayuda={
               prefijo
                 ? "Completa con el servicio: «Servicios administrados», «Migración ERP»."
@@ -247,7 +274,7 @@ export function NuevaOportunidad({
               value={estado.nombre}
               onChange={(e) => despachar({ tipo: "ESCRIBIR_NOMBRE", nombre: e.target.value })}
               placeholder="Servicio o proyecto que se va a vender"
-              problema={problemaDe(resultado, "name")}
+              problema={problemas.problema("name")}
             />
           </Campo>
 
@@ -261,7 +288,7 @@ export function NuevaOportunidad({
             propietarios={propietarios}
             usuarioActual={usuarioActual}
             puedeAsignar={puedeAsignar}
-            resultado={resultado}
+            problema={problemas.problema}
             alCambiarPipeline={cambiarPipeline}
             alCambiarEtapa={setStageId}
             alCambiarCierre={setCierre}

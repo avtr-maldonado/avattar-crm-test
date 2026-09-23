@@ -31,12 +31,18 @@ export type GateContext = {
   tienePersonaConRol: boolean;
   tienePropuestaCargada: boolean;
   tieneContratoOrdenCompra: boolean;
-  tieneCotizacionCongelada: boolean;
+  /**
+   * Hay cotización con al menos una línea. El requisito se sigue llamando
+   * `COTIZACION_CONGELADA` en los datos de las etapas, pero desde que la
+   * cotización es una sola y editable (decisiones §21) lo que exige es que
+   * exista con cifras, no que esté sellada.
+   */
+  tieneCotizacion: boolean;
   cantidadHitos: number;
   /**
-   * Neto de la cotización congelada menos la suma de hitos. Positivo = falta
-   * por asignar; negativo = sobra. `null` cuando todavía no hay cotización
-   * congelada contra la cual cuadrar.
+   * Neto de la cotización menos la suma de hitos. Positivo = falta por
+   * asignar; negativo = sobra. `null` cuando todavía no hay cotización con
+   * líneas contra la cual cuadrar.
    */
   diferenciaHitos: Money | null;
   meddicScore: number;
@@ -87,9 +93,9 @@ function evaluarUno(requirement: GateRequirement, ctx: GateContext): string | nu
         : "Falta cargar el contrato o la orden de compra en la pestaña de Documentos.";
 
     case "COTIZACION_CONGELADA":
-      return ctx.tieneCotizacionCongelada
+      return ctx.tieneCotizacion
         ? null
-        : "Falta congelar la cotización. Mientras sea borrador, el importe puede cambiar.";
+        : "Falta la cotización con al menos una línea: sin ella no hay importe que ofrecer.";
 
     case "HITOS_CAPTURADOS":
       return ctx.cantidadHitos > 0
@@ -126,7 +132,7 @@ function evaluarUno(requirement: GateRequirement, ctx: GateContext): string | nu
  */
 function evaluarCuadreDeHitos(ctx: GateContext): string | null {
   if (ctx.diferenciaHitos === null) {
-    return "Falta congelar la cotización para poder cuadrar los hitos contra su neto.";
+    return "Falta la cotización con líneas para poder cuadrar los hitos contra su neto.";
   }
   if (ctx.diferenciaHitos.isZero()) return null;
 

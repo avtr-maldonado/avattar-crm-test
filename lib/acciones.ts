@@ -77,3 +77,40 @@ export function problemaDe(
   if (!resultado || resultado.ok) return undefined;
   return resultado.problemas.find((p) => p.campo === campo)?.mensaje;
 }
+
+/**
+ * Qué campos corrigió el usuario **desde que llegó** un resultado.
+ *
+ * El problema de un campo se pinta hasta que se toca ese campo: seguir
+ * mostrándolo mientras se corrige es regañar por algo que ya se está
+ * atendiendo. Pero la corrección vale solo para *ese* resultado. Si se reenvía
+ * y el servidor vuelve a rechazar el mismo campo, el rechazo es nuevo y tiene
+ * que verse; de otro modo el usuario cree que ya pasó. Por eso las correcciones
+ * llevan `de`: el resultado al que pertenecen. Otro resultado, otra cuenta.
+ */
+export type Correcciones = {
+  de: ResultadoAccion<unknown> | null;
+  campos: ReadonlySet<string>;
+};
+
+export const SIN_CORRECCIONES: Correcciones = { de: null, campos: new Set() };
+
+export function corregir(
+  actual: Correcciones,
+  resultado: ResultadoAccion<unknown> | null,
+  campo: string,
+): Correcciones {
+  const campos = new Set(actual.de === resultado ? actual.campos : []);
+  campos.add(campo);
+  return { de: resultado, campos };
+}
+
+/** Como `problemaDe`, salvo que el campo ya se haya corregido para ese resultado. */
+export function problemaPendiente(
+  resultado: ResultadoAccion<unknown> | null,
+  correcciones: Correcciones,
+  campo: string,
+): string | undefined {
+  if (correcciones.de === resultado && correcciones.campos.has(campo)) return undefined;
+  return problemaDe(resultado, campo);
+}

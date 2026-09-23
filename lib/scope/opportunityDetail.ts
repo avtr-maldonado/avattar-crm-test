@@ -120,8 +120,10 @@ export async function getOpportunityDetail(session: Session, id: string) {
 
       // Insumos de las compuertas. Se traen contados o mínimos: la pantalla no
       // necesita el detalle de la cotización en E1, solo saber si existe.
+      // La cotización vigente: la de mayor versión, sin importar su estatus. Es
+      // una sola y editable (decisiones §21); las versiones viejas de antes de
+      // ese cambio quedan en la base como historia sin uso.
       quotes: {
-        where: { status: "CONGELADA" },
         select: {
           id: true,
           version: true,
@@ -129,7 +131,7 @@ export async function getOpportunityDetail(session: Session, id: string) {
           discountRate: true,
           ...(verMargen ? { grossMargin: true } : {}),
           ...(verCosto ? { grossProfit: true, totalCost: true } : {}),
-          frozenAt: true,
+          _count: { select: { lines: true } },
         },
         orderBy: { version: "desc" },
         take: 1,
@@ -189,12 +191,12 @@ export function contextoDeCompuerta(
   o: DetalleOportunidad,
   politica: { meddicMinToClosing: number },
 ): GateContext {
-  const congelada = o.quotes[0];
+  const cotizacion = cotizacionConLineas(o);
 
-  // RN-06 · la diferencia se mide contra el neto de la cotización CONGELADA.
-  // Sin ella no hay contra qué cuadrar, y eso es distinto de «cuadra en cero».
-  const diferenciaHitos: Money | null = congelada
-    ? congelada.netSubtotal.minus(sum(o.milestones.map((h) => h.amount)))
+  // RN-06 · la diferencia se mide contra el neto de la cotización. Sin líneas
+  // no hay contra qué cuadrar, y eso es distinto de «cuadra en cero».
+  const diferenciaHitos: Money | null = cotizacion
+    ? cotizacion.netSubtotal.minus(sum(o.milestones.map((h) => h.amount)))
     : null;
 
   return {
@@ -203,7 +205,7 @@ export function contextoDeCompuerta(
       d.type.name.toLowerCase().includes("propuesta"),
     ),
     tieneContratoOrdenCompra: o.documents.some((d) => d.type.isContract),
-    tieneCotizacionCongelada: congelada != null,
+    tieneCotizacion: cotizacion != null,
     cantidadHitos: o.milestones.length,
     diferenciaHitos,
     meddicScore: o.meddicScore ?? 0,
@@ -215,7 +217,17 @@ export function contextoDeCompuerta(
   };
 }
 
-/** El neto vigente: el de la cotización congelada, o el importe estimado. */
+/**
+ * La cotización, solo si tiene líneas. Una cotización vacía no dice nada del
+ * importe: para las compuertas, los hitos y el neto vigente es como si no
+ * existiera.
+ */
+export function cotizacionConLineas(o: DetalleOportunidad) {
+  const q = o.quotes[0];
+  return q && q._count.lines > 0 ? q : null;
+}
+
+/** El neto vigente: el de la cotización con líneas, o el importe estimado. */
 export function netoVigente(o: DetalleOportunidad): Money {
-  return o.quotes[0]?.netSubtotal ?? money(o.amount.toString());
+  return cotizacionConLineas(o)?.netSubtotal ?? money(o.amount.toString());
 }
