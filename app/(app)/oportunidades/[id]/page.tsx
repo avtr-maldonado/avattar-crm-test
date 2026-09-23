@@ -743,6 +743,11 @@ async function TabCotizacion({
       verMargen={verMargen}
       puedeEditar={puedeEditar}
       pisoDeLinea={formatPercent(toClient(politica.lineMarginFloor), 0)}
+      // Para la vista previa al editar: la tasa copiada (RN-24) y el piso por línea.
+      enVivo={{
+        taxRate: toClient(cotizacion.taxRate),
+        pisoDeLinea: toClient(politica.lineMarginFloor),
+      }}
       acciones={{
         guardarLinea: guardarLineaAccion,
         guardarCotizacion: guardarCotizacionAccion,

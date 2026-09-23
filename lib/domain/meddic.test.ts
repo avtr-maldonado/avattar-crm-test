@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DESCRIPCION_COMPONENTE,
   puedeCalificarDirecto,
+  faltaEvidencia,
   PESOS_POR_OMISION,
   componentesFaltantesParaGanar,
   computeMeddicScore,
@@ -69,21 +70,23 @@ describe("computeMeddicScore · §7.2", () => {
   });
 });
 
-describe("validarComponente · RN-30", () => {
-  it("PARCIAL exige evidencia no vacía (AC-13)", () => {
+describe("validarComponente · RN-30 enmendada (decisiones §24)", () => {
+  it("PARCIAL sin evidencia pasa: la evidencia se pide, no se exige", () => {
+    // El negocio quitó el candado el 23-sep-2026: calificar sin evidencia se
+    // permite y se señala en la tarjeta (`faltaEvidencia`), no se bloquea.
     expect(validarComponente({ component: "METRICAS", status: "PARCIAL", evidence: "" }))
-      .toMatchObject({ ok: false });
+      .toMatchObject({ ok: true });
     expect(validarComponente({ component: "METRICAS", status: "PARCIAL", evidence: "   " }))
-      .toMatchObject({ ok: false });
+      .toMatchObject({ ok: true });
     expect(
       validarComponente({ component: "METRICAS", status: "PARCIAL", evidence: "Ahorro de 2 M anuales" }),
     ).toMatchObject({ ok: true });
   });
 
-  it("CONFIRMADO también exige evidencia", () => {
+  it("CONFIRMADO sin evidencia también pasa", () => {
     expect(
       validarComponente({ component: "CRITERIOS_DECISION", status: "CONFIRMADO", evidence: null }),
-    ).toMatchObject({ ok: false });
+    ).toMatchObject({ ok: true });
   });
 
   it("NO_EVALUADO y AUSENTE no exigen evidencia", () => {
@@ -210,8 +213,8 @@ describe("puedeCalificarDirecto · la calificación rápida respeta RN-30", () =
     expect(puedeCalificarDirecto({ component: "METRICAS", status: "AUSENTE", evidence: null, personId: null })).toBe(true);
   });
 
-  it("Parcial sin evidencia no: hay que abrir el panel y escribirla", () => {
-    expect(puedeCalificarDirecto({ component: "METRICAS", status: "PARCIAL", evidence: "", personId: null })).toBe(false);
+  it("Parcial sin evidencia también se marca directo; la tarjeta lo señala", () => {
+    expect(puedeCalificarDirecto({ component: "METRICAS", status: "PARCIAL", evidence: "", personId: null })).toBe(true);
     expect(puedeCalificarDirecto({ component: "METRICAS", status: "PARCIAL", evidence: "Lo dijo el CIO", personId: null })).toBe(true);
   });
 
@@ -222,5 +225,21 @@ describe("puedeCalificarDirecto · la calificación rápida respeta RN-30", () =
 
   it("un componente o estado que no existen no se califican", () => {
     expect(puedeCalificarDirecto({ component: "OTRA_COSA", status: "AUSENTE", evidence: null, personId: null })).toBe(false);
+  });
+});
+
+describe("faltaEvidencia · lo que la tarjeta señala en vez de bloquear", () => {
+  it("parcial o confirmado sin evidencia: falta", () => {
+    expect(faltaEvidencia({ status: "PARCIAL", evidence: null })).toBe(true);
+    expect(faltaEvidencia({ status: "CONFIRMADO", evidence: "   " })).toBe(true);
+  });
+
+  it("con evidencia no falta nada", () => {
+    expect(faltaEvidencia({ status: "PARCIAL", evidence: "El CIO lo dijo el 5 de septiembre." })).toBe(false);
+  });
+
+  it("no evaluado y ausente no piden evidencia: no hay nada que señalar", () => {
+    expect(faltaEvidencia({ status: "NO_EVALUADO", evidence: null })).toBe(false);
+    expect(faltaEvidencia({ status: "AUSENTE", evidence: "" })).toBe(false);
   });
 });

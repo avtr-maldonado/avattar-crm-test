@@ -34,3 +34,24 @@ export function weightedTotal(
 export function openTotal(oportunidades: { amount: Money }[]): Money {
   return sum(oportunidades.map((o) => o.amount));
 }
+
+/**
+ * Lo ganado en un periodo, para el indicador «Ganado» de P-01.
+ *
+ * Se mide con `actualCloseDate`, nunca con el estimado: el avance es lo que ya
+ * pasó (§10.2). Una `GANADA` sin fecha de cierre real es un dato roto y no
+ * cuenta, en vez de colarse como si hubiera cerrado hoy. Recibe el conjunto ya
+ * acotado por `lib/scope` y por los filtros: para un vendedor suma solo lo suyo.
+ */
+export function wonInPeriod<T extends { status: string; actualCloseDate: Date | null }>(
+  oportunidades: readonly T[],
+  periodo: { from: Date | null; to: Date },
+): T[] {
+  return oportunidades.filter(
+    (o) =>
+      o.status === "GANADA" &&
+      o.actualCloseDate !== null &&
+      (periodo.from === null || o.actualCloseDate >= periodo.from) &&
+      o.actualCloseDate <= periodo.to,
+  );
+}

@@ -8,10 +8,10 @@ import { computeMeddicScore, validarComponente, type MeddicWeights } from "./med
 /**
  * Guardar un componente MEDDIC · §7 y `AC-16`.
  *
- * Las reglas ya viven en `meddic.ts`, que es puro y está probado: evidencia
- * obligatoria en `PARCIAL` y `CONFIRMADO` (`RN-30`), y persona real del comité
- * para confirmar decisor económico o campeón (§2.1). Aquí solo está lo que toca
- * la base.
+ * Las reglas ya viven en `meddic.ts`, que es puro y está probado: persona real
+ * del comité para confirmar decisor económico o campeón (§2.1); la evidencia se
+ * señala, no se exige (`RN-30` enmendada, decisiones §24). Aquí solo está lo
+ * que toca la base.
  *
  * ## El puntaje se recalcula en la misma transacción
  *

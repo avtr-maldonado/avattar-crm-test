@@ -3,12 +3,11 @@ import { listOpportunities, listOrganizations } from "@/lib/scope";
 import { listPipelines, pipelinePorOmision } from "@/lib/scope/pipelines";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
 import { historiasDeEtapas } from "@/lib/scope/funnel";
-import { avanceDeObjetivos } from "@/lib/scope/objetivos";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
 import { can } from "@/lib/auth/permissions";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { formatPercent, formatUSD, sum, toClient, type Money } from "@/lib/money";
-import { openTotal, weightedAmount, weightedTotal } from "@/lib/domain/pipeline";
+import { openTotal, weightedAmount, weightedTotal, wonInPeriod } from "@/lib/domain/pipeline";
 import { explainRiskFlags } from "@/lib/domain/riskFlags";
 import { buildFunnel } from "@/lib/domain/funnel";
 import {
@@ -16,7 +15,6 @@ import {
   type ColumnaDeForecast,
   type ResultadoDeForecast,
 } from "@/lib/domain/forecast";
-import { computeCoverage, computeCumulativeTrack } from "@/lib/domain/objectives";
 import {
   ETIQUETA_CAMPO,
   ETIQUETA_PREAJUSTE,
@@ -145,7 +143,6 @@ export default async function PipelinePage({
     cuentas,
     oportunidades,
     historias,
-    objetivos,
   ] = await Promise.all([
     listPipelines(session),
     getCommercialPolicy(paisActivo),
@@ -178,13 +175,6 @@ export default async function PipelinePage({
     // recortan los filtros del usuario: «¿el proceso mueve?» es una pregunta
     // sobre el proceso, no sobre el subconjunto que se esté mirando.
     historiasDeEtapas(session, { desde: desdeLaVentana, where: deLaOficina }),
-    paisPromesa.then((p) =>
-      avanceDeObjetivos(session, {
-        fiscalYear: trimestreDe(ahora, p.fiscalYearStartMonth).fiscalYear,
-        pais: paisActivo,
-        fiscalYearStartMonth: p.fiscalYearStartMonth,
-      }),
-    ),
   ]);
 
   /**
@@ -244,10 +234,9 @@ export default async function PipelinePage({
   const abiertas = visibles.filter((o) => o.status === "ABIERTA");
   const enRiesgo = visibles.filter((o) => o.banderas.length > 0);
 
-  // §10.2 · el cierre del trimestre mira `expectedCloseDate`; el avance de
-  // cuota mira `actualCloseDate`. Mezclarlas produce coberturas absurdas al
-  // final del trimestre.
-  const { quarter } = trimestreDe(ahora, pais.fiscalYearStartMonth);
+  // §10.2 · el cierre del trimestre mira `expectedCloseDate`; lo ganado mira
+  // `actualCloseDate`. Mezclarlas produce cifras absurdas al final del
+  // trimestre.
   const trimestre = resolvePeriod("ESTE_TRIMESTRE", pais.fiscalYearStartMonth, ahora)!;
   const cierraEnTrimestre = abiertas.filter(
     (o) =>
@@ -255,21 +244,12 @@ export default async function PipelinePage({
       o.expectedCloseDate <= trimestre.to,
   );
 
-  /**
-   * Cobertura · §10.2 · pipeline del trimestre ÷ brecha contra la cuota.
-   *
-   * La brecha se suma de los renglones que la sesión alcanza, nunca de una
-   * consulta aparte (§10.3): para un vendedor es su propia brecha, no la de la
-   * oficina. Y es la brecha **acumulada**, que es la que el negocio mide
-   * (`decisiones-pendientes.md` §17).
-   */
-  const brecha = sum(
-    objetivos.map(
-      (r) => computeCumulativeTrack(r.cuotaVenta, r.logradoVenta)[quarter - 1]!.faltante,
-    ),
-  );
-  const cobertura = computeCoverage(brecha, openTotal(cierraEnTrimestre));
-  const hayCuota = objetivos.some((r) => r.tieneCuota);
+  // Ganado · lo cerrado como GANADA en el año fiscal en curso, sobre el mismo
+  // conjunto acotado que los demás indicadores (§2.3): para un vendedor, lo
+  // suyo. Año y no trimestre porque la cuota se mide acumulada (decisiones §17).
+  const anioFiscal = resolvePeriod("ESTE_ANIO", pais.fiscalYearStartMonth, ahora)!;
+  const ganadas = wonInPeriod(visibles, { from: anioFiscal.from ?? null, to: anioFiscal.to });
+  const { fiscalYear } = trimestreDe(ahora, pais.fiscalYearStartMonth);
 
   const tarjetas = visibles.map((o) => aTarjeta(o, politica));
   const columnas = columnasDelTablero(pipeline?.stages ?? [], visibles, tarjetas);
@@ -408,7 +388,7 @@ export default async function PipelinePage({
             abiertas={abiertas}
             cierraEnTrimestre={cierraEnTrimestre}
             enRiesgo={enRiesgo}
-            cobertura={{ veces: cobertura, brecha, hayCuota }}
+            ganadas={{ lista: ganadas, anioFiscal: fiscalYear }}
           />
         </div>
 
@@ -615,23 +595,22 @@ function catalogosDeFiltro(
  * Se calculan sobre el conjunto **ya acotado** que recibe: para un vendedor son
  * los suyos, nunca el total de la oficina ni por agregación (§2.3).
  *
- * «Cobertura» ocupa el lugar que tenía el piso de margen. El piso ya se ve
- * donde decide algo —en cada tarjeta, verde o coral—, mientras que cuántas
- * veces cubre el pipeline lo que falta de cuota no se veía en ningún otro lado.
- * Sin cuota fijada se dice eso, nunca un cero (§11).
+ * «Ganado» ocupa el lugar que tuvo «Cobertura» (pedido del negocio del
+ * 23-sep-2026): lo que ya cerró en el año fiscal, medido con el cierre real
+ * (§10.2). La cobertura contra la cuota sigue en P-08, que es donde se decide.
  */
 function Indicadores({
   abiertas,
   cierraEnTrimestre,
   enRiesgo,
-  cobertura,
+  ganadas,
 }: {
   abiertas: { amount: Money; stage: { probability: Money } }[];
   cierraEnTrimestre: { amount: Money }[];
   enRiesgo: { amount: Money }[];
-  cobertura: { veces: number | null; brecha: Money; hayCuota: boolean };
+  ganadas: { lista: { amount: Money }[]; anioFiscal: number };
 }) {
-  const { veces, brecha, hayCuota } = cobertura;
+  const n = ganadas.lista.length;
 
   return (
     <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
@@ -656,16 +635,10 @@ function Indicadores({
       />
       <StatTile
         denso
-        etiqueta="Cobertura"
-        valor={!hayCuota ? "—" : veces === null ? "Cubierta" : `${veces.toFixed(1)} ×`}
-        subtexto={
-          !hayCuota
-            ? "sin cuota fijada para el año"
-            : veces === null
-              ? "la cuota acumulada ya está cubierta"
-              : `sobre ${formatUSD(brecha)} de brecha`
-        }
-        tono={hayCuota && veces !== null && veces < 1 ? "peligro" : "exito"}
+        etiqueta="Ganado"
+        valor={formatUSD(openTotal(ganadas.lista))}
+        subtexto={`${n} ${n === 1 ? "ganada" : "ganadas"} · año fiscal ${ganadas.anioFiscal}`}
+        tono={n > 0 ? "exito" : "neutro"}
       />
       <StatTile
         denso

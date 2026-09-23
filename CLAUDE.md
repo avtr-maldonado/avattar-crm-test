@@ -135,12 +135,16 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos}
                     de la oportunidad, responsable; estadoDeActividad es su reductor puro) ·
                     DatoEditable (los cinco datos que se corrigen en la ficha sin abrir el panel) ·
                     Bitacora (línea de tiempo con filtros en la URL) · PanelMeddic (descripción por
-                    componente y calificación rápida que respeta RN-30) · CambioDeEtapa ·
+                    componente, calificación rápida; la evidencia se señala «Sin evidencia», no se exige →
+                    RN-30 enmendada, decisiones §24) · CambioDeEtapa ·
                     EditarOportunidad · PanelHitos (neto, asignado y por asignar a la vista; la suma no
                     supera el neto, el % se convierte en el servidor) · PanelDocumentos
                     cotizacion: TablaDeCotizacion (una sola; «Editar» abre las celdas de cantidad, precio,
-                    descuento y costo y «Guardar cambios» las manda en un viaje: una entrada en la bitácora por
-                    guardado, solo si algo cambió de valor; sin congelar ni versiones → INV-06 enmendado) ·
+                    descuento y costo, y agregar o quitar líneas solo vive ahí; «Guardar cambios» las manda en
+                    un viaje: una entrada en la bitácora por guardado, solo si algo cambió de valor; sin congelar
+                    ni versiones → INV-06 enmendado) · calculoEnVivo (la vista previa al teclear, con decimal.js
+                    —la misma librería que Prisma— y una prueba de paridad contra lib/domain/quote; sin VER_COSTO
+                    no anticipa margen) · estadoDeEdicion (reductor puro: modo, generación, borrador) ·
                     AbrirCotizacion
                     objetivos: PanelDeAvance · TiraDeTrimestres · TablaDeEquipo · FijarObjetivo
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
@@ -173,7 +177,9 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   conjunto: nunca ve el total de la oficina, ni por agregación.
 - **MEDDIC gatea, no pondera.** El ponderado sigue siendo `amount × stage.probability` (`RN-01`).
   El puntaje MEDDIC bloquea el avance a cierre (≥70), el marcado como ganada (≥80, y `E`, `I`, `C`
-  confirmados) y la categoría «Compromiso» (≥70). Mínimos configurables.
+  confirmados) y la categoría «Compromiso» (≥70). Mínimos configurables. **La evidencia ya no
+  bloquea** (RN-30 enmendada, decisiones §24): parcial o confirmado sin evidencia se guarda y la
+  tarjeta lo señala; la persona ligada para confirmar `E` y `C` sigue siendo obligatoria.
 - **Un rango de fechas siempre dice sobre qué campo aplica** (`CIERRE_ESTIMADO`, `CIERRE_REAL`,
   `CREACION`, `ULTIMA_ACTIVIDAD`). Sin eso, los reportes no se pueden reproducir.
 - **Avance de cuota con `actualCloseDate`; cobertura con `expectedCloseDate`.** Mezclarlas produce

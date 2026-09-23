@@ -135,7 +135,7 @@ calculan **solo sobre sus oportunidades** (§2.3).
 | Valor abierto | Suma de las abiertas visibles |
 | Ponderado | Importe × probabilidad de la etapa (`RN-01`). MEDDIC no lo altera |
 | Cierre del trimestre | Abiertas con **cierre estimado** dentro del trimestre fiscal en curso |
-| Cobertura | Pipeline del trimestre ÷ brecha acumulada contra la cuota (§10.2, §17). «—» sin cuota fijada, «Cubierta» sin brecha; coral por debajo de 1× |
+| Ganado | Suma y conteo de las **ganadas** con cierre real dentro del año fiscal en curso (§10.2: lo ganado se mide con `actualCloseDate`). Sobre el mismo conjunto acotado que las demás; verde cuando hay alguna. Sustituyó a «Cobertura» el 23-sep-2026; la cobertura contra la cuota sigue en Objetivos (F-31) |
 | En riesgo | Suma y conteo de las que traen alguna bandera (F-12) |
 
 ### F-09 · Filtrar el pipeline
@@ -249,14 +249,14 @@ costo y utilidad **solo llegan** a quien tiene `VER_COSTO`; el margen, a quien t
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-16.1 Abrir la cotización | Quien alcance la oportunidad | Pulsa «Abrir cotización» | Nace vacía con la tasa de impuesto del país **copiada** en ese momento (`RN-24`): un cambio de tasa no altera cotizaciones existentes. Abrirla otra vez devuelve la misma |
-| CU-16.2 Agregar una línea de catálogo | Ídem | Elige un producto; precio y costo de la lista vigente **llenan** los campos y se pueden corregir antes de guardar; pone cantidad y descuento | La línea sigue ligada a su producto. Se recalculan subtotal bruto, neto, impuesto, total, costo, utilidad y margen, y el neto y el margen se espejan en la oportunidad al momento |
+| CU-16.2 Agregar una línea de catálogo | Ídem | En modo edición pulsa «+ Agregar línea» (con la cotización vacía, «Agregar la primera línea»); elige un producto; precio y costo de la lista vigente **llenan** los campos y se pueden corregir antes de guardar; pone cantidad y descuento | La línea sigue ligada a su producto. Se recalculan subtotal bruto, neto, impuesto, total, costo, utilidad y margen, y el neto y el margen se espejan en la oportunidad al momento |
 | CU-16.2b Producto sin lista | Ídem | Elige un producto marcado «sin lista» | Precio y costo llegan vacíos y **se fijan para esta oportunidad**; los dos son obligatorios, como en el concepto libre. No hay piso de SKU (`RN-08`); las alertas de margen (`RN-05`) siguen. Sin `VER_COSTO` no se puede capturar el costo, y la línea no entra (decisiones §22) |
 | CU-16.3 Agregar un concepto libre | Ídem | Escribe descripción, unidad, precio y **costo** | El costo es obligatorio (`Q-07`): sin él el margen de la línea sería falso |
-| CU-16.4 Editar líneas | Ídem | Pulsa «Editar»; cambia cantidad, precio unitario, descuento o costo en las celdas que haga falta; pulsa «Guardar cambios» | Se guardan de una vez **solo los campos que cambiaron de valor**, se recalculan los totales y se espeja el neto. Si nada cambió, avisa «Sin cambios» y no anota nada. Mientras se edita, agregar y quitar líneas se ocultan. Antes, editar cantidad o descuento fallaba en silencio y parecía que «no actualizaba» |
+| CU-16.4 Editar líneas | Ídem | Pulsa «Editar»; cambia cantidad, precio unitario, descuento o costo en las celdas que haga falta; pulsa «Guardar cambios» | **Mientras teclea**, precio neto, importe, utilidad, margen y los totales se recalculan al momento con `decimal.js` —la misma aritmética que el servidor, probada en paridad—; nada se guarda hasta pulsar. Sin `VER_COSTO` el margen no se puede anticipar: se muestra el guardado, atenuado, «se recalcula al guardar». Al guardar se escriben de una vez **solo los campos que cambiaron de valor**, se recalculan los totales y se espeja el neto. Si nada cambió, avisa «Sin cambios» y no anota nada. Mientras se edita, agregar y quitar líneas se ocultan. Antes, editar cantidad o descuento fallaba en silencio y parecía que «no actualizaba» |
 | CU-16.5 Precio bajo el piso del SKU | Ídem | Deja el precio con descuento debajo del piso del producto (`RN-08`) | El servidor rechaza **el guardado completo** y lo avisa con las dos cifras; nada se escribe hasta corregir. El piso aplica al agregar y al editar |
 | CU-16.6 Costo sin permiso | Vendedor sin `VER_COSTO` | Intenta fijar o cambiar un costo | No se acepta (`INV-02`): probar costos hasta que el margen cuadre sería deducirlo. La columna ni siquiera se pinta |
 | CU-16.7 Línea bajo el piso de margen | Ídem | El margen de la línea queda bajo el piso de la política | La pantalla lo señala en la línea y en una franja. La solicitud de autorización que eso dispararía (P-10) no está construida |
-| CU-16.8 Quitar una línea | Ídem | Pulsa la ✕ | Se quita y se recalcula. Si era la última, la oportunidad vuelve a valer su **estimado** y su margen queda en blanco: una cotización vacía no dice nada |
+| CU-16.8 Quitar una línea | Ídem | En modo edición pulsa la ✕ | Se quita y se recalcula. Si era la última, la oportunidad vuelve a valer su **estimado** y su margen queda en blanco: una cotización vacía no dice nada |
 | CU-16.9 Lo que queda en la bitácora | — | Cada alta o baja de línea, y cada **guardado con cambios** | Un registro por operación con el neto antes y después y la lista de líneas y campos que cambiaron (`EDITAR_COTIZACION`), en la misma transacción (`INV-09`). Un guardado sin cambios no deja nada. Se lee en la pestaña Bitácora (F-37) |
 | CU-16.10 Compuertas e hitos | — | Una etapa exige `COTIZACION_CONGELADA`; los hitos se cuadran | El requisito conserva su nombre en los datos pero exige **cotización con al menos una línea**; los hitos cuadran contra su neto (`RN-06`) |
 
@@ -268,10 +268,10 @@ haber averiguado para marcarlo.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-17.1 Calificar sin entrar | Quien alcance la oportunidad | Pulsa uno de los cuatro estados en la fila del componente | «No evaluado» y «Ausente» se guardan al pulsar. «Parcial» y «Confirmado» también, **si ya hay evidencia** (y persona, cuando aplica). El puntaje se recalcula **en la misma transacción** con los pesos del pipeline (`Q-08`, `AC-16`) |
-| CU-17.2 Falta la evidencia o la persona | Ídem | Pulsa «Parcial» o «Confirmado» sin evidencia guardada | Se abre el panel con ese estado ya elegido y el foco en la evidencia. No se guarda nada hasta completarla (`RN-30`) |
+| CU-17.1 Calificar sin entrar | Quien alcance la oportunidad | Pulsa uno de los cuatro estados en la fila del componente | Los cuatro se guardan al pulsar. Solo confirmar al decisor económico o al campeón **sin persona ligada** abre el panel (§2.1). El puntaje se recalcula **en la misma transacción** con los pesos del pipeline (`Q-08`, `AC-16`) |
+| CU-17.2 Sin evidencia | Ídem | Marca «Parcial» o «Confirmado» sin haber escrito evidencia | Se guarda igual (`RN-30` **enmendada**, decisiones §24). La tarjeta lleva la marca ámbar «⚠ Sin evidencia» junto al estado y el encabezado cuenta «N calificados sin evidencia»; el botón «Evidencia» no cambia. La evidencia se pide, no se exige |
 | CU-17.3 Evidencia y persona | Ídem | Pulsa «Evidencia» | El panel completo: estado, evidencia y, para decisor económico y campeón, la persona del comité (§2.1) |
-| CU-17.4 Parcial o confirmado sin evidencia | Ídem | Intenta guardar con la evidencia vacía | Se rechaza: «… necesita evidencia. Escribe en qué te basas» (`RN-30`) |
+| CU-17.4 Documentar después | Ídem | Pulsa «Evidencia» y escribe en qué se apoya | La marca desaparece. Antes del 23-sep-2026 guardar sin evidencia se rechazaba (`AC-13`); hoy se permite y se señala |
 | CU-17.5 Decisor o campeón confirmado sin persona | Ídem | Confirma sin ligar a alguien del comité | Se rechaza: hay que elegir una persona real del comité de compra (§2.1) |
 | CU-17.6 Lo que el puntaje gatea | — | Según la política comercial del país | Entrar a la etapa de cierre pide un mínimo; marcar ganada pide otro mayor y decisor, dolor y campeón confirmados; la categoría «Compromiso» pide un mínimo (`RN-28`, `RN-29`). Los mínimos son configurables (`INV-05`) |
 
