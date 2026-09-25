@@ -1,4 +1,5 @@
 import type {
+  BusinessType,
   CountryCode,
   ForecastCategory,
   OpportunityStatus,
@@ -42,6 +43,13 @@ export const ETIQUETA_ESTATUS: Record<OpportunityStatus, string> = {
  * RN-15 · la categoría de pronóstico es el juicio del vendedor, independiente
  * de la etapa. «Omitida» es dinero que existe pero no se pronostica.
  */
+/** El tipo de negocio de una oportunidad · §5.2. Requerido desde §26. */
+export const ETIQUETA_TIPO_DE_NEGOCIO: Record<BusinessType, string> = {
+  NUEVO: "Cliente nuevo",
+  EXPANSION: "Expansión",
+  RENOVACION: "Renovación",
+};
+
 export const ETIQUETA_CATEGORIA: Record<ForecastCategory, string> = {
   COMPROMISO: "Compromiso",
   MEJOR_CASO: "Mejor caso",

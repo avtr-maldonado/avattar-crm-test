@@ -46,7 +46,13 @@ import { formatPercent, formatUSD, money, toClient } from "@/lib/money";
 import { weightedAmount } from "@/lib/domain/pipeline";
 import { computeRiskFlags } from "@/lib/domain/riskFlags";
 import { evaluateGate, type GateRequirement } from "@/lib/domain/stageGate";
-import { ETIQUETA_BANDERA, ETIQUETA_ESTATUS, iniciales, tonoDeRiesgo } from "@/lib/etiquetas";
+import {
+  ETIQUETA_BANDERA,
+  ETIQUETA_ESTATUS,
+  ETIQUETA_TIPO_DE_NEGOCIO,
+  iniciales,
+  tonoDeRiesgo,
+} from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { Avatar, Boton, EstadoVacio, Pastilla, StatTile } from "@/components/ui/primitivas";
 import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
@@ -464,8 +470,8 @@ function TabResumen({
               etiqueta="Tipo de negocio"
               campo="businessType"
               valor={o.businessType}
-              texto={ETIQUETA_TIPO[o.businessType] ?? o.businessType}
-              opciones={opcionesDe(ETIQUETA_TIPO)}
+              texto={ETIQUETA_TIPO_DE_NEGOCIO[o.businessType] ?? o.businessType}
+              opciones={opcionesDe(ETIQUETA_TIPO_DE_NEGOCIO)}
               editable={puedeEditar}
               guardar={guardarCampo}
             />
@@ -1048,12 +1054,6 @@ const FECHA = new Intl.DateTimeFormat("es-MX", {
   timeZone: "UTC",
 });
 
-
-const ETIQUETA_TIPO: Record<string, string> = {
-  NUEVO: "Cliente nuevo",
-  EXPANSION: "Expansión",
-  RENOVACION: "Renovación",
-};
 
 /** Un mapa de etiquetas, como lo quiere un desplegable. */
 function opcionesDe(mapa: Record<string, string>) {
