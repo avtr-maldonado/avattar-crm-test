@@ -27,7 +27,7 @@ import {
 const ESTADOS = ["ABIERTA", "GANADA", "PERDIDA"] as const;
 const CATEGORIAS = ["PIPELINE", "MEJOR_CASO", "COMPROMISO", "OMITIDA"] as const;
 const PAISES = ["MX", "CO", "CL"] as const;
-const BANDERAS = ["SIN_ACTIVIDAD", "ESTANCADA", "MARGEN_BAJO"] as const;
+const BANDERAS = ["SIN_ACTIVIDAD", "ESTANCADA"] as const;
 const CAMPOS_FECHA = [
   "CIERRE_ESTIMADO",
   "CIERRE_REAL",

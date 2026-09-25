@@ -7,7 +7,7 @@ import { destinatariosValidos } from "@/lib/domain/opportunity";
 import { can } from "@/lib/auth/permissions";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { formatPercent, formatUSD, sum, toClient, type Money } from "@/lib/money";
-import { openTotal, weightedAmount, weightedTotal, wonInPeriod } from "@/lib/domain/pipeline";
+import { openTotal, ordenarPorEstatus, weightedAmount, weightedTotal, wonInPeriod } from "@/lib/domain/pipeline";
 import { explainRiskFlags } from "@/lib/domain/riskFlags";
 import { buildFunnel } from "@/lib/domain/funnel";
 import {
@@ -23,7 +23,7 @@ import {
   toWhere,
   trimestreDe,
 } from "@/lib/filters";
-import { etiquetaDeMes, fraseDeRiesgo, iniciales, tonoDeRiesgo } from "@/lib/etiquetas";
+import { ETIQUETA_CATEGORIA, etiquetaDeMes, fraseDeRiesgo, iniciales, tonoDeRiesgo } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { Boton, ControlSegmentado, StatTile } from "@/components/ui/primitivas";
 import { TableroKanban, type ColumnaKanban } from "@/components/pipeline/TableroKanban";
@@ -33,6 +33,7 @@ import { NuevaOportunidad } from "@/components/pipeline/NuevaOportunidad";
 import { Embudo, type RiesgoVisible } from "@/components/pipeline/Embudo";
 import { Forecast, type ColumnaVisible } from "@/components/pipeline/Forecast";
 import { BarraDeFiltros } from "@/components/pipeline/BarraDeFiltros";
+import { BarraDeHerramientas } from "@/components/pipeline/BarraDeHerramientas";
 import { buscarOrganizacionesAccion, personasDeOrganizacionAccion, crearOportunidadAccion } from "./acciones";
 import { cambiarEtapaAccion } from "./[id]/acciones";
 
@@ -122,6 +123,22 @@ export default async function PipelinePage({
 
   const puedeAsignar = can(session, "VER_OPORTUNIDADES_OFICINA");
   const filtros = parseFilters(urlParams, session);
+  // §25 · sin estatus en la URL se ven las abiertas, como pedía §9.2; la barra
+  // lo hace visible. La consulta NO recorta por estatus: las cerradas hacen
+  // falta para «Ganado» aunque no se pinten. El recorte va en memoria, después
+  // del alcance, así que sigue sin ampliar nada (AC-25).
+  const estadosMostrados = new Set<string>(filtros.status.length ? filtros.status : ["ABIERTA"]);
+  // Para el punto del botón de filtros cuando la fila está oculta: hay recorte.
+  const hayFiltrosActivos =
+    filtros.org.length > 0 ||
+    filtros.owner.length > 0 ||
+    filtros.pipeline !== null ||
+    filtros.atRisk ||
+    filtros.period !== "PERSONALIZADO" ||
+    filtros.from !== null ||
+    filtros.to !== null ||
+    filtros.forecast.length > 0 ||
+    !(estadosMostrados.size === 1 && estadosMostrados.has("ABIERTA"));
 
   const ahora = new Date();
   const desdeLaVentana = new Date(ahora.getTime() - VENTANA_DE_PASO_EN_DIAS * 86_400_000);
@@ -164,7 +181,7 @@ export default async function PipelinePage({
         // estaban en pantalla y desaparecían del tablero, no de los totales.
         where: {
           AND: [
-            toWhere(filtros, session, { fiscalYearStartMonth: p.fiscalYearStartMonth }),
+            toWhere({ ...filtros, status: [] }, session, { fiscalYearStartMonth: p.fiscalYearStartMonth }),
             deLaOficina,
           ],
         },
@@ -215,7 +232,7 @@ export default async function PipelinePage({
   const pipeline = pipelinePorOmision(pipelines, session, paisActivo, filtros.pipeline);
 
   const conEvidencia = oportunidades.map((o) => {
-    const evidencia = explainRiskFlags(o, o.stage, politica, ahora);
+    const evidencia = explainRiskFlags(o, o.stage, ahora);
     return { ...o, evidencia, banderas: evidencia.map((e) => e.flag) };
   });
 
@@ -232,7 +249,11 @@ export default async function PipelinePage({
     : conEvidencia;
 
   const abiertas = visibles.filter((o) => o.status === "ABIERTA");
-  const enRiesgo = visibles.filter((o) => o.banderas.length > 0);
+  // Una cerrada ya no corre riesgo: las banderas son de lo que se trabaja.
+  const enRiesgo = abiertas.filter((o) => o.banderas.length > 0);
+  // Lo que se pinta en los tableros: abiertas, ganadas y perdidas, en ese
+  // orden (§25). Los indicadores siguen sobre `visibles` y `abiertas`.
+  const mostradas = ordenarPorEstatus(visibles.filter((o) => estadosMostrados.has(o.status)));
 
   // §10.2 · el cierre del trimestre mira `expectedCloseDate`; lo ganado mira
   // `actualCloseDate`. Mezclarlas produce cifras absurdas al final del
@@ -251,11 +272,11 @@ export default async function PipelinePage({
   const ganadas = wonInPeriod(visibles, { from: anioFiscal.from ?? null, to: anioFiscal.to });
   const { fiscalYear } = trimestreDe(ahora, pais.fiscalYearStartMonth);
 
-  const tarjetas = visibles.map((o) => aTarjeta(o, politica));
-  const columnas = columnasDelTablero(pipeline?.stages ?? [], visibles, tarjetas);
+  const tarjetas = mostradas.map((o) => aTarjeta(o, politica));
+  const columnas = columnasDelTablero(pipeline?.stages ?? [], mostradas, tarjetas);
   // La tabla muestra la etapa como columna; la tarjeta no la lleva porque en el
   // kanban ya la dice la columna donde está.
-  const etapaDe = Object.fromEntries(visibles.map((o) => [o.id, o.stage.name]));
+  const etapaDe = Object.fromEntries(mostradas.map((o) => [o.id, o.stage.name]));
 
   // El embudo mide sobre lo abierto: una etapa no «tiene» las que ya cerraron.
   const etapasDelEmbudo = buildFunnel(pipeline?.stages ?? [], abiertas, historias).map((e) => ({
@@ -276,29 +297,17 @@ export default async function PipelinePage({
    * mueven. De cada oportunidad se escribe **una** bandera, la más grave: el
    * renglón tiene una línea, y repetir las tres haría un muro.
    */
-  const pisoVisible = formatPercent(toClient(politica.marginFloor), 0);
   // Sin `sort`: la consulta ya pidió `amount: "desc"` y `filter` conserva el
   // orden. Reordenar aquí sería recorrer la lista otra vez para dejarla igual.
   const riesgos: RiesgoVisible[] = enRiesgo.map((o) => {
-    const peor =
-      o.evidencia.find((e) => e.flag === "MARGEN_BAJO") ??
-      o.evidencia.find((e) => e.flag === "SIN_ACTIVIDAD") ??
-      o.evidencia[0]!;
+    // Sin actividad pesa más que estancada: la primera es que nadie la sigue.
+    const peor = o.evidencia.find((e) => e.flag === "SIN_ACTIVIDAD") ?? o.evidencia[0]!;
 
     return {
       id: o.id,
       folio: o.folio,
       nombre: o.name,
-      motivo: fraseDeRiesgo(
-        peor.flag === "MARGEN_BAJO"
-          ? {
-              flag: "MARGEN_BAJO",
-              margen: formatPercent(toClient(peor.margen), 0),
-              piso: pisoVisible,
-            }
-          : peor,
-        { etapa: o.stage.name },
-      ),
+      motivo: fraseDeRiesgo(peor, { etapa: o.stage.name }),
       importe: formatUSD(o.amount),
       propietario: o.owner.name,
       tono: tonoDeRiesgo(peor.flag),
@@ -322,9 +331,10 @@ export default async function PipelinePage({
     return `/oportunidades?${p.toString()}`;
   };
 
-  // El forecast acomoda lo abierto por su cierre estimado, en meses o en
-  // trimestres fiscales del país. Se formatea aquí; el componente solo pinta.
-  const forecast = buildForecast(abiertas, {
+  // El forecast acomoda lo mostrado por su cierre estimado, en meses o en
+  // trimestres fiscales del país; las cerradas se ven pero no suman (RN-12).
+  // Se formatea aquí; el componente solo pinta.
+  const forecast = buildForecast(mostradas, {
     agrupar,
     fiscalYearStartMonth: pais.fiscalYearStartMonth,
     ahora,
@@ -360,28 +370,32 @@ export default async function PipelinePage({
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        {/* Una sola fila de controles: qué vista, qué datos, y el alta. La
-            línea entre las dos primeras separa preguntas distintas. */}
-        <div className="flex flex-wrap items-center gap-3">
-          <ControlSegmentado opciones={VISTAS} activa={vista} hrefDe={hrefVista} />
-          <span aria-hidden className="hidden h-6 w-px bg-borde sm:block" />
-          <BarraDeFiltros
-            ruta="/oportunidades"
-            visibles={filtros.visibles}
-            activos={{
-              org: filtros.org,
-              owner: filtros.owner,
-              pipeline: filtros.pipeline,
-              dateField: filtros.dateField,
-              period: filtros.period,
-              from: filtros.from,
-              to: filtros.to,
-              atRisk: filtros.atRisk,
-            }}
-            catalogos={catalogosDeFiltro(cuentas, propietarios, pipelines, paisActivo)}
-          />
-          <div className="ml-auto">{botonDeAlta}</div>
-        </div>
+        {/* Dos filas: arriba qué vista, si se ven los filtros y el alta; abajo
+            los filtros, que se pueden ocultar (BarraDeHerramientas). */}
+        <BarraDeHerramientas
+          vistas={<ControlSegmentado opciones={VISTAS} activa={vista} hrefDe={hrefVista} />}
+          filtros={
+              <BarraDeFiltros
+                ruta="/oportunidades"
+                visibles={filtros.visibles}
+                activos={{
+                  org: filtros.org,
+                  owner: filtros.owner,
+                  pipeline: filtros.pipeline,
+                  dateField: filtros.dateField,
+                  period: filtros.period,
+                  from: filtros.from,
+                  to: filtros.to,
+                  atRisk: filtros.atRisk,
+                  status: [...estadosMostrados],
+                  forecast: filtros.forecast,
+                }}
+                catalogos={catalogosDeFiltro(cuentas, propietarios, pipelines, paisActivo)}
+              />
+          }
+          alta={botonDeAlta}
+          hayFiltrosActivos={hayFiltrosActivos}
+        />
 
         <div className="mt-4">
           <Indicadores
@@ -451,6 +465,7 @@ function aTarjeta(o: Oportunidad, politica: { marginFloor: Money }): DatosTarjet
     cierre: FORMATO_FECHA.format(o.expectedCloseDate),
     propietario: { nombre: o.owner.name, iniciales: o.owner.initials },
     banderas: o.banderas,
+    estatus: o.status,
   };
 }
 
@@ -486,13 +501,15 @@ function columnasDelTablero(
 
   return etapas.map((etapa) => {
     const deLaEtapa = porEtapa.get(etapa.id) ?? [];
+    // RN-12 · las cerradas se ven en su columna, pero solo lo abierto suma.
+    const abiertasDeLaEtapa = deLaEtapa.filter((o) => o.status === "ABIERTA");
     return {
       etapaId: etapa.id,
       nombre: etapa.name,
       probabilidad: formatPercent(toClient(etapa.probability), 0),
-      total: formatUSD(openTotal(deLaEtapa)),
+      total: formatUSD(openTotal(abiertasDeLaEtapa)),
       ponderado: formatUSD(
-        sum(deLaEtapa.map((o) => weightedAmount(o.amount, etapa.probability))),
+        sum(abiertasDeLaEtapa.map((o) => weightedAmount(o.amount, etapa.probability))),
       ),
       esCierre: etapa.isClosing,
       gateMode: etapa.gateMode,
@@ -552,7 +569,8 @@ function etiquetaDePeriodo(p: ColumnaDeForecast<Oportunidad>["periodo"]): string
     case "mes":
       return etiquetaDeMes(p.anio, p.mes);
     case "trimestre":
-      return `T${p.quarter} ${p.fiscalYear}`;
+      // Q1–Q4, como lo dice el negocio, aunque el año sea fiscal (§25).
+      return `Q${p.quarter} ${p.fiscalYear}`;
   }
 }
 
@@ -586,6 +604,8 @@ function catalogosDeFiltro(
     pipeline: deLaOficina,
     camposDeFecha: paresDe(ETIQUETA_CAMPO),
     preajustes: paresDe(ETIQUETA_PREAJUSTE),
+    // RN-15 · el juicio del vendedor, en el orden de certeza.
+    pronostico: paresDe(ETIQUETA_CATEGORIA),
   };
 }
 

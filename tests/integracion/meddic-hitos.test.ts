@@ -51,6 +51,7 @@ afterAll(async () => {
   await prisma.auditLog.deleteMany({ where: { entityId: { in: quotes.map((q) => q.id) } } });
   await prisma.quote.deleteMany({ where: { opportunityId: { in: creadas } } });
   await prisma.meddicComponentAssessment.deleteMany({ where: { opportunityId: { in: creadas } } });
+  await prisma.person.deleteMany({ where: { name: { startsWith: "Laura Prueba MEDDIC" } } });
   await prisma.milestone.deleteMany({ where: { opportunityId: { in: creadas } } });
   await prisma.stageTransition.deleteMany({ where: { opportunityId: { in: creadas } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: creadas } } });
@@ -125,6 +126,59 @@ describe("guardarComponenteMeddic · AC-16, el puntaje en la misma transacción"
     });
     expect(guardado.status).toBe("PARCIAL");
     expect(guardado.evidence).toBeNull();
+  });
+
+  it("§27 · confirmar sin evidencia falla y no escribe", async () => {
+    const id = await unaOportunidad();
+    const detalle = await getOpportunityDetail(jorge, id);
+    const r = await guardarComponenteMeddic(
+      jorge,
+      detalle!,
+      { component: "METRICAS", status: "CONFIRMADO", evidence: "  " },
+      PESOS_POR_OMISION,
+    );
+    expect(r).toMatchObject({ motivo: "VALIDACION" });
+    expect(await prisma.meddicComponentAssessment.count({ where: { opportunityId: id } })).toBe(0);
+  });
+
+  it("§27 · confirmar al decisor creando a la persona en el mismo paso la liga y la deja en la cuenta", async () => {
+    const id = await unaOportunidad();
+    const detalle = await getOpportunityDetail(jorge, id);
+    const nombre = `Laura Prueba MEDDIC ${Date.now()}`;
+    const r = await guardarComponenteMeddic(
+      jorge,
+      detalle!,
+      {
+        component: "DECISOR_ECONOMICO",
+        status: "CONFIRMADO",
+        evidence: "Firmó la orden anterior; lo confirmó el 5 de septiembre.",
+        nuevaPersona: { name: nombre, jobTitle: "CFO" },
+      },
+      PESOS_POR_OMISION,
+    );
+    expect(r.ok).toBe(true);
+
+    const guardado = await prisma.meddicComponentAssessment.findFirstOrThrow({
+      where: { opportunityId: id, component: "DECISOR_ECONOMICO" },
+      select: { personId: true, person: { select: { name: true, jobTitle: true, organizationId: true } } },
+    });
+    expect(guardado.personId).not.toBeNull();
+    expect(guardado.person?.name).toBe(nombre);
+    expect(guardado.person?.jobTitle).toBe("CFO");
+    expect(guardado.person?.organizationId).toBe(detalle!.organization.id);
+  });
+
+  it("§27 · una persona nueva sin nombre no se crea ni se liga", async () => {
+    const id = await unaOportunidad();
+    const detalle = await getOpportunityDetail(jorge, id);
+    const r = await guardarComponenteMeddic(
+      jorge,
+      detalle!,
+      { component: "CAMPEON", status: "CONFIRMADO", evidence: "Aliado.", nuevaPersona: { name: " " } },
+      PESOS_POR_OMISION,
+    );
+    expect(r).toMatchObject({ motivo: "VALIDACION" });
+    if (!r.ok) expect(r.problemas[0]?.campo).toBe("personaNombre");
   });
 
   it("AC-12 · confirmar CAMPEON sin ligar persona falla", async () => {

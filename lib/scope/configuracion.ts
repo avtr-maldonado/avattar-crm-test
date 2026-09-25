@@ -218,3 +218,12 @@ export async function familiasDeProducto() {
     orderBy: { name: "asc" },
   });
 }
+
+/** Los motivos de pérdida vigentes, para el panel de «Perdida» (AC-20, RN-16). */
+export async function motivosDePerdida() {
+  return prisma.lossReason.findMany({
+    where: { active: true },
+    select: { id: true, name: true, requiresCompetitor: true },
+    orderBy: { name: "asc" },
+  });
+}

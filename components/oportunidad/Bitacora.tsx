@@ -88,7 +88,11 @@ function Marca({ tipo }: { tipo: TipoDeEvento }) {
       aria-hidden
       className={clsx(
         "absolute -left-[2.9rem] top-2.5 flex size-7 items-center justify-center rounded-full border bg-superficie-pagina",
-        tipo === "ACTIVIDAD" ? "border-exito text-exito" : "border-borde text-texto-tenue",
+        tipo === "ACTIVIDAD" || tipo === "GANADA"
+          ? "border-exito text-exito"
+          : tipo === "PERDIDA"
+            ? "border-coral text-coral"
+            : "border-borde text-texto-tenue",
       )}
     >
       <Icono nombre={ICONO[tipo]} className="size-3.5" />
@@ -103,15 +107,19 @@ const ETIQUETA: Record<TipoDeEvento, string> = {
   PROPIETARIO: "Propietario",
   COTIZACION: "Cotización",
   ACTIVIDAD: "Actividad",
+  GANADA: "Ganada",
+  PERDIDA: "Perdida",
 };
 
-const TONO: Record<TipoDeEvento, "neutro" | "acento" | "exito" | "alerta"> = {
+const TONO: Record<TipoDeEvento, "neutro" | "acento" | "exito" | "alerta" | "peligro"> = {
   CREACION: "neutro",
   ETAPA: "acento",
   CIERRE: "alerta",
   PROPIETARIO: "neutro",
   COTIZACION: "acento",
   ACTIVIDAD: "exito",
+  GANADA: "exito",
+  PERDIDA: "peligro",
 };
 
 const ICONO: Record<TipoDeEvento, NombreDeIcono> = {
@@ -121,4 +129,6 @@ const ICONO: Record<TipoDeEvento, NombreDeIcono> = {
   PROPIETARIO: "contactos",
   COTIZACION: "productos",
   ACTIVIDAD: "palomita",
+  GANADA: "palomita",
+  PERDIDA: "oportunidades",
 };

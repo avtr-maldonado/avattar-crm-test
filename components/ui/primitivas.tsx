@@ -88,7 +88,7 @@ export function Boton({
   title,
 }: {
   children: React.ReactNode;
-  variante?: "primario" | "secundario" | "fantasma" | "peligro";
+  variante?: "primario" | "secundario" | "fantasma" | "peligro" | "exito";
   href?: string;
   type?: "button" | "submit";
   onClick?: () => void;
@@ -115,6 +115,8 @@ export function Boton({
         "border border-borde-fuerte bg-superficie-pagina text-texto-cuerpo hover:bg-superficie-sutil",
       fantasma: "text-texto-cuerpo hover:bg-superficie-sutil",
       peligro: "bg-coral text-white hover:brightness-95",
+      // Reservado a la decisión buena: marcar ganada. Verde es cumplir (§13.1).
+      exito: "bg-exito text-white hover:brightness-95",
     }[variante],
     className,
   );

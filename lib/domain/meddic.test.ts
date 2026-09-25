@@ -83,9 +83,12 @@ describe("validarComponente · RN-30 enmendada (decisiones §24)", () => {
     ).toMatchObject({ ok: true });
   });
 
-  it("CONFIRMADO sin evidencia también pasa", () => {
+  it("CONFIRMADO exige evidencia (§27): confirmar es afirmar, y hay que decir en qué te basas", () => {
     expect(
       validarComponente({ component: "CRITERIOS_DECISION", status: "CONFIRMADO", evidence: null }),
+    ).toMatchObject({ ok: false });
+    expect(
+      validarComponente({ component: "CRITERIOS_DECISION", status: "CONFIRMADO", evidence: "Lo dijo compras." }),
     ).toMatchObject({ ok: true });
   });
 
@@ -216,6 +219,11 @@ describe("puedeCalificarDirecto · la calificación rápida respeta RN-30", () =
   it("Parcial sin evidencia también se marca directo; la tarjeta lo señala", () => {
     expect(puedeCalificarDirecto({ component: "METRICAS", status: "PARCIAL", evidence: "", personId: null })).toBe(true);
     expect(puedeCalificarDirecto({ component: "METRICAS", status: "PARCIAL", evidence: "Lo dijo el CIO", personId: null })).toBe(true);
+  });
+
+  it("Confirmado sin evidencia no se marca directo: el panel la pide (§27)", () => {
+    expect(puedeCalificarDirecto({ component: "METRICAS", status: "CONFIRMADO", evidence: "", personId: null })).toBe(false);
+    expect(puedeCalificarDirecto({ component: "METRICAS", status: "CONFIRMADO", evidence: "Ahorro de 2 M.", personId: null })).toBe(true);
   });
 
   it("Confirmar al campeón exige además la persona", () => {

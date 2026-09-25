@@ -30,7 +30,9 @@ export type NombreDeIcono =
   | "sitio"
   | "reloj"
   | "lapiz"
-  | "palomita";
+  | "palomita"
+  | "ayuda"
+  | "filtro";
 
 const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
   // Tres columnas de alturas distintas: el kanban.
@@ -147,6 +149,17 @@ const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
     </>
   ),
   palomita: <path d="m4.5 10.5 3.6 3.6 7.4-8.2" />,
+
+  // Un embudo: los filtros del tablero.
+  filtro: <path d="M3.5 4.5h13l-5 6v4.5l-3 1.5v-6z" />,
+
+  // Un círculo con signo de interrogación: «¿qué quiere decir esto?».
+  ayuda: (
+    <>
+      <circle cx="10" cy="10" r="7.25" />
+      <path d="M8 8.1a2.1 2.1 0 1 1 2.9 1.9c-.6.3-.9.7-.9 1.4v.3M10 14.3v.01" />
+    </>
+  ),
 };
 
 export function Icono({ nombre, className }: { nombre: NombreDeIcono; className?: string }) {

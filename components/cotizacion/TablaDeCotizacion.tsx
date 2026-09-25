@@ -17,7 +17,9 @@ import {
 import { calcularEnVivo, type LineaEnVivo } from "./calculoEnVivo";
 import { INICIAL, reducirEdicion } from "./estadoDeEdicion";
 
-type Resultado = ResultadoAccion<{ id: string; cambios?: number } | null>;
+type Resultado = ResultadoAccion<
+  { id: string; cambios?: number; total?: { antes: string; despues: string } | null } | null
+>;
 type Accion = (previo: Resultado | null, form: FormData) => Promise<Resultado>;
 
 /** Ya formateado en el servidor: lo que se guardó, calculado con Decimal (INV-03). */
@@ -83,8 +85,9 @@ type CampoDeLinea = "quantity" | "unitPrice" | "discountPct" | "unitCost";
  * vuelven campos, y **agregar y quitar líneas solo están aquí**: son cambios de
  * la cotización, y la cotización se cambia en modo edición. «Guardar cambios»
  * manda todas las celdas en un viaje; el servidor aplica solo lo que cambió de
- * valor y deja **una** entrada en la bitácora por guardado. Si nada cambió, no
- * escribe nada y lo dice (decisiones §21).
+ * valor y deja **una** entrada en la bitácora si el total quedó distinto de la
+ * última anotación (decisiones §21 y §26). Si nada cambió, no escribe nada y
+ * lo dice.
  */
 export function TablaDeCotizacion({
   quoteId,
@@ -137,9 +140,15 @@ export function TablaDeCotizacion({
 
       if (cual === "guardarCotizacion") {
         const n = r.datos?.cambios ?? 0;
+        const total = r.datos?.total ?? null;
         despacharEdicion({ tipo: "cerrar" });
-        if (n === 0) avisar.informacion("Sin cambios", "Nada cambió de valor; no se anotó nada.");
-        else avisar.exito("Cotización guardada", `${n} ${n === 1 ? "cambio" : "cambios"}, en la bitácora.`);
+        if (total) {
+          avisar.exito("Cotización guardada", `Total ${total.antes} → ${total.despues}, en la bitácora.`);
+        } else if (n > 0) {
+          avisar.exito("Cotización guardada", "El total no cambió: nada nuevo en la bitácora.");
+        } else {
+          avisar.informacion("Sin cambios", "Nada cambió; no se anotó nada.");
+        }
       }
       setAgregando(false);
       return r;
@@ -331,8 +340,8 @@ export function TablaDeCotizacion({
                 + Agregar línea
               </button>
               <p className="text-xs text-texto-cuerpo">
-                Solo lo que cambie de valor se anota. Un precio bajo el piso del producto detiene
-                el guardado completo.
+                La bitácora anota el total solo si cambió al guardar. Un precio bajo el piso del
+                producto detiene el guardado completo.
               </p>
             </div>
             <div className="flex items-center gap-2">

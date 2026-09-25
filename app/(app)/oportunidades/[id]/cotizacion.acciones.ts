@@ -12,6 +12,7 @@ import {
   type CambioPorLinea,
   type CambiosDeLinea,
 } from "@/lib/domain/quoteService";
+import { formatUSD } from "@/lib/money";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { getCotizacion } from "@/lib/scope/cotizaciones";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
@@ -24,7 +25,9 @@ import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
  */
 const NO_ALCANZA = "No encontramos esa cotización, o no está a tu alcance.";
 
-export type ResultadoDeCotizacion = ResultadoAccion<{ id: string; cambios?: number } | null>;
+export type ResultadoDeCotizacion = ResultadoAccion<
+  { id: string; cambios?: number; total?: { antes: string; despues: string } | null } | null
+>;
 
 async function cargarCotizacion(quoteId: string) {
   const session = await requireSession();
@@ -169,8 +172,12 @@ export async function guardarCotizacionAccion(
   const r = await guardarCambiosDeCotizacion(session, cotizacion, cambios, umbrales);
   if (!r.ok) return r;
 
-  if (r.datos.cambios > 0) revalidar(cotizacion.opportunity.id);
-  return ok({ id: cotizacion.id, cambios: r.datos.cambios });
+  if (r.datos.cambios > 0 || r.datos.total) revalidar(cotizacion.opportunity.id);
+  // Formateado aquí: el componente no calcula ni formatea dinero.
+  const total = r.datos.total
+    ? { antes: formatUSD(r.datos.total.antes), despues: formatUSD(r.datos.total.despues) }
+    : null;
+  return ok({ id: cotizacion.id, cambios: r.datos.cambios, total });
 }
 
 function cambiosDe(campo: CampoDeCelda, valor: string): ResultadoAccion<CambiosDeLinea> {

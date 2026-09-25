@@ -29,6 +29,7 @@ export function Campo({
   anotacion,
   tonoAnotacion = "tenue",
   ayuda,
+  ayudaEmergente,
   children,
 }: {
   etiqueta: string;
@@ -37,16 +38,21 @@ export function Campo({
   anotacion?: ReactNode;
   tonoAnotacion?: "tenue" | "exito" | "acento" | "alerta";
   ayuda?: string;
+  /** Un icono junto a la etiqueta que despliega una explicación (`AyudaEmergente`). */
+  ayudaEmergente?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label
-        htmlFor={htmlFor}
-        className="text-eyebrow font-semibold uppercase tracking-[var(--ls-eyebrow)] text-texto-tenue"
-      >
-        {etiqueta}
-      </label>
+      <div className="flex items-center gap-1.5">
+        <label
+          htmlFor={htmlFor}
+          className="text-eyebrow font-semibold uppercase tracking-[var(--ls-eyebrow)] text-texto-tenue"
+        >
+          {etiqueta}
+        </label>
+        {ayudaEmergente}
+      </div>
 
       <div className="flex items-center gap-2.5">
         <div className="min-w-0 flex-1">{children}</div>

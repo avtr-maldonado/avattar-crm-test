@@ -2,7 +2,6 @@ import type { CountryCode } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { computeRiskFlags, type RiskFlag } from "@/lib/domain/riskFlags";
 import { openTotal, weightedTotal } from "@/lib/domain/pipeline";
-import { getCommercialPolicy } from "@/lib/policy";
 import { money, sum, type Money } from "@/lib/money";
 import { OPORTUNIDADES } from "./datos";
 
@@ -71,7 +70,6 @@ export async function resumenDeRiesgo(
   pais: CountryCode,
   ahora = new Date("2026-09-01T12:00:00Z"),
 ): Promise<ResumenRiesgo> {
-  const politica = await getCommercialPolicy(pais);
 
   const abiertas = await prisma.opportunity.findMany({
     where: {
@@ -96,7 +94,7 @@ export async function resumenDeRiesgo(
   const detalle: ResumenRiesgo["detalle"] = [];
 
   for (const o of abiertas) {
-    const flags = computeRiskFlags(o, o.stage, politica, ahora);
+    const flags = computeRiskFlags(o, o.stage, ahora);
     if (flags.length === 0) continue;
     banderas += flags.length;
     enRiesgo.push(o.amount);

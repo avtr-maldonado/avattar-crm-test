@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { money, toClient } from "@/lib/money";
-import { openTotal, weightedAmount, weightedTotal, wonInPeriod } from "./pipeline";
+import { openTotal, ordenarPorEstatus, weightedAmount, weightedTotal, wonInPeriod } from "./pipeline";
 
 describe("weightedAmount · RN-01", () => {
   it("es importe por probabilidad de etapa", () => {
@@ -90,5 +90,26 @@ describe("wonInPeriod · lo ganado del periodo, por actualCloseDate", () => {
   it("sin límite inferior, todo lo cerrado hasta `to` cuenta", () => {
     const r = wonInPeriod([ganada("2019-01-01"), ganada("2027-01-01")], { from: null, to: periodo.to });
     expect(r).toHaveLength(1);
+  });
+});
+
+describe("ordenarPorEstatus · abiertas, ganadas y perdidas, en ese orden", () => {
+  const con = (status: string, n: number) => ({ status, n });
+
+  it("agrupa por estatus sin alterar el orden dentro de cada grupo", () => {
+    const r = ordenarPorEstatus([con("PERDIDA", 1), con("ABIERTA", 2), con("GANADA", 3), con("ABIERTA", 4), con("PERDIDA", 5)]);
+    expect(r.map((o) => `${o.status}:${o.n}`)).toEqual([
+      "ABIERTA:2",
+      "ABIERTA:4",
+      "GANADA:3",
+      "PERDIDA:1",
+      "PERDIDA:5",
+    ]);
+  });
+
+  it("no muta la lista que recibe", () => {
+    const lista = [con("GANADA", 1), con("ABIERTA", 2)];
+    ordenarPorEstatus(lista);
+    expect(lista[0]!.status).toBe("GANADA");
   });
 });

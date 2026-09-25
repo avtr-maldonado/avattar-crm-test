@@ -221,3 +221,29 @@ describe("buildForecast · las dos lentes", () => {
     expect(columnas.find((c) => c.clave === "2026-10")!.ponderado.toString()).toBe("0.03");
   });
 });
+
+describe("buildForecast · las cerradas se ven, pero no suman · RN-12", () => {
+  it("una ganada o perdida en la columna no entra al total ni al ponderado", () => {
+    // Con el filtro de estatus se pueden mostrar cerradas en el tablero (§25).
+    // Se acomodan en su columna para verlas; el dinero del forecast sigue
+    // siendo solo lo abierto, que es lo que cuadra con «Valor abierto».
+    const { columnas } = buildForecast(
+      [
+        abierta({ status: "ABIERTA", amount: money("100") }),
+        abierta({ status: "GANADA", amount: money("1000") }),
+        abierta({ status: "PERDIDA", amount: money("10000") }),
+      ],
+      MES,
+    );
+    const octubre = columnas.find((c) => c.periodo.tipo === "mes" && c.periodo.mes === 10)!;
+    expect(octubre.oportunidades).toHaveLength(3);
+    expect(octubre.total.toFixed(0)).toBe("100");
+    expect(octubre.ponderado.toFixed(0)).toBe("50");
+  });
+
+  it("sin estatus en la entrada, todo cuenta como hasta hoy", () => {
+    const { columnas } = buildForecast([abierta({ amount: money("100") }), abierta({ amount: money("200") })], MES);
+    const octubre = columnas.find((c) => c.periodo.tipo === "mes" && c.periodo.mes === 10)!;
+    expect(octubre.total.toFixed(0)).toBe("300");
+  });
+});

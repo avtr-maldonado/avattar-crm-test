@@ -46,7 +46,7 @@ import { formatPercent, formatUSD, money, toClient } from "@/lib/money";
 import { weightedAmount } from "@/lib/domain/pipeline";
 import { computeRiskFlags } from "@/lib/domain/riskFlags";
 import { evaluateGate, type GateRequirement } from "@/lib/domain/stageGate";
-import { ETIQUETA_BANDERA, ETIQUETA_ESTATUS, iniciales } from "@/lib/etiquetas";
+import { ETIQUETA_BANDERA, ETIQUETA_ESTATUS, iniciales, tonoDeRiesgo } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { Avatar, Boton, EstadoVacio, Pastilla, StatTile } from "@/components/ui/primitivas";
 import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
@@ -60,14 +60,17 @@ import { DatoEditable } from "@/components/oportunidad/DatoEditable";
 import { EditarPersona } from "@/components/contactos/EditarPersona";
 import { crearPersonaAccion, editarPersonaAccion } from "../../contactos/acciones";
 import { EditarOportunidad } from "@/components/oportunidad/EditarOportunidad";
-import { catalogosParaAlta, tiposDeActividad } from "@/lib/scope/configuracion";
-import { destinatariosValidos } from "@/lib/domain/opportunity";
+import { CerrarOportunidad } from "@/components/oportunidad/CerrarOportunidad";
+import { catalogosParaAlta, motivosDePerdida, tiposDeActividad } from "@/lib/scope/configuracion";
+import { destinatariosValidos, requisitosParaGanar } from "@/lib/domain/opportunity";
 import { can, type Session } from "@/lib/auth/permissions";
 import {
   cambiarEtapaAccion,
   editarCampoAccion,
   editarOportunidadAccion,
   guardarActividadAccion,
+  marcarGanadaAccion,
+  marcarPerdidaAccion,
 } from "./acciones";
 
 /**
@@ -121,7 +124,7 @@ export default async function DetalleOportunidadPage({
     oportunidad.status === "ABIERTA" &&
     (oportunidad.owner.id === session.userId || puedeReasignar);
 
-  const [politica, pais, actividades, catalogos, tiposActividad, propietarios, cotizacion, bitacora] =
+  const [politica, pais, actividades, catalogos, tiposActividad, propietarios, cotizacion, bitacora, motivos] =
     await Promise.all([
       getCommercialPolicy(oportunidad.pipeline.countryCode),
       // La zona horaria de la oportunidad: las actividades se capturan y se
@@ -136,6 +139,8 @@ export default async function DetalleOportunidadPage({
       destinatariosValidos(oportunidad.countryCode),
       cotizacionVigente(session, oportunidad.id),
       bitacoraDeOportunidad(session, oportunidad),
+      // Para el panel de «Perdida»: el motivo es obligatorio (AC-20).
+      motivosDePerdida(),
     ]);
 
   const composer = {
@@ -170,7 +175,7 @@ export default async function DetalleOportunidadPage({
     { clave: "bitacora", etiqueta: "Bitácora", contador: bitacora.length },
   ];
 
-  const banderas = computeRiskFlags(oportunidad, oportunidad.stage, politica, new Date());
+  const banderas = computeRiskFlags(oportunidad, oportunidad.stage, new Date());
   const conCotizacion = cotizacionConLineas(oportunidad) != null;
 
   return (
@@ -196,6 +201,7 @@ export default async function DetalleOportunidadPage({
           puedeReasignar={puedeReasignar}
           origenes={catalogos.origenes}
           propietarios={propietarios.map((u) => ({ id: u.id, name: u.name }))}
+          motivos={motivos}
         />
 
         <div className="mt-6">
@@ -204,7 +210,12 @@ export default async function DetalleOportunidadPage({
 
         <div className="mt-6">
           {pestanaActiva === "meddic" ? (
-            <TabMeddic o={oportunidad} politica={politica} puedeEditar={puedeEditarDetalle} />
+            <TabMeddic
+              o={oportunidad}
+              politica={politica}
+              puedeEditar={puedeEditarDetalle}
+              rolesDeComite={catalogos.rolesComite}
+            />
           ) : pestanaActiva === "hitos" ? (
             <TabHitos o={oportunidad} puedeEditar={puedeEditarDetalle} />
           ) : pestanaActiva === "documentos" ? (
@@ -259,8 +270,7 @@ function Encabezado({
   politica,
   sesion,
   puedeReasignar,
-  origenes,
-  propietarios,
+  motivos,
 }: {
   o: DetalleOportunidad;
   banderas: ReturnType<typeof computeRiskFlags>;
@@ -269,6 +279,7 @@ function Encabezado({
   puedeReasignar: boolean;
   origenes: { id: string; name: string }[];
   propietarios: { id: string; name: string }[];
+  motivos: { id: string; name: string; requiresCompetitor: boolean }[];
 }) {
   const etapas = o.pipeline.stages.map((e) => ({
     id: e.id,
@@ -298,43 +309,23 @@ function Encabezado({
         <Pastilla>{o.pipeline.name}</Pastilla>
         {o.organization.isStrategic && <Pastilla tono="acento">Cuenta estratégica</Pastilla>}
         {banderas.map((b) => (
-          <Pastilla key={b} tono={b === "MARGEN_BAJO" ? "peligro" : "alerta"}>
+          <Pastilla key={b} tono={tonoDeRiesgo(b)}>
             {ETIQUETA_BANDERA[b]}
           </Pastilla>
         ))}
 
         <div className="ml-auto flex gap-2">
-          {/* Marcar ganada y marcar perdida llegan con E3: dependen del cuadre
-              de hitos (AC-18) y de los mínimos MEDDIC (AC-14, AC-20). Ponerlas
-              hoy sería poner botones que siempre se niegan. */}
           <Boton variante="secundario" href={`/contactos/organizaciones/${o.organization.id}`}>
             Ver cuenta
           </Boton>
+          {/* Ganada y perdida desde cualquier etapa (decisiones §25). Editar
+              vive ahora en «Datos de la oportunidad», como lápiz. */}
           {puedeEditar && (
-            <EditarOportunidad
-              datos={{
-                id: o.id,
-                name: o.name,
-                primaryPersonId: o.primaryPerson?.id ?? null,
-                estimatedAmount: toClient(o.estimatedAmount),
-                expectedCloseDate: o.expectedCloseDate.toISOString().slice(0, 10),
-                businessType: o.businessType,
-                forecastCategory: o.forecastCategory,
-                sourceId: o.source?.id ?? null,
-                ownerId: o.owner.id,
-                tieneCotizacion: cotizacionConLineas(o) != null,
-                meddicScore: o.meddicScore,
-              }}
-              personas={o.organization.people.map((p) => ({
-                id: p.id,
-                name: p.name,
-                jobTitle: p.jobTitle,
-              }))}
-              origenes={origenes}
-              propietarios={propietarios}
-              puedeReasignar={puedeReasignar}
-              minimoParaCompromiso={Number(politica.meddicMinToCommit)}
-              accion={editarOportunidadAccion}
+            <CerrarOportunidad
+              opportunityId={o.id}
+              requisitos={requisitosParaGanar(o).map((r) => ({ texto: r.texto, cumple: r.cumple }))}
+              motivos={motivos}
+              acciones={{ ganada: marcarGanadaAccion, perdida: marcarPerdidaAccion }}
             />
           )}
         </div>
@@ -431,7 +422,39 @@ function TabResumen({
   return (
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
-        <Tarjeta titulo="Datos de la oportunidad">
+        <Tarjeta
+          titulo="Datos de la oportunidad"
+          accion={
+            puedeEditar ? (
+              <EditarOportunidad
+                disparador="icono"
+                datos={{
+                  id: o.id,
+                  name: o.name,
+                  primaryPersonId: o.primaryPerson?.id ?? null,
+                  estimatedAmount: toClient(o.estimatedAmount),
+                  expectedCloseDate: o.expectedCloseDate.toISOString().slice(0, 10),
+                  businessType: o.businessType,
+                  forecastCategory: o.forecastCategory,
+                  sourceId: o.source?.id ?? null,
+                  ownerId: o.owner.id,
+                  tieneCotizacion: conCotizacion,
+                  meddicScore: o.meddicScore,
+                }}
+                personas={o.organization.people.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  jobTitle: p.jobTitle,
+                }))}
+                origenes={origenes}
+                propietarios={propietarios}
+                puedeReasignar={puedeReasignar}
+                minimoParaCompromiso={Number(politica.meddicMinToCommit)}
+                accion={editarOportunidadAccion}
+              />
+            ) : undefined
+          }
+        >
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
             <Dato etiqueta="Folio" valor={o.folio} mono />
             <Dato etiqueta="Cuenta" valor={o.organization.name} />
@@ -580,33 +603,7 @@ function TabResumen({
           )}
         </Tarjeta>
 
-        <Tarjeta titulo="Historial de etapas">
-          {o.stageHistory.length === 0 ? (
-            <p className="text-sm text-texto-tenue">
-              Sin transiciones registradas. Se anotan a partir del primer cambio de
-              etapa hecho desde el sistema.
-            </p>
-          ) : (
-            <ol className="space-y-3">
-              {o.stageHistory.map((t) => (
-                <li key={t.id} className="text-sm">
-                  <p className="text-texto-cuerpo">
-                    {t.fromStage ? `${t.fromStage.name} → ` : ""}
-                    <span className="font-medium">{t.toStage.name}</span>
-                    {t.gateOverride && (
-                      <span className="ml-2">
-                        <Pastilla tono="alerta">Avanzó con advertencia</Pastilla>
-                      </span>
-                    )}
-                  </p>
-                  <p className="tabular text-xs text-texto-tenue">
-                    {FECHA.format(t.atDate)} · {t.byUser.name}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Tarjeta>
+        {/* El historial de etapas vive en la pestaña Bitácora (F-37). */}
 
         {!conCotizacion && (
           <p className="text-xs text-texto-tenue">
@@ -775,10 +772,12 @@ function TabMeddic({
   o,
   politica,
   puedeEditar,
+  rolesDeComite,
 }: {
   o: DetalleOportunidad;
   politica: Politica;
   puedeEditar: boolean;
+  rolesDeComite: { id: string; name: string }[];
 }) {
   const porComponente = new Map(o.meddic.map((m) => [m.component, m]));
 
@@ -811,6 +810,7 @@ function TabMeddic({
         ganada: Number(politica.meddicMinToWin),
         compromiso: Number(politica.meddicMinToCommit),
       }}
+      rolesDeComite={rolesDeComite}
       puedeEditar={puedeEditar}
       accion={guardarMeddicAccion}
     />

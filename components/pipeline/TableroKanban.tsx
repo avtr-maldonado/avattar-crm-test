@@ -206,10 +206,12 @@ export function TableroKanban({
             <div className="grid min-h-24 grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-1.5 p-1.5 lg:grid-cols-1">
               {c.oportunidades.map((o) => {
                 const moviendose = enviando && detenida?.tarjeta.id === o.id;
+                // Una cerrada no se mueve de etapa: ya se decidió (RN-18).
+                const movible = arrastrable && o.estatus === "ABIERTA";
                 return (
                   <div
                     key={o.id}
-                    draggable={arrastrable && !enviando}
+                    draggable={movible && !enviando}
                     onDragStart={(e) => {
                       setArrastrada({ id: o.id, nombre: o.nombre, etapaId: c.etapaId });
                       // Firefox no inicia el arrastre si nadie pone datos, y
@@ -223,7 +225,7 @@ export function TableroKanban({
                       setSobre(null);
                     }}
                     className={clsx(
-                      arrastrable && "cursor-grab active:cursor-grabbing",
+                      movible && "cursor-grab active:cursor-grabbing",
                       arrastrada?.id === o.id && "opacity-40",
                       moviendose && "animate-pulse opacity-60",
                     )}

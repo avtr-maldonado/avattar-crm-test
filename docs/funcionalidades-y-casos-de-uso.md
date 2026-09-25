@@ -115,12 +115,12 @@ no vuelve a la base. La vista, los filtros y el pipeline viven en la URL.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-07.1 Abrir el pipeline | Cualquier rol | Entra a Oportunidades | Abre en Kanban, en el pipeline de venta de la oficina activa. Si la oficina no tiene pipeline configurado, uno de venta que sí alcance |
-| CU-07.2 Kanban | Cualquier rol | — | Una columna por etapa, **incluidas las vacías**, con conteo, probabilidad, total y ponderado. Todas caben en el ancho sin scroll horizontal; las tarjetas se compactan según la columna. Cada tarjeta: nombre, cuenta y cierre, propietario, importe, margen (verde en o sobre el piso, coral debajo · §13.1), puntaje MEDDIC y el triángulo de riesgo si aplica |
+| CU-07.1 Abrir el pipeline | Cualquier rol | Entra a Oportunidades | Abre en Kanban, en el pipeline de venta de la oficina activa. Arriba, el selector de vistas, un botón de embudo que muestra u oculta la fila de filtros (con un punto cuando hay filtros activos y están ocultos) y «Nueva oportunidad»; debajo, los filtros (F-09). Si la oficina no tiene pipeline, lo dice |
+| CU-07.2 Kanban | Cualquier rol | — | Una columna por etapa, **incluidas las vacías**, con conteo, probabilidad, total y ponderado; el total y el ponderado suman **solo las abiertas** (`RN-12`). Todas caben en el ancho sin scroll horizontal; las tarjetas se compactan según la columna. Cada tarjeta: nombre, cuenta y cierre, propietario, importe, margen (verde en o sobre el piso, coral debajo · §13.1), puntaje MEDDIC y el triángulo de riesgo si aplica. Con el filtro de estatus, las **ganadas** llevan borde verde y relleno verde tenue, y las **perdidas** borde coral y relleno coral tenue, más una pastilla, debajo de las abiertas, y no se arrastran |
 | CU-07.3 Tabla | Cualquier rol | Pulsa «Tabla» | Las mismas oportunidades renglón a renglón, con la etapa como columna |
 | CU-07.4 Embudo | Cualquier rol | Pulsa «Embudo» | Una barra por etapa con el valor abierto contra la etapa mayor, y debajo la **tasa de paso** de los últimos 90 días: de las que entraron a la etapa anterior, cuántas llegaron a esta o más lejos (§17). A la derecha, la cola de riesgo ordenada por valor con la razón concreta |
 | CU-07.5 Embudo sin movimientos | Cualquier rol | Nadie entró a la etapa anterior en la ventana | La leyenda dice «no hay con qué medirlo», no «0 %» |
-| CU-07.6 Forecast | Cualquier rol | Pulsa «Forecast» y elige meses o trimestres fiscales | Un tablero de columnas como el kanban, pero la columna es **cuándo**: cada oportunidad abierta va en la columna de su cierre estimado, con la misma tarjeta. La cabecera de cada columna trae cuántas, el total abierto, el ponderado por etapa (`RN-01`) y una barra con la mezcla por categoría de pronóstico (el juicio del vendedor · `RN-15`); lo omitido cuenta en el total y no en la barra |
+| CU-07.6 Forecast | Cualquier rol | Pulsa «Forecast» y elige meses o trimestres fiscales | Un tablero de columnas como el kanban, pero la columna es **cuándo**: cada oportunidad mostrada va en la columna de su cierre estimado, con la misma tarjeta; los trimestres se nombran **Q1–Q4** del año fiscal. La cabecera de cada columna trae cuántas, el total abierto, el ponderado por etapa (`RN-01`) y una barra con la mezcla por categoría de pronóstico (el juicio del vendedor · `RN-15`); lo omitido cuenta en el total y no en la barra; las cerradas se ven pero no suman (`RN-12`) y van debajo de las abiertas |
 | CU-07.7 Forecast · mover la ventana | Cualquier rol | Pulsa «‹ Anteriores», «Hoy» o «Siguientes ›» | La ventana es de seis meses o cuatro trimestres y avanza de periodo en periodo, nunca hacia atrás del periodo en curso. Las flechas dicen cuántas oportunidades quedan fuera hacia cada lado, para que nada se pierda sin aviso |
 | CU-07.8 Forecast con cierres vencidos | Cualquier rol | Hay abiertas con cierre estimado en el pasado | Van en una columna «Vencidas» al principio, en coral: son fechas que hay que corregir, no dinero de un mes que ya pasó. Al mover la ventana hacia adelante, cuentan entre las que quedan atrás |
 | CU-07.9 Nada con los filtros | Cualquier rol | Los filtros dejan el tablero vacío | Estado vacío con «Limpiar filtros» y «Nueva oportunidad» |
@@ -149,7 +149,9 @@ quede invisible (`AC-23`). Salda la deuda de E0.
 | CU-09.2 Por cliente | Cualquier rol | Marca una o varias cuentas (con buscador si hay más de ocho) y aplica | Solo cuentas dentro de su alcance aparecen como opción |
 | CU-09.3 Por vendedor | Gerente, Dirección, Administración | Marca uno o varios y aplica | A un vendedor **no se le ofrece**: solo hay una opción posible y desplegarlo revelaría la lista de compañeros (`AC-24`) |
 | CU-09.4 Por lapso | Cualquier rol | Elige **sobre qué fecha** (cierre estimado, cierre real, creación, última actividad) y qué periodo (este trimestre, anterior, próximo, este año, año anterior, últimos 30 o 90 días, vencidas, personalizado con desde/hasta), en el mismo desplegable | El campo y el rango viajan juntos siempre: un rango sin su campo produce números que nadie puede reproducir (§9.3) |
-| CU-09.5 Solo en riesgo | Cualquier rol | Pulsa la pastilla | Quedan las que traen alguna bandera. Es el único filtro que se aplica en memoria, porque las banderas se calculan (`INV-11`); se recorta después del alcance, así que no amplía nada (§17) |
+| CU-09.5 Solo en riesgo | Cualquier rol | Pulsa la pastilla | Quedan las que traen alguna bandera. Es el único filtro que se aplica en memoria, porque las banderas se calculan y no se guardan (`INV-11`); se recorta después del alcance, así que no amplía nada |
+| CU-09.8 Por estatus | Cualquier rol | Abre «Estatus» y marca Abiertas, Ganadas y/o Perdidas, y aplica | Un desplegable como el de Vendedor. Sin nada en la URL se ven **solo las abiertas** (§9.2; decisiones §25); aplicar sin marcar nada vuelve a ese reposo. Las cerradas se pintan debajo de las abiertas, con su color; «Ganado» del encabezado no depende de este filtro |
+| CU-09.9 Por pronóstico | Cualquier rol | Abre «Pronóstico» y marca Compromiso, Mejor caso, Pipeline y/o Omitida | Filtra por la categoría de pronóstico (`RN-15`), en la consulta. Vacío = todas |
 | CU-09.6 Limpiar | Cualquier rol | Pulsa «Limpiar» | Vuelve al pipeline sin recortes |
 | CU-09.7 URL manipulada | Vendedor | Pega `owner=<otro vendedor>` en la URL | Cero resultados. Ni los del otro ni los suyos (`AC-25`) |
 
@@ -162,6 +164,7 @@ error caro de esta pantalla: crear una cuenta duplicada sin darse cuenta.
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-10.1 Con una cuenta existente | Cualquier rol | Escribe el nombre de la cuenta y elige una de las sugeridas (dentro de su alcance) | Se enlaza la existente. El nombre de la oportunidad se sugiere con el prefijo de la cuenta y se puede completar sin perder lo escrito |
+| CU-10.1b Tipo de negocio y pronóstico | Ídem | El tipo de negocio abre en «Sin especificar» y es **obligatorio**; el campo «Pronóstico» lleva un icono de ayuda que explica en una línea qué es Compromiso, Mejor caso, Pipeline y Omitida (`RN-15`) | Sin tipo de negocio no se crea: «Elige el tipo de negocio», en el campo. La ayuda también está al editar |
 | CU-10.2 Con una cuenta nueva en línea | Cualquier rol | Escribe un nombre que no existe y lo deja | La cuenta se crea **en la misma operación** que la oportunidad, con la sede del país del pipeline y quien crea como propietario (§14, §18) |
 | CU-10.3 Con una persona principal | Cualquier rol | Con cuenta existente, el campo es un desplegable con **todos sus contactos** (nombre · cargo · rol) y la opción «Nuevo contacto…», que abre debajo la captura de nombre, cargo y rol en el comité. Con cuenta nueva, se escribe directamente el nombre | Opcional a propósito: exigirla pelea contra la captura rápida. Ver los contactos de golpe evita crear a alguien que ya estaba. Solo se listan los de cuentas que la sesión alcanza; si no alcanza ninguna, queda capturar uno nuevo |
 | CU-10.4 Pipeline, etapa y cierre | Cualquier rol | Elige pipeline y etapa de entrada (cada etapa dice cuántos requisitos tiene), importe estimado, origen y cierre estimado | **El país de la oportunidad es el del pipeline** (§18): a una misma cuenta se le vende en México y en Colombia. Hay que operar en ese país (`AC-05`). La fecha se anota con su trimestre fiscal. El folio `OPP-AAAA-NNNNN` se asigna al crear, consecutivo por año, y es inmutable (`INV-12`) |
@@ -193,7 +196,7 @@ destildar (`INV-11`, `RN-13`).
 |---|---|---|
 | Sin actividad | No hay siguiente actividad agendada, o la agendada ya venció (`RN-10`) | Triángulo coral en la tarjeta; «Sin actividad futura programada · 34 días sin contacto» en la cola de riesgo |
 | Estancada | Lleva en la etapa más días que el límite de esa etapa (`RN-03`). Registrar una llamada **no** reinicia el contador: solo cambiar de etapa | Triángulo apagado; «Estancada 26 días en Negociación» |
-| Margen bajo | La cotización vigente tiene margen bajo el piso del país (`RN-05`). Sin cotización no se acusa | Triángulo coral; «Margen 9 % bajo el piso de 20 %» |
+| ~~Margen bajo~~ | **Dejó de ser bandera** el 24-sep-2026 (decisiones §27): el margen ya se ve en la tarjeta, verde o coral (§13.1), y como bandera duplicaba la señal y llenaba la cola de riesgo. Quedan Sin actividad y Estancada |
 
 ---
 
@@ -203,17 +206,33 @@ destildar (`INV-11`, `RN-13`).
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-13.1 Abrir el detalle | Quien la alcance | Pulsa la tarjeta o el resultado del buscador | Barra superior con el nombre, el folio y la cuenta; estado, pipeline y banderas; la barra de etapas; y las pestañas Resumen, Actividades, Cotización, MEDDIC, Hitos y Documentos, con su conteo. La pestaña vive en la URL |
+| CU-13.1 Abrir el detalle | Quien la alcance | Pulsa la tarjeta o el resultado del buscador | Barra superior con el nombre, el folio y la cuenta; estado, pipeline y banderas; a la derecha «Ver cuenta», **«Ganada»** (verde) y **«Perdida»** (coral) (F-38); la barra de etapas; y las pestañas Resumen, Actividades, Cotización, MEDDIC, Hitos, Documentos y Bitácora, con su conteo. El historial de etapas vive en Bitácora, no en Resumen. La pestaña vive en la URL |
 | CU-13.2 Oportunidad fuera del alcance | Vendedor | Pega el enlace de una que no es suya | **404**, igual que si no existiera. Distinguir «no existe» de «no es tuya» le confirmaría que la del compañero existe |
 
 ### F-14 · Editar los datos comerciales
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-14.1 Editar la propia | Propietario, o quien tenga alcance de oficina (`Q-13`) | Cambia nombre, importe estimado, cierre, categoría de pronóstico, origen, persona principal, tipo de negocio | Se guarda. Si hay cotización congelada, el importe lo manda ella, no la captura |
+| CU-14.1 Editar la propia | Propietario, o quien tenga alcance de oficina (`Q-13`) | Pulsa el **lápiz** en el título de «Datos de la oportunidad»; cambia nombre, importe estimado, cierre, categoría, persona principal u origen | Se guarda con las reglas de negocio: «Compromiso» exige el mínimo MEDDIC (`RN-29`); reasignar es de Gerencia. Lo que el dato quiere decir se explica en el propio campo |
 | CU-14.2 Reasignar | Gerente, Dirección, Administración | Cambia el propietario | Solo a un usuario activo que opere en el país de la oportunidad (`Q-14`). El anterior deja de verla si era vendedor |
 | CU-14.3 Cerrada | Cualquiera | Intenta editar una ganada o perdida | No se edita: solo Administración reabre (`RN-18`). Reabrir todavía no tiene pantalla |
 | CU-14.4 Corregir un dato sin abrir nada | Ídem que CU-14.1 | Pulsa el tipo de negocio, el pronóstico, el cierre estimado, el origen o el propietario en «Datos de la oportunidad» | El dato se vuelve control ahí mismo y guarda al elegir; Esc cancela. Rigen las mismas reglas que el panel completo: «Compromiso» exige puntaje MEDDIC y reasignar es de Gerencia. Si el servidor lo rechaza, el dato se queda como estaba y un aviso dice por qué (decisiones §19) |
+
+### F-38 · Marcar ganada o perdida
+
+Botones «Ganada» y «Perdida» en el encabezado del detalle, **desde cualquier etapa** (decisiones
+§25). Los dos sellan `actualCloseDate` con el día de hoy, dejan rastro en la bitácora y no mueven
+la oportunidad de etapa. `INV-07` sigue: no se gana sin cumplir las condiciones, y las condiciones
+son las de §25.
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-38.1 Ganar | Propietario, o quien tenga alcance de oficina | Pulsa «Ganada» | Un panel enseña las tres condiciones con palomita o cruz: cotización con al menos una línea, hitos capturados y hitos que **cuadran** con el neto (`RN-06`). Solo con las tres se puede confirmar; el servidor las vuelve a comprobar (`INV-07`) |
+| CU-38.2 Falta algo | Ídem | Intenta ganar sin cotización, sin hitos o con hitos que no cuadran | El panel no deja confirmar y dice qué falta con la cifra: «Faltan $200,000 por asignar en hitos» (`AC-18`). Se resuelve en las pestañas Cotización e Hitos |
+| CU-38.3 Perder | Ídem | Pulsa «Perdida», elige el motivo y, si el motivo lo pide, escribe el competidor | Se marca perdida con el cierre real de hoy. Sin motivo se rechaza (`AC-20`); un motivo que exige competidor lo pide (`RN-16`). No hace falta cotización |
+| CU-38.4 Lo que queda | — | Ganada o perdida | `GANADA` o `PERDIDA`, `actualCloseDate` de hoy y `MARCAR_GANADA` / `MARCAR_PERDIDA` en `AuditLog`, en la misma transacción (`INV-09`). La bitácora lo enseña como «Ganada · $1,000,000.00 · Desde Negociación» o «Perdida · Precio · Competidor: …» |
+| CU-38.5 Ya cerrada | Cualquiera | Intenta ganar o perder una cerrada | Se rechaza: reabrir es de Administración (`RN-18`, pendiente). Los botones no se ofrecen |
+| CU-38.6 Lo que ya no se exige | — | — | El puntaje MEDDIC mínimo para ganar (`RN-28`) y el contrato u orden de compra cargado (`RN-06`) **no se exigen** para ganar: decisión del negocio del 24-sep-2026, anotada en §25 con dónde volver a exigirlos |
 
 ### F-15 · Agendar o registrar una actividad
 
@@ -257,7 +276,7 @@ costo y utilidad **solo llegan** a quien tiene `VER_COSTO`; el margen, a quien t
 | CU-16.6 Costo sin permiso | Vendedor sin `VER_COSTO` | Intenta fijar o cambiar un costo | No se acepta (`INV-02`): probar costos hasta que el margen cuadre sería deducirlo. La columna ni siquiera se pinta |
 | CU-16.7 Línea bajo el piso de margen | Ídem | El margen de la línea queda bajo el piso de la política | La pantalla lo señala en la línea y en una franja. La solicitud de autorización que eso dispararía (P-10) no está construida |
 | CU-16.8 Quitar una línea | Ídem | En modo edición pulsa la ✕ | Se quita y se recalcula. Si era la última, la oportunidad vuelve a valer su **estimado** y su margen queda en blanco: una cotización vacía no dice nada |
-| CU-16.9 Lo que queda en la bitácora | — | Cada alta o baja de línea, y cada **guardado con cambios** | Un registro por operación con el neto antes y después y la lista de líneas y campos que cambiaron (`EDITAR_COTIZACION`), en la misma transacción (`INV-09`). Un guardado sin cambios no deja nada. Se lee en la pestaña Bitácora (F-37) |
+| CU-16.9 Lo que queda en la bitácora | — | Cada **guardado** cuya cotización quede con un total distinto del de la última anotación, suba o baje | **Una** entrada `EDITAR_COTIZACION` con el neto anotado antes y el de ahora, y la lista de celdas que cambiaron en ese guardado, en la misma transacción (`INV-09`). Agregar o quitar líneas no anota por sí solo: lo recoge el siguiente guardado. Un guardado que no mueve el total —solo el costo, o dos cambios que se compensan— se guarda sin anotar (decisiones §26). Se lee en la pestaña Bitácora (F-37) |
 | CU-16.10 Compuertas e hitos | — | Una etapa exige `COTIZACION_CONGELADA`; los hitos se cuadran | El requisito conserva su nombre en los datos pero exige **cotización con al menos una línea**; los hitos cuadran contra su neto (`RN-06`) |
 
 ### F-17 · Calificar con MEDDIC
@@ -268,10 +287,10 @@ haber averiguado para marcarlo.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-17.1 Calificar sin entrar | Quien alcance la oportunidad | Pulsa uno de los cuatro estados en la fila del componente | Los cuatro se guardan al pulsar. Solo confirmar al decisor económico o al campeón **sin persona ligada** abre el panel (§2.1). El puntaje se recalcula **en la misma transacción** con los pesos del pipeline (`Q-08`, `AC-16`) |
-| CU-17.2 Sin evidencia | Ídem | Marca «Parcial» o «Confirmado» sin haber escrito evidencia | Se guarda igual (`RN-30` **enmendada**, decisiones §24). La tarjeta lleva la marca ámbar «⚠ Sin evidencia» junto al estado y el encabezado cuenta «N calificados sin evidencia»; el botón «Evidencia» no cambia. La evidencia se pide, no se exige |
-| CU-17.3 Evidencia y persona | Ídem | Pulsa «Evidencia» | El panel completo: estado, evidencia y, para decisor económico y campeón, la persona del comité (§2.1) |
-| CU-17.4 Documentar después | Ídem | Pulsa «Evidencia» y escribe en qué se apoya | La marca desaparece. Antes del 23-sep-2026 guardar sin evidencia se rechazaba (`AC-13`); hoy se permite y se señala |
+| CU-17.1 Calificar sin entrar | Quien alcance la oportunidad | Pulsa uno de los cuatro estados en la fila del componente | «No evaluado», «Ausente» y «Parcial» se guardan al pulsar. **«Confirmado» abre el panel** si falta la evidencia —o la persona, para decisor y campeón— con ese estado ya elegido y el foco en lo que falta (§27). El puntaje se recalcula **en la misma transacción** con los pesos del pipeline (`Q-08`, `AC-16`) |
+| CU-17.2 Sin evidencia | Ídem | Marca «Parcial» sin haber escrito evidencia | Se guarda igual (`RN-30` enmendada, §24). La tarjeta lleva la marca ámbar «⚠ Sin evidencia» y el encabezado cuenta «N calificados sin evidencia». **Confirmar** sí la exige (§27): «… confirmado necesita evidencia: escribe en qué te basas» |
+| CU-17.3 Evidencia y persona | Ídem | Pulsa «Evidencia» | El panel completo: estado, evidencia y, para decisor económico y campeón, la persona del comité (§2.1). Si la persona no existe, **«Nueva persona…»** abre nombre, cargo y rol en el comité (propuesto según el componente) y nace en la cuenta de la oportunidad al guardar, en la misma transacción (§27) |
+| CU-17.4 Documentar después | Ídem | Pulsa «Evidencia» y escribe en qué se apoya | La marca desaparece y la evidencia se lee en la tarjeta, bajo la descripción del componente (volvió el 24-sep-2026) |
 | CU-17.5 Decisor o campeón confirmado sin persona | Ídem | Confirma sin ligar a alguien del comité | Se rechaza: hay que elegir una persona real del comité de compra (§2.1) |
 | CU-17.6 Lo que el puntaje gatea | — | Según la política comercial del país | Entrar a la etapa de cierre pide un mínimo; marcar ganada pide otro mayor y decisor, dolor y campeón confirmados; la categoría «Compromiso» pide un mínimo (`RN-28`, `RN-29`). Los mínimos son configurables (`INV-05`) |
 
@@ -284,7 +303,7 @@ sistema avisa que el calendario dejó de cuadrar en vez de recalcular en silenci
 |---|---|---|---|
 | CU-18.1 Capturar un hito | Quien alcance la oportunidad | Pulsa «Agregar hito». El panel muestra **neto a repartir, ya asignado y por asignar** antes de teclear; captura concepto, fecha y monto (o % del neto con el conmutador USD/%). «Usar lo que falta» llena el campo con lo que queda | Se agrega al calendario. La conversión de % a monto la hace el servidor con `Decimal` (`INV-03`); se guarda siempre el monto. Un rechazo no borra lo capturado |
 | CU-18.1b Pasarse del neto | Ídem | Captura un monto que, sumado a los demás hitos, supera el neto | El formulario lo avisa en coral mientras se teclea, y el servidor lo **rechaza** con las cifras: «sumarían $1,200,000: $200,000 más que el neto de $1,000,000» (decisiones §22). Al editar, el monto anterior del hito no cuenta. Sin cotización con líneas no hay tope ni porcentaje: se captura en monto |
-| CU-18.2 Cuadre | — | — | La pestaña dice cuánto falta contra el neto de la cotización con líneas: «faltan $200,000 por asignar», con la barra y las tres cifras debajo. Distingue «no hay neto todavía» de «cuadra en cero». «Sobran» solo puede aparecer si la cotización bajó después de capturar los hitos |
+| CU-18.2 Cuadre | — | — | La pestaña dice cuánto falta contra el neto de la cotización con líneas: «faltan $200,000 por asignar», con la barra y las tres cifras debajo. Distingue «no hay neto todavía» de «cuadra en cero». «Sobran» solo puede aparecer si la cotización bajó después de capturar los hitos. Es la condición para ganar (F-38) |
 | CU-18.3 Marcar cumplido | Ídem | Pulsa el hito | Pasa a cumplido con fecha, o vuelve a pendiente. Es lo que convierte el calendario en seguimiento de cobro |
 | CU-18.4 Quitar | Ídem | — | Se borra la fila (en duro, a propósito · `Q-16`) |
 

@@ -2,6 +2,7 @@ import type { MeddicComponent, MeddicStatus } from "@prisma/client";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
+import { iniciales } from "@/lib/etiquetas";
 import type { DetalleOportunidad } from "@/lib/scope/opportunityDetail";
 import { computeMeddicScore, validarComponente, type MeddicWeights } from "./meddic";
 
@@ -28,6 +29,8 @@ export async function guardarComponenteMeddic(
     status: MeddicStatus;
     evidence?: string | null;
     personId?: string | null;
+    /** §27 · si la persona del comité no existe, se crea aquí, en la cuenta de la oportunidad. */
+    nuevaPersona?: { name: string; jobTitle?: string | null; committeeRoleId?: string | null };
   },
   pesos: MeddicWeights,
 ): Promise<ResultadoAccion<{ puntaje: number }>> {
@@ -36,13 +39,18 @@ export async function guardarComponenteMeddic(
   }
 
   const evidence = entrada.evidence?.trim() || null;
-  const personId = entrada.personId || null;
+  let personId = entrada.personId || null;
+  const nuevaPersona = entrada.nuevaPersona;
+  if (nuevaPersona && nuevaPersona.name.trim().length < 3) {
+    return falla("VALIDACION", { campo: "personaNombre", mensaje: "Ponle nombre a la persona." });
+  }
 
   const valido = validarComponente({
     component: entrada.component,
     status: entrada.status,
     evidence,
-    personId,
+    // La persona nueva cuenta como ligada: nace en la misma transacción.
+    personId: personId ?? (nuevaPersona ? "nueva" : null),
   });
   if (!valido.ok) {
     return falla("VALIDACION", { campo: "status", mensaje: valido.motivo });
@@ -58,6 +66,22 @@ export async function guardarComponenteMeddic(
   }
 
   const puntaje = await prisma.$transaction(async (tx) => {
+    if (nuevaPersona && !personId) {
+      // Igual que en el alta de oportunidad: la persona es de la cuenta, con
+      // su rol en el comité si se declaró (§2.1).
+      const creada = await tx.person.create({
+        data: {
+          organizationId: detalle.organization.id,
+          name: nuevaPersona.name.trim(),
+          initials: iniciales(nuevaPersona.name.trim()),
+          jobTitle: nuevaPersona.jobTitle?.trim() || null,
+          committeeRoleId: nuevaPersona.committeeRoleId || null,
+        },
+        select: { id: true },
+      });
+      personId = creada.id;
+    }
+
     await tx.meddicComponentAssessment.upsert({
       where: {
         opportunityId_component: { opportunityId: detalle.id, component: entrada.component },

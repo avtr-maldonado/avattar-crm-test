@@ -5,7 +5,7 @@ import { z } from "zod";
 import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { requireSession } from "@/lib/auth/session";
 import { editarActividad, registrarActividad } from "@/lib/domain/activity";
-import { cambiarEtapa, editarOportunidad } from "@/lib/domain/opportunity";
+import { cambiarEtapa, editarOportunidad, marcarGanada, marcarPerdida } from "@/lib/domain/opportunity";
 import { cambioDeCampo } from "@/lib/domain/opportunityField";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { duracionEnMinutos, instanteEn } from "@/lib/tiempo";
@@ -247,4 +247,59 @@ export async function guardarActividadAccion(
   revalidatePath("/actividades");
   revalidatePath("/oportunidades");
   return ok(r.datos);
+}
+
+// ═══════════════════════════════════════════════════ Marcar ganada o perdida
+
+const esquemaCierre = z.object({ opportunityId: z.string().min(1) });
+
+/**
+ * Ganar · decisiones §25. Las condiciones viven en `requisitosParaGanar`, en
+ * el dominio (INV-07); aquí solo se carga el detalle por alcance y se delega.
+ */
+export async function marcarGanadaAccion(
+  _previo: ResultadoAccion | null,
+  form: FormData,
+): Promise<ResultadoAccion> {
+  const datos = esquemaCierre.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+
+  const { session, detalle } = await cargar(datos.data.opportunityId);
+  if (!detalle) return falla("AUTORIZACION", NO_ALCANZA);
+
+  const r = await marcarGanada(session, detalle);
+  if (!r.ok) return r;
+
+  revalidatePath(`/oportunidades/${detalle.id}`);
+  revalidatePath("/oportunidades");
+  return ok(null);
+}
+
+const esquemaPerdida = z.object({
+  opportunityId: z.string().min(1),
+  lossReasonId: z.string().optional().default(""),
+  lossCompetitor: z.string().trim().optional(),
+});
+
+/** Perder · AC-20. El motivo, y el competidor cuando el motivo lo exige, los valida el dominio. */
+export async function marcarPerdidaAccion(
+  _previo: ResultadoAccion | null,
+  form: FormData,
+): Promise<ResultadoAccion> {
+  const datos = esquemaPerdida.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+  const d = datos.data;
+
+  const { session, detalle } = await cargar(d.opportunityId);
+  if (!detalle) return falla("AUTORIZACION", NO_ALCANZA);
+
+  const r = await marcarPerdida(session, detalle, {
+    lossReasonId: d.lossReasonId,
+    lossCompetitor: d.lossCompetitor,
+  });
+  if (!r.ok) return r;
+
+  revalidatePath(`/oportunidades/${detalle.id}`);
+  revalidatePath("/oportunidades");
+  return ok(null);
 }

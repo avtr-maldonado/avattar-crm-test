@@ -44,12 +44,15 @@ improvisar. Detalle en `docs/CRM-AVTR-SPEC.md` §3.
    `0.20`, `0.15`, `0.16` o `0.30` en `lib/domain` es un defecto.
 6. **INV-06** ~~Una cotización congelada es inmutable. Editar = versión nueva.~~ **Enmendado el 22 de
    septiembre de 2026 (decisiones §21):** una cotización por oportunidad, editable mientras la
-   oportunidad está abierta; **cada guardado con cambios escribe en `AuditLog` el neto antes y
-   después y qué líneas y campos cambiaron, en la misma transacción**, y espeja `amount` y
-   `grossMargin` al momento. Un guardado sin cambios de valor no escribe nada. No se
+   oportunidad está abierta; **cada guardado que deje el total distinto del de la última
+   anotación escribe en `AuditLog` el neto anotado antes, el de ahora y qué celdas cambiaron, en
+   la misma transacción** (§26, 24-sep), y espeja `amount` y `grossMargin` al momento. Agregar o
+   quitar líneas no anota por sí solo; un guardado que no mueve el total no escribe nada. No se
    renumera: la trazabilidad sigue siendo el invariante, solo cambió de forma.
 7. **INV-07** No se gana sin cumplir todas las condiciones. La validación vive en el servicio de
-   dominio, no en el formulario.
+   dominio, no en el formulario. **Las condiciones son las de decisiones §25** (24-sep-2026):
+   cotización con líneas, hitos capturados y cuadrados con el neto. MEDDIC y documento no se
+   exigen para ganar; §25 dice dónde volver a exigirlos.
 8. **INV-08** ~~El tipo de cambio se congela al ganar.~~ **Sin efecto bajo monomoneda (D-A).**
    No se renumera: reintroducir multimoneda es reactivarlo.
 9. **INV-09** Las acciones sensibles escriben `AuditLog` en la misma transacción. Si el log falla,
@@ -57,7 +60,8 @@ improvisar. Detalle en `docs/CRM-AVTR-SPEC.md` §3.
 10. **INV-10** El estado de los filtros vive en la URL (`searchParams`). La **oficina activa** no es
     un filtro: vive en la cookie `crm-oficina` y recorta dentro del alcance, nunca lo amplía
     (`decisiones-pendientes.md` §16).
-11. **INV-11** Las banderas de riesgo se calculan, no se capturan.
+11. **INV-11** Las banderas de riesgo se calculan, no se capturan. Son dos: sin actividad y
+    estancada; el margen bajo dejó de ser bandera (decisiones §27) y se ve en la tarjeta.
 12. **INV-12** El folio es inmutable, incluso al reabrir. Consecutivo **por año**.
 13. **INV-13** Las etapas son datos, no `enum`. Un `switch` por nombre de etapa es un defecto.
 14. **INV-14** La UI siempre en español. Identificadores en inglés.
@@ -123,26 +127,33 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     desde onSubmit para que React no reinicie el formulario cuando la acción devuelve VALIDACION;
                     useProblemas apaga el error de un campo al corregirlo) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
+                    · AyudaEmergente (<details> con un icono junto a la etiqueta; lo usa el campo «Pronóstico»)
                     · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
                     contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo)
 components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos}/   por pantalla
                     pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
                     por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
-                    BarraDeFiltros (§9)
+                    BarraDeHerramientas (dos filas: vistas, botón de embudo que oculta los filtros y alta;
+                    debajo los filtros) · BarraDeFiltros (§9; Estatus y Pronóstico como desplegables de
+                    varios, solo abiertas por omisión → §25, §27) ·
+                    TarjetaOportunidad (ganada verde, perdida coral; solo las abiertas se arrastran)
                     oportunidad: ComposerDeActividad (nueva o edición; agendar por omisión, «marcar como hecha»
                     en el pie, tipos en botones con icono y el resto en «Otro…», fecha + inicio + fin en la zona
                     de la oportunidad, responsable; estadoDeActividad es su reductor puro) ·
                     DatoEditable (los cinco datos que se corrigen en la ficha sin abrir el panel) ·
                     Bitacora (línea de tiempo con filtros en la URL) · PanelMeddic (descripción por
-                    componente, calificación rápida; la evidencia se señala «Sin evidencia», no se exige →
-                    RN-30 enmendada, decisiones §24) · CambioDeEtapa ·
-                    EditarOportunidad · PanelHitos (neto, asignado y por asignar a la vista; la suma no
+                    componente, evidencia en la tarjeta, calificación rápida; parcial sin evidencia se señala
+                    «Sin evidencia», confirmar la exige; «Nueva persona…» crea a la del comité desde el panel →
+                    RN-30 enmendada, decisiones §24 y §27) · CambioDeEtapa ·
+                    EditarOportunidad (disparador «icono»: el lápiz en «Datos de la oportunidad») ·
+                    CerrarOportunidad (Ganada/Perdida desde cualquier etapa; requisitos con palomita, motivo
+                    y competidor → §25) · PanelHitos (neto, asignado y por asignar a la vista; la suma no
                     supera el neto, el % se convierte en el servidor) · PanelDocumentos
                     cotizacion: TablaDeCotizacion (una sola; «Editar» abre las celdas de cantidad, precio,
                     descuento y costo, y agregar o quitar líneas solo vive ahí; «Guardar cambios» las manda en
-                    un viaje: una entrada en la bitácora por guardado, solo si algo cambió de valor; sin congelar
-                    ni versiones → INV-06 enmendado) · calculoEnVivo (la vista previa al teclear, con decimal.js
+                    un viaje: una entrada en la bitácora por guardado, solo si el total cambió (§26); sin
+                    congelar ni versiones → INV-06 enmendado) · calculoEnVivo (la vista previa al teclear, con decimal.js
                     —la misma librería que Prisma— y una prueba de paridad contra lib/domain/quote; sin VER_COSTO
                     no anticipa margen) · estadoDeEdicion (reductor puro: modo, generación, borrador) ·
                     AbrirCotizacion
@@ -177,9 +188,10 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   conjunto: nunca ve el total de la oficina, ni por agregación.
 - **MEDDIC gatea, no pondera.** El ponderado sigue siendo `amount × stage.probability` (`RN-01`).
   El puntaje MEDDIC bloquea el avance a cierre (≥70), el marcado como ganada (≥80, y `E`, `I`, `C`
-  confirmados) y la categoría «Compromiso» (≥70). Mínimos configurables. **La evidencia ya no
-  bloquea** (RN-30 enmendada, decisiones §24): parcial o confirmado sin evidencia se guarda y la
-  tarjeta lo señala; la persona ligada para confirmar `E` y `C` sigue siendo obligatoria.
+  confirmados) y la categoría «Compromiso» (≥70). Mínimos configurables. **La evidencia solo
+  bloquea al confirmar** (RN-30 enmendada, decisiones §24 y §27): parcial sin evidencia se guarda
+  y la tarjeta lo señala; confirmado exige evidencia, y `E` y `C` además la persona ligada, que se
+  puede crear desde el mismo panel.
 - **Un rango de fechas siempre dice sobre qué campo aplica** (`CIERRE_ESTIMADO`, `CIERRE_REAL`,
   `CREACION`, `ULTIMA_ACTIVIDAD`). Sin eso, los reportes no se pueden reproducir.
 - **Avance de cuota con `actualCloseDate`; cobertura con `expectedCloseDate`.** Mezclarlas produce
@@ -219,6 +231,10 @@ textualmente; no se sustituyen por la paleta por omisión de ninguna librería.
   puntual, nunca como superficie.
 - Montserrat para cuerpo y títulos, Clash Display para títulos cortos.
 - Todas las cifras en columna con `font-variant-numeric: tabular-nums`.
+- Los colores que se usan con opacidad (`bg-exito/10`, `border-coral/40`) están definidos en
+  `tailwind.config.ts` con canales RGB y `<alpha-value>` (`--status-success-rgb`…). Un color
+  definido como `var(--x)` a secas **no acepta** `/10`: Tailwind descarta la clase en silencio
+  (pasó el 24-sep con las tarjetas cerradas). Al usar un color nuevo con opacidad, darle canal.
 - Verde en o sobre el piso de margen, coral debajo: es la señal más importante de la interfaz.
 - Los estados vacíos siempre proponen la acción siguiente. Los errores dicen qué falta con el dato
   concreto: «faltan $200,000 por asignar en hitos», no «datos inválidos».
@@ -235,9 +251,9 @@ cambio de etapa y registro de actividades, contactos en dos pestañas con edici�
 precio versionado (RN-26). La **barra de filtros de §9** ya existe (cliente, vendedor, lapso,
 pipeline y «solo en riesgo»), con lo que se salda `AC-23`. De E2, el cotizador: líneas, congelar,
 versionar, alertas de política. De E3, las pestañas MEDDIC, hitos y documentos. De E4, **P-08
-objetivos**, con medición acumulada (decisiones §17). **Pendiente y visible:** marcar
-ganada/perdida, P-09 análisis, y las autorizaciones de descuento, fuera de este alcance por
-decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
+objetivos**, con medición acumulada (decisiones §17). **Marcar ganada/perdida** existe desde el
+24-sep-2026 (§25). **Pendiente y visible:** reabrir (RN-18), P-09 análisis, y las autorizaciones
+de descuento, fuera de este alcance por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
 
 ## Comandos

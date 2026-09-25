@@ -1,4 +1,3 @@
-import type { Money } from "@/lib/money";
 
 /**
  * Las banderas de riesgo · RN-13, INV-11.
@@ -11,11 +10,9 @@ import type { Money } from "@/lib/money";
  * Función pura. Todo umbral entra por parámetro (INV-05): los días de
  * estancamiento vienen de la etapa y el piso de margen, de la política del país.
  */
-export type RiskFlag = "SIN_ACTIVIDAD" | "ESTANCADA" | "MARGEN_BAJO";
+export type RiskFlag = "SIN_ACTIVIDAD" | "ESTANCADA";
 
 export type RiskInputs = {
-  /** Nulo mientras no hay cotización: sin margen no se acusa margen bajo. */
-  grossMargin: Money | null;
   /** RN-03 · se sella en cada transición, no en cada actividad. */
   stageEnteredAt: Date;
   nextActivityAt: Date | null;
@@ -41,8 +38,7 @@ export type RiskInputs = {
  */
 export type RiskEvidence =
   | { flag: "SIN_ACTIVIDAD"; diasSinContacto: number | null }
-  | { flag: "ESTANCADA"; diasEnEtapa: number; limite: number }
-  | { flag: "MARGEN_BAJO"; margen: Money; piso: Money };
+  | { flag: "ESTANCADA"; diasEnEtapa: number; limite: number };
 
 const MS_POR_DIA = 24 * 60 * 60 * 1000;
 
@@ -53,7 +49,6 @@ function diasEntre(desde: Date, hasta: Date): number {
 export function explainRiskFlags(
   oportunidad: RiskInputs,
   etapa: { staleAfterDays: number },
-  politica: { marginFloor: Money },
   ahora: Date,
 ): RiskEvidence[] {
   const evidencia: RiskEvidence[] = [];
@@ -85,14 +80,9 @@ export function explainRiskFlags(
     });
   }
 
-  // RN-05 · «verde en o sobre el piso, coral debajo» (§13.1). El piso cumple.
-  if (oportunidad.grossMargin !== null && oportunidad.grossMargin.lt(politica.marginFloor)) {
-    evidencia.push({
-      flag: "MARGEN_BAJO",
-      margen: oportunidad.grossMargin,
-      piso: politica.marginFloor,
-    });
-  }
+  // El margen bajo el piso ya no es bandera (decisiones §27, 24-sep-2026): se
+  // ve en la tarjeta, verde o coral (§13.1), y como bandera duplicaba la señal
+  // y llenaba la cola de riesgo de lo que no es seguimiento.
 
   return evidencia;
 }
@@ -106,8 +96,7 @@ export function explainRiskFlags(
 export function computeRiskFlags(
   oportunidad: RiskInputs,
   etapa: { staleAfterDays: number },
-  politica: { marginFloor: Money },
   ahora: Date,
 ): RiskFlag[] {
-  return explainRiskFlags(oportunidad, etapa, politica, ahora).map((e) => e.flag);
+  return explainRiskFlags(oportunidad, etapa, ahora).map((e) => e.flag);
 }

@@ -48,4 +48,4 @@ export type {
 };
 
 /** Las banderas de riesgo, que se calculan y no se guardan (INV-11). */
-export type RiskFlag = "SIN_ACTIVIDAD" | "ESTANCADA" | "MARGEN_BAJO";
+export type RiskFlag = "SIN_ACTIVIDAD" | "ESTANCADA";
