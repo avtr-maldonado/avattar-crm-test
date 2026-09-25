@@ -95,7 +95,9 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline),
                     usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS),
                     cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
-                    bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta)
+                    bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta),
+                    analisis (P-09: ganadas con cotización vigente, abiertas con etapa y MEDDIC, actividades
+                    hechas, objetivos de varios países; costo solo con VER_COSTO)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
                     riskFlags (banderas + evidencia con su número), folio, funnel (embudo y tasa de
                     paso), forecast (columnas por periodo de cierre estimado, ventana fija que avanza,
@@ -103,7 +105,10 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     objectives (avance acumulado → decisiones §17), opportunityField (qué datos se
                     corrigen desde la ficha; lista cerrada, el nombre del campo llega del cliente),
                     bitacora (fusiona y ordena las fuentes de la historia; sin VER_COSTO el costo se
-                    nombra pero no se cifra).
+                    nombra pero no se cifra),
+                    analisis (los ocho reportes de P-09 como agregaciones puras: agruparVentas,
+                    completarTrimestres, historicoDeVentas, rentabilidad, embudoDeForecast, cicloDeVenta,
+                    antiguedadYEstancamiento, actividadPorVendedor, saludMeddic → decisiones §28).
                     Servicios con transacción:
                     opportunity, activity (registrar y editar; responsable, duración y calendario por
                     parámetro), contact, product, quoteService, milestoneService, meddicService, document,
@@ -120,7 +125,8 @@ lib/graph/          calendario de Microsoft 365 (F-605): token de aplicación co
                     Entra al dominio por parámetro; nunca hace fallar el guardado
 lib/policy/         lectura de CommercialPolicy y Country → INV-05
 lib/money/          Decimal y formateo → INV-03
-lib/filters/        definición y parseo de filtros → INV-10
+lib/filters/        definición y parseo de filtros → INV-10 · analisis.ts: los de P-09 (pestaña, filtros y la
+                    agrupación de cada reporte en la URL) y hrefDeAnalisis para los conmutadores
 lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
 components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>; useEnvioQueConserva envía
@@ -131,7 +137,7 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
                     contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo)
-components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos}/   por pantalla
+components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,analisis}/   por pantalla
                     pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
                     por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
                     BarraDeHerramientas (dos filas: vistas, botón de embudo que oculta los filtros y alta;
@@ -158,6 +164,10 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos}
                     no anticipa margen) · estadoDeEdicion (reductor puro: modo, generación, borrador) ·
                     AbrirCotizacion
                     objetivos: PanelDeAvance · TiraDeTrimestres · TablaDeEquipo · FijarObjetivo
+                    analisis: FiltrosDeAnalisis (cliente; navega reescribiendo la URL) · TablaDeAnalisis + Reporte
+                    (tabla de reporte con total, barras de proporción y conmutador por enlaces) ·
+                    PestanaVentas · PestanaForecast · PestanaActividad (servidor; reciben datos acotados y
+                    llaman al dominio; sin costo no hay columna de utilidad)
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
                     del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
@@ -252,8 +262,10 @@ precio versionado (RN-26). La **barra de filtros de §9** ya existe (cliente, ve
 pipeline y «solo en riesgo»), con lo que se salda `AC-23`. De E2, el cotizador: líneas, congelar,
 versionar, alertas de política. De E3, las pestañas MEDDIC, hitos y documentos. De E4, **P-08
 objetivos**, con medición acumulada (decisiones §17). **Marcar ganada/perdida** existe desde el
-24-sep-2026 (§25). **Pendiente y visible:** reabrir (RN-18), P-09 análisis, y las autorizaciones
-de descuento, fuera de este alcance por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
+24-sep-2026 (§25). **P-09 análisis** existe desde el 25-sep-2026 (§28): ocho reportes en tres
+pestañas, con filtros y agrupaciones en la URL; los bloques D y E de la propuesta quedaron fuera.
+**Pendiente y visible:** reabrir (RN-18) y las autorizaciones de descuento, fuera de este alcance
+por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
 
 ## Comandos

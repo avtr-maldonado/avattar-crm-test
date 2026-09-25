@@ -1510,3 +1510,65 @@ oportunidad» a la derecha. Abajo: los filtros. Que la fila se vea o no es estad
 en la URL. Cuando están ocultos y hay alguno activo, el botón lleva un punto de acento: el
 recorte sigue aunque no se vea. Y en el panel MEDDIC, la persona nueva pide «Nombre», «Puesto» y
 «Rol», sin más palabras.
+
+## 28. P-09 Análisis: ocho reportes en tres pestañas (25 de septiembre de 2026)
+
+El negocio eligió, de la propuesta (`docs/propuesta-reportes-analisis.pdf`), los bloques A, B y
+C; D (cuentas y catálogo) y E (gobierno) quedan fuera de esta entrega. Lo construido:
+
+| Pestaña | Reporte | Agrupa por | Qué fecha manda |
+|---|---|---|---|
+| Análisis de ventas | 1 · Avance contra objetivo consolidado | trimestre · cliente · producto · tipo de negocio | `actualCloseDate` en el año fiscal |
+| | 2 · Histórico de venta | año · trimestre | `actualCloseDate`, **toda la historia** |
+| | 3 · Rentabilidad | producto · tipo · cliente | `actualCloseDate` en el año fiscal |
+| Forecast | 4 · Embudo | trimestre, y dentro cliente o vendedor; filtros de probabilidad mínima y pronóstico | `expectedCloseDate`, abiertas |
+| | 5 · Ciclo de venta medio | vendedor · trimestre de cierre | del alta al `actualCloseDate` |
+| | 6 · Antigüedad y estancamiento | vendedor · detalle (20 mayores) | hoy |
+| Actividad y MEDDIC | 8 · Actividad por vendedor | vendedor · tipo · mes | `completedAt` en el año fiscal |
+| | 9 · Salud MEDDIC | etapa · en cierre bajo el mínimo | hoy |
+
+Filtros comunes: país, vendedor, año fiscal, producto y tipo de negocio. Todo —pestaña, filtros y
+la agrupación de cada reporte— vive en la URL (INV-10): un reporte es un enlace.
+
+### Lo que se decidió construyendo
+
+- **La cuota es consolidada y no se reparte.** Se suma de los renglones de objetivos que la
+  sesión alcanza (§10.3) y se compara en el total y por trimestre. Por cliente, producto o tipo
+  no existe cuota, así que con esos filtros el cumplimiento no se pinta y la pantalla lo dice.
+  Con cuota anual y trimestral a la vez, manda la anual (RN-32).
+- **El histórico ignora el filtro de año.** Comparar años exige más de uno; el resto de los
+  filtros sí aplica. La variación es contra el periodo anterior **con ventas**: un trimestre sin
+  nada en medio no se inventa como cero.
+- **Por producto, cada venta se reparte entre las líneas de su cotización vigente** (la de mayor
+  versión, §21). Lo ganado sin cotización va en una fila «Sin cotización», porque decir que no
+  vendió nada sería mentir. El «número de negocios» de una fila de producto cuenta en cuántas
+  oportunidades aparece.
+- **Rentabilidad solo con `VER_COSTO`** (INV-02): sin el permiso el lector no selecciona costo
+  ni utilidad, el dominio devuelve utilidad nula y el reporte 3 muestra un aviso en lugar de
+  ceros. El margen se pinta contra `marginFloor` de la política del país (INV-05).
+- **Estancada y sin actividad salen de `explainRiskFlags`** (INV-11): un reporte que las
+  calculara aparte diría otra cosa que el tablero. «Vencida» es cierre estimado en el pasado y
+  todavía abierta.
+- **Ciclo de venta con promedio y mediana**; la mediana aguanta el negocio de dos años que sesga
+  el promedio. Sin ganadas en el año, «sin datos suficientes», nunca cero (C-02).
+- **La oficina activa no recorta aquí.** Esta pantalla es para comparar países; el país es un
+  filtro explícito y, como cualquier filtro, nunca amplía el alcance (AC-25). El calendario
+  fiscal, el piso de margen y el mínimo MEDDIC son los del país filtrado o, sin filtro, los del
+  primero del alcance: con varios países y calendarios distintos, la vista consolidada usa uno.
+  Q-18: ¿los tres países comparten calendario fiscal? Hoy sí en la base.
+- **El vendedor sigue en 403** (AC-02). Nada de esta pantalla se calcula para él.
+
+### Un defecto latente que sigue
+
+`avanceDeObjetivos` (P-08) calcula la utilidad lograda con cotizaciones `frozenAt not null`, y
+desde §21 ya no se congela ninguna: la utilidad lograda de Objetivos está en cero. Los reportes
+de Análisis no la usan —toman la cotización de mayor versión—, pero P-08 hay que corregirlo.
+
+Dónde vive: `lib/filters/analisis.ts` (parser y `hrefDeAnalisis`), `lib/scope/analisis.ts`
+(`ganadas`, `abiertasDelAnalisis`, `actividadesHechasDelAnio`, `objetivosDelAnalisis`),
+`lib/domain/analisis.ts` (agregaciones puras), `app/(app)/analisis/page.tsx`,
+`components/analisis/` (`FiltrosDeAnalisis`, `TablaDeAnalisis` + `Reporte`, `PestanaVentas`,
+`PestanaForecast`, `PestanaActividad`). `ETIQUETA_TIPO_DE_NEGOCIO` pasó a `lib/etiquetas.ts`.
+Pruebas: `lib/domain/analisis.test.ts` (24), `lib/filters/analisis.test.ts` (6) y, contra la base,
+`tests/integracion/analisis.test.ts` (INV-02, AC-25, RN-31; solo lectura, no depende del escenario §15).
+

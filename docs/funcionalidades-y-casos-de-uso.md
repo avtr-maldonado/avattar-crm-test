@@ -491,7 +491,34 @@ Pestaña Usuarios, solo con `ADMINISTRAR_USUARIOS`. Cada operación deja bitáco
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-36.1 Vendedor | Vendedor | Abre `/analisis` | **403**, no una pantalla vacía (`AC-02`) |
-| CU-36.2 Gerencia y dirección | Gerente, Dirección, Administración | Abre `/analisis` | La ruta existe y autoriza; los tableros llegan con E4. Los que requieran historia dirán «sin datos suficientes», nunca cero (`Q-06`) |
+| CU-36.2 Gerencia y dirección | Gerente, Dirección, Administración | Abre `/analisis` | Tres pestañas: Análisis de ventas, Forecast, Actividad y MEDDIC. Los reportes que requieren historia dicen «sin datos suficientes», nunca cero (`Q-06`, `C-02`) |
+| CU-36.3 Filtrar | Gerente, Dirección | Elige país, vendedor, año fiscal, producto o tipo de negocio | Recorta **dentro** del alcance (`AC-25`); todo queda en la URL (`INV-10`) y el enlace se puede compartir. Un gerente solo ve los países donde opera; la oficina activa no recorta aquí |
+
+### F-39 · Análisis de ventas (reportes 1 a 3)
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-39.1 Avance contra objetivo | Gerente, Dirección | Agrupa lo ganado del año por trimestre, cliente, producto o tipo | Ganado por `actualCloseDate`; cuota consolidada (suma de las cuotas del alcance, `RN-32`) y cumplimiento en el total y, por trimestre, en cada fila. Por producto cada venta se reparte entre las líneas de su cotización; sin cotización, fila «Sin cotización» |
+| CU-39.2 Filtro por producto o tipo | Gerente, Dirección | Filtra por producto o tipo de negocio | La cuota no se reparte a ese nivel: el cumplimiento no se pinta y la pantalla lo dice |
+| CU-39.3 Histórico | Gerente, Dirección | Agrupa por año o trimestre | Toda la historia; el filtro de año no aplica. Variación contra el periodo anterior con ventas |
+| CU-39.4 Rentabilidad | Dirección, Administración (`VER_COSTO`) | Agrupa por producto, tipo o cliente | Venta, costo, utilidad y margen de la cotización vigente; verde en o sobre el piso de la política, coral debajo (`INV-05`) |
+| CU-39.5 Rentabilidad sin permiso | Gerente sin `VER_COSTO` | Abre la pestaña | El costo no viaja (`INV-02`); el reporte 3 muestra un aviso, no ceros |
+
+### F-40 · Forecast (reportes 4 a 6)
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-40.1 Embudo | Gerente, Dirección | Ve las abiertas por trimestre de cierre estimado y, dentro, por cliente o vendedor | Importe, ponderado (`RN-01`) y peso de cada subgrupo en su trimestre |
+| CU-40.2 Filtros del embudo | Gerente, Dirección | Fija probabilidad mínima de etapa (25/50/75 %) o marca categorías de pronóstico | Recortan antes de agrupar; sin categoría marcada, todas. Viven en la URL |
+| CU-40.3 Ciclo de venta | Gerente, Dirección | Lee promedio y mediana de días del alta al cierre real | Sobre las ganadas del año; por vendedor y por trimestre de cierre. Sin ganadas, «sin datos suficientes» |
+| CU-40.4 Antigüedad | Gerente, Dirección | Ve estancadas, sin actividad y vencidas por vendedor, y las 20 abiertas de mayor importe | Mismas banderas que el tablero (`INV-11`, `RN-03`, `RN-10`); días en etapa contra el límite de la etapa; el folio lleva a la oportunidad |
+
+### F-41 · Actividad y MEDDIC (reportes 8 y 9)
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-41.1 Actividad por vendedor | Gerente, Dirección | Ve las hechas del año por persona y tipo, y sus abiertas sin siguiente paso | Solo lo **hecho** cuenta (decisiones §19); sin siguiente paso = sin actividad agendada o con la agendada vencida (`RN-10`). Además, hechas por mes |
+| CU-41.2 Salud MEDDIC | Gerente, Dirección | Ve el puntaje promedio por etapa, cuántas están bajo el mínimo y sin calificar | Mínimo de la política (`INV-05`); componentes parciales o confirmados sin evidencia (`RN-30`); lista de las que están en etapa de cierre por debajo del mínimo, con enlace |
 
 ---
 
@@ -503,7 +530,7 @@ Pestaña Usuarios, solo con `ADMINISTRAR_USUARIOS`. Cada operación deja bitáco
 | Reabrir una oportunidad (`RN-18`) | Pendiente | Solo Administración; sin pantalla |
 | Registrar actividad desde la pantalla de Actividades | Pendiente | El botón existe; la ruta no. Se registra desde el detalle |
 | Autorizaciones de descuento · P-10 | Fuera de este alcance | Decisión del negocio. La compuerta «sin autorización pendiente» existe pero nunca se activa |
-| Tableros de Análisis · P-09 | Pendiente (E4) | Solo la autorización |
+| Reportes D y E de la propuesta de Análisis (cuentas y catálogo; gobierno) | Fuera de esta entrega | Decisión del negocio del 25-sep-2026; A, B y C están construidos (decisiones §28) |
 | Vistas guardadas (§9.5) | Pendiente | Los filtros ya viven en la URL, que es el prerrequisito |
 | Editar pipelines, catálogos, permisos y política desde la interfaz | Pendiente | Hoy se consultan; se cambian en la base |
 | Carga masiva de productos y costos (`Q-05`) | Pendiente | |
