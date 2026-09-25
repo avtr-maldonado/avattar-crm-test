@@ -12,7 +12,15 @@ import { formatUSD, money } from "@/lib/money";
  * recibe los eventos ya ordenados y con su texto.
  */
 
-export type TipoDeEvento = "CREACION" | "ETAPA" | "CIERRE" | "PROPIETARIO" | "COTIZACION" | "ACTIVIDAD";
+export type TipoDeEvento =
+  | "CREACION"
+  | "ETAPA"
+  | "CIERRE"
+  | "PROPIETARIO"
+  | "COTIZACION"
+  | "ACTIVIDAD"
+  | "GANADA"
+  | "PERDIDA";
 
 export type FiltroDeBitacora = "todo" | "etapas" | "cotizacion" | "actividades" | "cambios";
 
@@ -149,6 +157,35 @@ function eventoDeAuditoria(
         titulo: `Cierre estimado: ${fecha(antes.expectedCloseDate)} → ${fecha(despues.expectedCloseDate)}`,
       };
 
+    // El resultado de la oportunidad (§25): con el importe o el motivo, y desde
+    // qué etapa se cerró, porque ganar o perder no mueve de columna.
+    case "MARCAR_GANADA":
+      return {
+        id: a.id,
+        tipo: "GANADA",
+        cuando: a.at,
+        quien: a.byUser.name,
+        titulo: `Ganada · ${importe(despues.amount)}`,
+        detalle: despues.stage ? `Desde ${String(despues.stage)}` : undefined,
+      };
+
+    case "MARCAR_PERDIDA": {
+      const motivo = typeof despues.lossReason === "string" ? despues.lossReason : "sin motivo";
+      const competidor =
+        typeof despues.lossCompetitor === "string" && despues.lossCompetitor
+          ? `Competidor: ${despues.lossCompetitor}`
+          : null;
+      const desde = despues.stage ? `Desde ${String(despues.stage)}` : null;
+      return {
+        id: a.id,
+        tipo: "PERDIDA",
+        cuando: a.at,
+        quien: a.byUser.name,
+        titulo: `Perdida · ${motivo}`,
+        detalle: [competidor, desde].filter(Boolean).join(" · ") || undefined,
+      };
+    }
+
     case "CAMBIAR_PROPIETARIO":
       return {
         id: a.id,
@@ -209,7 +246,7 @@ const GRUPOS: Record<Exclude<FiltroDeBitacora, "todo">, ReadonlySet<TipoDeEvento
   etapas: new Set(["ETAPA", "CREACION"]),
   cotizacion: new Set(["COTIZACION"]),
   actividades: new Set(["ACTIVIDAD"]),
-  cambios: new Set(["CIERRE", "PROPIETARIO"]),
+  cambios: new Set(["CIERRE", "PROPIETARIO", "GANADA", "PERDIDA"]),
 };
 
 export const FILTROS_DE_BITACORA: { valor: FiltroDeBitacora; etiqueta: string }[] = [

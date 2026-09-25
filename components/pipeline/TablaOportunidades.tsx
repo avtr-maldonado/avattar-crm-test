@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ETIQUETA_BANDERA } from "@/lib/etiquetas";
+import { ETIQUETA_BANDERA, tonoDeRiesgo } from "@/lib/etiquetas";
 import { Avatar, Pastilla } from "@/components/ui/primitivas";
 import type { DatosTarjeta } from "./TarjetaOportunidad";
 
@@ -52,7 +52,14 @@ export function TablaOportunidades({
                 </Link>
               </td>
               <td className="px-3 py-2">
-                <div className="font-medium text-texto-titulo">{o.nombre}</div>
+                <div className="flex items-center gap-2 font-medium text-texto-titulo">
+                  {o.nombre}
+                  {o.estatus !== "ABIERTA" ? (
+                    <Pastilla tono={o.estatus === "GANADA" ? "exito" : "peligro"}>
+                      {o.estatus === "GANADA" ? "Ganada" : "Perdida"}
+                    </Pastilla>
+                  ) : null}
+                </div>
                 <div className="text-xs text-texto-tenue">{o.organizacion}</div>
               </td>
               <td className="px-3 py-2 text-texto-cuerpo">{etapaDe[o.id]}</td>
@@ -94,7 +101,7 @@ export function TablaOportunidades({
               <td className="px-3 py-2">
                 <div className="flex flex-wrap gap-1">
                   {o.banderas.map((b) => (
-                    <Pastilla key={b} tono={b === "MARGEN_BAJO" ? "peligro" : "alerta"}>
+                    <Pastilla key={b} tono={tonoDeRiesgo(b)}>
                       {ETIQUETA_BANDERA[b]}
                     </Pastilla>
                   ))}

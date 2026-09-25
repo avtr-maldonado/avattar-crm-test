@@ -63,7 +63,14 @@ const esquemaMeddic = z.object({
   status: z.enum(["NO_EVALUADO", "AUSENTE", "PARCIAL", "CONFIRMADO"]),
   evidence: z.string().trim().optional(),
   personId: z.string().trim().optional(),
+  // §27 · «Nueva persona…» en el panel: nace en la cuenta de la oportunidad.
+  personaNombre: z.string().trim().optional(),
+  personaCargo: z.string().trim().optional(),
+  personaRolComiteId: z.string().trim().optional(),
 });
+
+/** El valor del desplegable que significa «crear una persona nueva». */
+const NUEVA_PERSONA = "__nueva";
 
 export async function guardarMeddicAccion(
   _previo: ResultadoDePestana | null,
@@ -83,7 +90,11 @@ export async function guardarMeddicAccion(
       component: d.component,
       status: d.status,
       evidence: d.evidence || null,
-      personId: d.personId || null,
+      personId: d.personId === NUEVA_PERSONA ? null : d.personId || null,
+      nuevaPersona:
+        d.personId === NUEVA_PERSONA
+          ? { name: d.personaNombre ?? "", jobTitle: d.personaCargo, committeeRoleId: d.personaRolComiteId }
+          : undefined,
     },
     await pesosDelPipeline(detalle.pipeline.id),
   );

@@ -11,6 +11,7 @@ import {
 } from "@/lib/scope/opportunityDetail";
 import { evaluateGate, type GateContext, type GateFailure, type GateResult } from "./stageGate";
 import { nextFolio } from "./folio";
+import { cuadreDeHitos } from "./milestone";
 
 export type DecisionDeTransicion = {
   avanza: boolean;
@@ -583,4 +584,193 @@ export async function editarOportunidad(
   });
 
   return ok(null);
+}
+
+// ═══════════════════════════════════════════════════ Marcar ganada o perdida
+
+export type RequisitoParaGanar = {
+  texto: string;
+  cumple: boolean;
+  /** Lo que se le dice a quien intenta ganar sin cumplirlo. `null` si cumple o si otro requisito ya lo explica. */
+  faltante: string | null;
+};
+
+/**
+ * Lo que hace falta para ganar · INV-07 con las condiciones de decisiones §25.
+ *
+ * Desde cualquier etapa. Tres cosas: una cotización con líneas —sin ella no
+ * hay neto que ganar—, hitos de facturación, y que cuadren con ese neto
+ * (RN-06, AC-18: el mensaje dice cuánto falta). No se exigen el puntaje MEDDIC
+ * (RN-28) ni el contrato cargado: el negocio lo decidió así el 24-sep-2026, y
+ * §25 dice dónde volver a exigirlos.
+ *
+ * Puro: la pantalla lo usa para enseñar la lista con palomitas; el servicio,
+ * para negarse con las mismas palabras.
+ */
+export function requisitosParaGanar(o: DetalleOportunidad): RequisitoParaGanar[] {
+  const cotizacion = cotizacionConLineas(o);
+  const hayHitos = o.milestones.length > 0;
+  const cuadre = cuadreDeHitos(
+    o.milestones.map((h) => h.amount),
+    cotizacion?.netSubtotal ?? null,
+  );
+
+  return [
+    {
+      texto: "Cotización con al menos una línea",
+      cumple: cotizacion != null,
+      faltante: cotizacion
+        ? null
+        : "Sin cotización con líneas no hay neto que ganar. Abre la cotización y agrega sus líneas.",
+    },
+    {
+      texto: "Hitos de facturación capturados",
+      cumple: hayHitos,
+      faltante: hayHitos
+        ? null
+        : "Sin hitos de facturación no hay calendario de cobro (RN-06). Captura los hitos.",
+    },
+    {
+      texto: "Hitos que cuadran con el neto de la cotización",
+      cumple: cuadre.cuadra,
+      // Sin cotización o sin hitos ya lo dijeron los de arriba: aquí solo el cuadre.
+      faltante: cotizacion && hayHitos && !cuadre.cuadra ? cuadre.mensaje : null,
+    },
+  ];
+}
+
+/** Abierta, y de quien la puede cerrar: su propietario o quien tiene alcance de oficina (Q-13). */
+function alcanzaParaCerrar(
+  session: Session,
+  detalle: DetalleOportunidad,
+): ResultadoAccion<never> | null {
+  if (detalle.status !== "ABIERTA") {
+    return falla(
+      "AUTORIZACION",
+      `Esta oportunidad ya está ${ETIQUETA_ESTATUS[detalle.status].toLowerCase()}. Reabrirla es de Administración (RN-18).`,
+    );
+  }
+  const esSuya = detalle.owner.id === session.userId;
+  if (!esSuya && !can(session, "VER_OPORTUNIDADES_OFICINA")) {
+    return falla("AUTORIZACION", "Solo su propietario o Gerencia pueden cerrarla.");
+  }
+  return null;
+}
+
+/** El día de hoy sin hora, en UTC: `actualCloseDate` es `@db.Date`. */
+function hoyUTC(): Date {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/**
+ * Marcar ganada · AC-19. Sella `actualCloseDate` con el día de hoy y deja
+ * `MARCAR_GANADA` en `AuditLog` en la misma transacción (INV-09): es lo que la
+ * bitácora enseña y lo que el avance de cuota mide (§10.2). La etapa se queda
+ * donde estaba: ganar no es moverse de columna.
+ */
+export async function marcarGanada(
+  session: Session,
+  detalle: DetalleOportunidad,
+): Promise<ResultadoAccion<{ actualCloseDate: Date }>> {
+  const bloqueada = alcanzaParaCerrar(session, detalle);
+  if (bloqueada) return bloqueada;
+
+  // INV-07 · todas las condiciones, y todas nombradas, no solo la primera.
+  const faltantes = requisitosParaGanar(detalle).flatMap((r) =>
+    r.faltante ? [{ mensaje: r.faltante }] : [],
+  );
+  if (faltantes.length > 0) return falla("COMPUERTA", ...faltantes);
+
+  const actualCloseDate = hoyUTC();
+  const cotizacion = cotizacionConLineas(detalle);
+
+  await auditedTransaction(async (tx, audit) => {
+    await tx.opportunity.update({
+      where: { id: detalle.id },
+      data: { status: "GANADA", actualCloseDate },
+    });
+    await audit({
+      entity: "Opportunity",
+      entityId: detalle.id,
+      action: "MARCAR_GANADA",
+      byUserId: session.userId,
+      before: { status: detalle.status, stage: detalle.stage.name },
+      after: {
+        status: "GANADA",
+        actualCloseDate: actualCloseDate.toISOString(),
+        amount: detalle.amount.toString(),
+        netSubtotal: cotizacion?.netSubtotal.toString() ?? null,
+        stage: detalle.stage.name,
+      },
+    });
+  });
+
+  return ok({ actualCloseDate });
+}
+
+export type MotivoDePerdida = {
+  lossReasonId: string;
+  /** RN-16 · obligatorio cuando el motivo lo exige. */
+  lossCompetitor?: string | null;
+};
+
+/**
+ * Marcar perdida · AC-20. El motivo es obligatorio: sin él una pérdida no
+ * enseña nada. Si el motivo exige competidor (RN-16), también. Igual que
+ * ganar: desde cualquier etapa, con el cierre real de hoy y su rastro.
+ */
+export async function marcarPerdida(
+  session: Session,
+  detalle: DetalleOportunidad,
+  motivo: MotivoDePerdida,
+): Promise<ResultadoAccion<{ actualCloseDate: Date }>> {
+  const bloqueada = alcanzaParaCerrar(session, detalle);
+  if (bloqueada) return bloqueada;
+
+  if (!motivo.lossReasonId) {
+    return falla("VALIDACION", {
+      campo: "lossReasonId",
+      mensaje: "Di por qué se perdió: sin motivo, una pérdida no enseña nada.",
+    });
+  }
+  const razon = await prisma.lossReason.findFirst({
+    where: { id: motivo.lossReasonId, active: true },
+    select: { id: true, name: true, requiresCompetitor: true },
+  });
+  if (!razon) {
+    return falla("VALIDACION", { campo: "lossReasonId", mensaje: "Ese motivo no está en el catálogo." });
+  }
+  const lossCompetitor = motivo.lossCompetitor?.trim() || null;
+  if (razon.requiresCompetitor && !lossCompetitor) {
+    return falla("VALIDACION", {
+      campo: "lossCompetitor",
+      mensaje: `«${razon.name}» exige nombrar al competidor (RN-16).`,
+    });
+  }
+
+  const actualCloseDate = hoyUTC();
+
+  await auditedTransaction(async (tx, audit) => {
+    await tx.opportunity.update({
+      where: { id: detalle.id },
+      data: { status: "PERDIDA", actualCloseDate, lossReasonId: razon.id, lossCompetitor },
+    });
+    await audit({
+      entity: "Opportunity",
+      entityId: detalle.id,
+      action: "MARCAR_PERDIDA",
+      byUserId: session.userId,
+      before: { status: detalle.status, stage: detalle.stage.name },
+      after: {
+        status: "PERDIDA",
+        actualCloseDate: actualCloseDate.toISOString(),
+        lossReason: razon.name,
+        lossCompetitor,
+        stage: detalle.stage.name,
+      },
+    });
+  });
+
+  return ok({ actualCloseDate });
 }

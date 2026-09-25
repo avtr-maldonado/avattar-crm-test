@@ -12,10 +12,14 @@ import {
   AreaDeTexto,
   AvisosDeAccion,
   Campo,
+  Entrada,
   Panel,
   Seleccion,
   useEnvioQueConserva,
 } from "@/components/ui/formulario";
+
+/** El valor del desplegable de persona que significa «crear una nueva» (§27). */
+const NUEVA_PERSONA = "__nueva";
 
 type Resultado = ResultadoAccion<{ puntaje?: number; url?: string } | null>;
 type Accion = (previo: Resultado | null, form: FormData) => Promise<Resultado>;
@@ -77,11 +81,12 @@ function tonoDelPuntaje(puntaje: number): "peligro" | "alerta" | "exito" {
  * y los cuatro guardan al pulsar. Solo confirmar al decisor económico o al
  * campeón sin persona ligada abre el panel, con ese estado ya elegido (§2.1).
  *
- * ## La evidencia se señala, no se exige · RN-30 enmendada (§24)
+ * ## La evidencia se pide al confirmar y se señala en parcial · RN-30 (§24, §27)
  *
- * Un componente parcial o confirmado sin evidencia lleva la marca «Sin
- * evidencia» junto a su estado y el encabezado cuenta cuántos van así; el
- * botón «Evidencia» no cambia, para que siempre esté donde se espera. Sin evidencia el puntaje es una opinión:
+ * Confirmar exige evidencia: el botón rápido abre el panel con el estado
+ * elegido y el foco en ella. Parcial se guarda sin evidencia y lleva la marca
+ * «Sin evidencia» junto a su estado; el encabezado cuenta cuántos van así. La
+ * evidencia, cuando existe, se lee en la tarjeta bajo la descripción. Sin evidencia el puntaje es una opinión:
  * el sistema lo deja pasar y lo hace visible.
  */
 export function PanelMeddic({
@@ -89,6 +94,7 @@ export function PanelMeddic({
   puntaje,
   componentes,
   personas,
+  rolesDeComite,
   minimos,
   puedeEditar,
   accion,
@@ -97,6 +103,8 @@ export function PanelMeddic({
   puntaje: number;
   componentes: ComponenteMeddic[];
   personas: { id: string; name: string; jobTitle: string | null }[];
+  /** Para declarar el rol de una persona nueva desde el panel (§2.1). */
+  rolesDeComite: { id: string; name: string }[];
   minimos: { cierre: number; ganada: number; compromiso: number };
   puedeEditar: boolean;
   accion: Accion;
@@ -206,6 +214,10 @@ export function PanelMeddic({
                 )}
               </div>
               <p className="mt-0.5 text-xs text-texto-cuerpo">{c.descripcion}</p>
+              {/* La evidencia, de vuelta en la tarjeta (24-sep): solo cuando existe. */}
+              {c.evidencia ? (
+                <p className="mt-1 text-xs text-texto-tenue">{c.evidencia}</p>
+              ) : null}
             </div>
 
             {puedeEditar && (
@@ -252,8 +264,8 @@ export function PanelMeddic({
         titulo={editando?.nombre ?? ""}
         subtitulo={
           editando?.anclaPersona
-            ? "Confirmarlo exige ligar a una persona real del comité de compra (§2.1)."
-            : "La evidencia no bloquea, pero sin ella el puntaje es una opinión: escribe en qué te basas."
+            ? "Confirmarlo exige evidencia y una persona real del comité de compra (§2.1); si no existe, créala aquí."
+            : "Confirmar exige evidencia; en parcial se pide, no se exige (RN-30, §27)."
         }
         abierto={editando !== null}
         alCerrar={() => setEditando(null)}
@@ -274,60 +286,15 @@ export function PanelMeddic({
         }
       >
         {editando && (
-          <form
-            id="calificar-meddic"
+          <FormularioDeCalificacion
             key={`${editando.clave}-${editando.estado}`}
-            className="flex flex-col gap-5"
-            onSubmit={alEnviar}
-          >
-            <input type="hidden" name="opportunityId" value={opportunityId} />
-            <input type="hidden" name="component" value={editando.clave} />
-            <p className="text-sm text-texto-cuerpo">{editando.descripcion}</p>
-
-            <Campo etiqueta="Estado" htmlFor="status" problema={problemaDe(resultado, "status")}>
-              <Seleccion id="status" name="status" defaultValue={editando.estado}>
-                {ESTADOS.map(([valor, etiqueta]) => (
-                  <option key={valor} value={valor}>
-                    {etiqueta}
-                  </option>
-                ))}
-              </Seleccion>
-            </Campo>
-
-            <Campo
-              etiqueta="Evidencia"
-              htmlFor="evidence"
-              ayuda="Qué se sabe y cómo se sabe: quién lo dijo, en qué reunión, con qué cifra."
-            >
-              <AreaDeTexto
-                id="evidence"
-                name="evidence"
-                autoFocus={!editando.evidencia}
-                defaultValue={editando.evidencia ?? ""}
-                placeholder="En qué se apoya esta calificación"
-              />
-            </Campo>
-
-            {editando.anclaPersona && (
-              <Campo
-                etiqueta="Persona"
-                htmlFor="personId"
-                problema={problemaDe(resultado, "personId")}
-                ayuda="Del comité de compra de esta cuenta. Se captura en Contactos."
-              >
-                <Seleccion id="personId" name="personId" defaultValue={editando.personaId ?? ""}>
-                  <option value="">Sin ligar</option>
-                  {personas.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.jobTitle ? `${p.name} · ${p.jobTitle}` : p.name}
-                    </option>
-                  ))}
-                </Seleccion>
-              </Campo>
-            )}
-
-            <AvisosDeAccion resultado={resultado} />
-          </form>
+            opportunityId={opportunityId}
+            editando={editando}
+            personas={personas}
+            rolesDeComite={rolesDeComite}
+            resultado={resultado}
+            alEnviar={alEnviar}
+          />
         )}
       </Panel>
     </div>
@@ -356,5 +323,128 @@ function Umbral({
         )}
       </dd>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────── Formulario
+
+/**
+ * El panel de un componente: estado, evidencia y, para el decisor y el campeón,
+ * la persona del comité. Si la persona no existe, «Nueva persona…» abre nombre,
+ * cargo y rol, y nace en la cuenta de la oportunidad al guardar (§27), como en
+ * el alta de oportunidad.
+ */
+function FormularioDeCalificacion({
+  opportunityId,
+  editando,
+  personas,
+  rolesDeComite,
+  resultado,
+  alEnviar,
+}: {
+  opportunityId: string;
+  editando: ComponenteMeddic;
+  personas: { id: string; name: string; jobTitle: string | null }[];
+  rolesDeComite: { id: string; name: string }[];
+  resultado: Resultado | null;
+  alEnviar: (e: React.FormEvent<HTMLFormElement>) => void;
+}) {
+  const [personaSel, setPersonaSel] = useState(editando.personaId ?? "");
+  const nueva = personaSel === NUEVA_PERSONA;
+  // El rol que corresponde al componente, si el catálogo lo tiene: se propone,
+  // no se impone.
+  const pista = editando.clave === "DECISOR_ECONOMICO" ? "decisor" : "campe";
+  const rolSugerido = rolesDeComite.find((r) => r.name.toLowerCase().includes(pista))?.id ?? "";
+
+  return (
+    <form id="calificar-meddic" className="flex flex-col gap-5" onSubmit={alEnviar}>
+      <input type="hidden" name="opportunityId" value={opportunityId} />
+      <input type="hidden" name="component" value={editando.clave} />
+      <p className="text-sm text-texto-cuerpo">{editando.descripcion}</p>
+
+      <Campo etiqueta="Estado" htmlFor="status" problema={problemaDe(resultado, "status")}>
+        <Seleccion id="status" name="status" defaultValue={editando.estado}>
+          {ESTADOS.map(([valor, etiqueta]) => (
+            <option key={valor} value={valor}>
+              {etiqueta}
+            </option>
+          ))}
+        </Seleccion>
+      </Campo>
+
+      <Campo
+        etiqueta="Evidencia"
+        htmlFor="evidence"
+        ayuda="Qué se sabe y cómo se sabe: quién lo dijo, en qué reunión, con qué cifra."
+      >
+        <AreaDeTexto
+          id="evidence"
+          name="evidence"
+          autoFocus={!editando.evidencia}
+          defaultValue={editando.evidencia ?? ""}
+          placeholder="En qué se apoya esta calificación"
+        />
+      </Campo>
+
+      {editando.anclaPersona ? (
+        <>
+          <Campo
+            etiqueta="Persona"
+            htmlFor="personId"
+            problema={problemaDe(resultado, "personId")}
+            ayuda="Del comité de compra de esta cuenta. Si no está, créala aquí."
+          >
+            <Seleccion
+              id="personId"
+              name="personId"
+              value={personaSel}
+              onChange={(e) => setPersonaSel(e.target.value)}
+              problema={problemaDe(resultado, "personId")}
+            >
+              <option value="">Sin ligar</option>
+              {personas.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.jobTitle ? `${p.name} · ${p.jobTitle}` : p.name}
+                </option>
+              ))}
+              <option value={NUEVA_PERSONA}>Nueva persona…</option>
+            </Seleccion>
+          </Campo>
+
+          {nueva ? (
+            <div className="grid grid-cols-1 gap-5 rounded-sm border border-borde bg-superficie-sutil p-4 sm:grid-cols-3">
+              <Campo
+                etiqueta="Nombre"
+                htmlFor="personaNombre"
+                problema={problemaDe(resultado, "personaNombre")}
+              >
+                <Entrada
+                  id="personaNombre"
+                  name="personaNombre"
+                  placeholder="Nombre"
+                  autoFocus
+                  problema={problemaDe(resultado, "personaNombre")}
+                />
+              </Campo>
+              <Campo etiqueta="Cargo" htmlFor="personaCargo">
+                <Entrada id="personaCargo" name="personaCargo" placeholder="Puesto" />
+              </Campo>
+              <Campo etiqueta="Rol" htmlFor="personaRolComiteId">
+                <Seleccion id="personaRolComiteId" name="personaRolComiteId" defaultValue={rolSugerido}>
+                  <option value="">Sin declarar</option>
+                  {rolesDeComite.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </Seleccion>
+              </Campo>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      <AvisosDeAccion resultado={resultado} />
+    </form>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ETIQUETA_BANDERA, ETIQUETA_ROL, NOMBRE_PAIS, iniciales } from "./etiquetas";
+import { ETIQUETA_BANDERA, ETIQUETA_ROL, NOMBRE_PAIS, iniciales , AYUDA_DE_PRONOSTICO } from "./etiquetas";
 
 describe("iniciales", () => {
   it("toma nombre y primer apellido", () => {
@@ -31,9 +31,8 @@ describe("etiquetas · INV-14", () => {
     expect(Object.keys(ETIQUETA_ROL)).toHaveLength(5);
   });
 
-  it("las tres banderas de riesgo tienen texto", () => {
-    expect(Object.keys(ETIQUETA_BANDERA)).toHaveLength(3);
-    expect(ETIQUETA_BANDERA.MARGEN_BAJO).toBe("Margen bajo");
+  it("las dos banderas de riesgo tienen texto (el margen dejó de serlo · §27)", () => {
+    expect(Object.keys(ETIQUETA_BANDERA)).toHaveLength(2);
   });
 
   it("los tres países tienen nombre completo", () => {
@@ -86,5 +85,12 @@ describe("marcador de rubro activo", () => {
       const encendidos = rubros.filter((r) => estaActivo(ruta, r));
       expect(encendidos, `${ruta} enciende ${encendidos.length} rubros`).toHaveLength(1);
     }
+  });
+});
+
+describe("AYUDA_DE_PRONOSTICO · qué significa cada categoría", () => {
+  it("cubre las cuatro categorías, con nombre y una explicación breve", () => {
+    expect(AYUDA_DE_PRONOSTICO.map((p) => p.nombre)).toEqual(["Compromiso", "Mejor caso", "Pipeline", "Omitida"]);
+    for (const p of AYUDA_DE_PRONOSTICO) expect(p.texto.length).toBeGreaterThan(20);
   });
 });

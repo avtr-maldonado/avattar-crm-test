@@ -55,3 +55,19 @@ export function wonInPeriod<T extends { status: string; actualCloseDate: Date | 
       o.actualCloseDate <= periodo.to,
   );
 }
+
+const RANGO_DE_ESTATUS: Record<string, number> = { ABIERTA: 0, GANADA: 1, PERDIDA: 2 };
+
+/**
+ * Abiertas, después ganadas, después perdidas · decisiones §25.
+ *
+ * Es el orden de lectura de un tablero cuando el filtro de estatus deja ver
+ * cerradas: lo que todavía se trabaja arriba, lo que ya se decidió debajo. Es
+ * estable: dentro de cada grupo se conserva el orden con que llegó (por
+ * importe, desde la consulta). No muta la lista.
+ */
+export function ordenarPorEstatus<T extends { status: string }>(lista: readonly T[]): T[] {
+  return [...lista].sort(
+    (a, b) => (RANGO_DE_ESTATUS[a.status] ?? 3) - (RANGO_DE_ESTATUS[b.status] ?? 3),
+  );
+}

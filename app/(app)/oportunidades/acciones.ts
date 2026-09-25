@@ -92,7 +92,11 @@ const esquema = z.object({
   omitirCompuerta: z.coerce.boolean().optional(),
   estimatedAmount: importe,
   expectedCloseDate: z.string().min(1, "Pon la fecha de cierre estimada."),
-  businessType: z.enum(["NUEVO", "EXPANSION", "RENOVACION"]),
+  // Sin valor por omisión: «Sin especificar» no es un tipo de negocio.
+  businessType: z
+    .string()
+    .min(1, "Elige el tipo de negocio.")
+    .pipe(z.enum(["NUEVO", "EXPANSION", "RENOVACION"], { message: "Elige el tipo de negocio." })),
   forecastCategory: z.enum(["PIPELINE", "MEJOR_CASO", "COMPROMISO", "OMITIDA"]).default("PIPELINE"),
   sourceId: z.string().optional(),
   ownerId: z.string().optional(),

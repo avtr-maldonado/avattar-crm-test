@@ -39,6 +39,17 @@
   --status-danger: #ff585d;
   --status-info: #62a8e5;
 
+  /* Canales RGB de los colores que se usan con opacidad (`bg-exito/10`,
+     `border-coral/40`). Tailwind solo compone alfa sobre canales con
+     `<alpha-value>`; sobre un var() con hex descarta la clase en silencio.
+     Mismos valores que los hex de arriba: si cambia uno, cambian los dos. */
+  --avattar-coral-rgb: 255 88 93;
+  --avattar-lime-rgb: 208 223 0;
+  --status-success-rgb: 47 158 109;
+  --navy-800-rgb: 38 55 73;
+  --navy-950-rgb: 8 16 28;
+  --accent-rgb: 98 168 229;
+
   /* Alias semánticos — los componentes usan estos, no los hex */
   --text-heading: var(--navy-600);
   --text-body: var(--navy-700);

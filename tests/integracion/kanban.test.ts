@@ -173,17 +173,14 @@ describe("tablero kanban · señales visuales", () => {
 
   it("las banderas de la tarjeta salen del cálculo, no de un campo (INV-11)", async () => {
     const jorge = await sesionDe("jm@avattar.com");
-    const [oportunidades, politica] = await Promise.all([
-      listOpportunities(jorge),
-      getCommercialPolicy("MX"),
-    ]);
+    const oportunidades = await listOpportunities(jorge);
 
     const conBandera = oportunidades
       // Sobre el escenario de §15: las altas reales también levantan banderas
       // —una oportunidad nueva sin próxima actividad la levanta, y debe—, pero
       // la cifra que este criterio compara es la del prototipo aprobado.
       .filter((o) => FOLIOS_SEMBRADOS.has(o.folio))
-      .map((o) => ({ folio: o.folio, banderas: computeRiskFlags(o, o.stage, politica, AHORA) }))
+      .map((o) => ({ folio: o.folio, banderas: computeRiskFlags(o, o.stage, AHORA) }))
       .filter((o) => o.banderas.length > 0);
 
     expect(conBandera).toHaveLength(6);

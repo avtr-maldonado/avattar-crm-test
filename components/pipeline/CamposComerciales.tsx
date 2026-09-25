@@ -1,6 +1,7 @@
 "use client";
 
-import { etiquetaDeTrimestre } from "@/lib/etiquetas";
+import { AYUDA_DE_PRONOSTICO, etiquetaDeTrimestre } from "@/lib/etiquetas";
+import { AyudaEmergente } from "@/components/ui/AyudaEmergente";
 import { Campo, Entrada, Seleccion } from "@/components/ui/formulario";
 import { SelectorDeEtapa, type EtapaElegible } from "./SelectorDeEtapa";
 
@@ -117,8 +118,10 @@ export function CamposComerciales({
           />
         </Campo>
 
-        <Campo etiqueta="Tipo de negocio" htmlFor="businessType">
-          <Seleccion id="businessType" name="businessType" defaultValue="NUEVO">
+        <Campo etiqueta="Tipo de negocio" htmlFor="businessType" problema={problema("businessType")}>
+          {/* Sin valor por omisión: elegirlo es parte de dar de alta. */}
+          <Seleccion id="businessType" name="businessType" defaultValue="" problema={problema("businessType")}>
+            <option value="">Sin especificar</option>
             {TIPOS_DE_NEGOCIO.map((t) => (
               <option key={t.valor} value={t.valor}>
                 {t.etiqueta}
@@ -163,9 +166,10 @@ export function CamposComerciales({
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Campo
-          etiqueta="Categoría de pronóstico"
+          etiqueta="Pronóstico"
           htmlFor="forecastCategory"
-          ayuda="«Compromiso» exige puntaje MEDDIC y llega con ese módulo."
+          ayudaEmergente={<AyudaEmergente titulo="Qué significa cada pronóstico" puntos={AYUDA_DE_PRONOSTICO} />}
+          ayuda="«Compromiso» exige el puntaje MEDDIC mínimo (RN-29)."
         >
           <Seleccion id="forecastCategory" name="forecastCategory" defaultValue="PIPELINE">
             {CATEGORIAS.map((c) => (

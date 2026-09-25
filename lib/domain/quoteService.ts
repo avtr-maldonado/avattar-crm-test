@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
-import { auditedTransaction, type AuditFn } from "@/lib/audit";
+import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { money, type Money } from "@/lib/money";
@@ -103,7 +103,7 @@ async function netoActual(tx: Prisma.TransactionClient, quoteId: string): Promis
   return q.netSubtotal;
 }
 
-/** Lo que `EDITAR_COTIZACION` deja en `after.linea`; lo lee `lib/domain/bitacora`. */
+/** Lo que `EDITAR_COTIZACION` deja en `after.lineas`; lo lee `lib/domain/bitacora`. `alta`/`baja` quedan de entradas viejas (§21). */
 type LineaAuditada = {
   descripcion: string;
   campo?: "quantity" | "unitPrice" | "discountRate" | "unitCost";
@@ -113,22 +113,20 @@ type LineaAuditada = {
   baja?: boolean;
 };
 
-async function anotar(
-  audit: AuditFn,
-  session: Session,
-  quoteId: string,
-  antes: Money,
-  despues: Money,
-  linea: LineaAuditada,
-) {
-  await audit({
-    entity: "Quote",
-    entityId: quoteId,
-    action: "EDITAR_COTIZACION",
-    byUserId: session.userId,
-    before: { netSubtotal: antes.toFixed(4) },
-    after: { netSubtotal: despues.toFixed(4), linea },
+/**
+ * El neto de la última anotación en la bitácora; cero si no hay ninguna, que
+ * es el total con el que se abre una cotización. Es contra lo que un guardado
+ * decide si anota (§26): así cada entrada empalma con la anterior aunque en
+ * medio se hayan agregado o quitado líneas sin guardar.
+ */
+async function ultimoNetoAnotado(tx: Prisma.TransactionClient, quoteId: string): Promise<Money> {
+  const ultima = await tx.auditLog.findFirst({
+    where: { entity: "Quote", entityId: quoteId, action: "EDITAR_COTIZACION" },
+    orderBy: { at: "desc" },
+    select: { after: true },
   });
+  const neto = (ultima?.after as { netSubtotal?: unknown } | null)?.netSubtotal;
+  return typeof neto === "string" ? money(neto) : money(0);
 }
 
 // ═════════════════════════════════════════════════════ Abrir la cotización
@@ -320,15 +318,14 @@ export async function guardarLinea(
 
   void umbrales; // RN-05 señala en la pantalla; aquí no bloquea (sin autorizaciones).
 
-  await auditedTransaction(async (tx, audit) => {
-    const [antes, ultima] = await Promise.all([
-      netoActual(tx, cotizacion.id),
-      tx.quoteLine.findFirst({
-        where: { quoteId: cotizacion.id },
-        orderBy: { position: "desc" },
-        select: { position: true },
-      }),
-    ]);
+  // Sin anotación: la bitácora se escribe al guardar, y solo si el total
+  // cambió (decisiones §26).
+  await prisma.$transaction(async (tx) => {
+    const ultima = await tx.quoteLine.findFirst({
+      where: { quoteId: cotizacion.id },
+      orderBy: { position: "desc" },
+      select: { position: true },
+    });
     await tx.quoteLine.create({
       data: {
         quoteId: cotizacion.id,
@@ -342,8 +339,7 @@ export async function guardarLinea(
         discountRate,
       },
     });
-    const despues = await recalcularYEspejar(tx, cotizacion.id);
-    await anotar(audit, session, cotizacion.id, antes, despues, { descripcion, alta: true });
+    await recalcularYEspejar(tx, cotizacion.id);
   });
 
   return ok(null);
@@ -384,7 +380,7 @@ export async function guardarCambiosDeCotizacion(
   cotizacion: CotizacionConLineas,
   cambios: CambioPorLinea[],
   umbrales: Umbrales,
-): Promise<ResultadoAccion<{ cambios: number }>> {
+): Promise<ResultadoAccion<{ cambios: number; total: { antes: string; despues: string } | null }>> {
   const bloqueada = editable(cotizacion);
   if (bloqueada) return bloqueada;
 
@@ -478,23 +474,35 @@ export async function guardarCambiosDeCotizacion(
   void umbrales; // RN-05 señala en la pantalla; aquí no bloquea (sin autorizaciones).
 
   const todas = pendientes.flatMap((p) => p.auditadas);
-  if (todas.length === 0) return ok({ cambios: 0 });
 
-  await auditedTransaction(async (tx, audit) => {
-    const antes = await netoActual(tx, cotizacion.id);
-    await Promise.all(pendientes.map((p) => tx.quoteLine.update({ where: { id: p.id }, data: p.data })));
-    const despues = await recalcularYEspejar(tx, cotizacion.id);
+  // §26 · lo que cambió de valor se guarda; la bitácora se escribe solo si el
+  // total quedó distinto de la última anotación, suba o baje. Un cambio que no
+  // mueve el neto —el costo, o dos que se compensan— se guarda sin anotar.
+  const total = await auditedTransaction(async (tx, audit) => {
+    if (todas.length > 0) {
+      await Promise.all(
+        pendientes.map((p) => tx.quoteLine.update({ where: { id: p.id }, data: p.data })),
+      );
+      await recalcularYEspejar(tx, cotizacion.id);
+    }
+    const [anotado, actual] = await Promise.all([
+      ultimoNetoAnotado(tx, cotizacion.id),
+      netoActual(tx, cotizacion.id),
+    ]);
+    if (actual.eq(anotado)) return null;
+
     await audit({
       entity: "Quote",
       entityId: cotizacion.id,
       action: "EDITAR_COTIZACION",
       byUserId: session.userId,
-      before: { netSubtotal: antes.toFixed(4) },
-      after: { netSubtotal: despues.toFixed(4), lineas: todas },
+      before: { netSubtotal: anotado.toFixed(4) },
+      after: { netSubtotal: actual.toFixed(4), lineas: todas },
     });
+    return { antes: anotado.toFixed(4), despues: actual.toFixed(4) };
   });
 
-  return ok({ cambios: todas.length });
+  return ok({ cambios: todas.length, total });
 }
 
 /** Cómo se anota un valor en la bitácora: el descuento como porcentaje, lo demás tal cual. */
@@ -503,7 +511,7 @@ function pintar(campo: (typeof CAMPOS_EDITABLES)[number], v: Money): string {
 }
 
 export async function quitarLinea(
-  session: Session,
+  _session: Session,
   cotizacion: CotizacionConLineas,
   lineId: string,
 ): Promise<ResultadoAccion> {
@@ -513,14 +521,11 @@ export async function quitarLinea(
   const linea = cotizacion.lines.find((l) => l.id === lineId);
   if (!linea) return falla("VALIDACION", "Esa línea no es de esta cotización.");
 
-  await auditedTransaction(async (tx, audit) => {
-    const antes = await netoActual(tx, cotizacion.id);
+  // Sin anotación: la bitácora se escribe al guardar, y solo si el total
+  // cambió (decisiones §26).
+  await prisma.$transaction(async (tx) => {
     await tx.quoteLine.deleteMany({ where: { id: lineId, quoteId: cotizacion.id } });
-    const despues = await recalcularYEspejar(tx, cotizacion.id);
-    await anotar(audit, session, cotizacion.id, antes, despues, {
-      descripcion: linea.description,
-      baja: true,
-    });
+    await recalcularYEspejar(tx, cotizacion.id);
   });
 
   return ok(null);

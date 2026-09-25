@@ -105,16 +105,23 @@ export function computeMeddicScore(
 export type ResultadoValidacion = { ok: true } | { ok: false; motivo: string };
 
 /**
- * RN-30, enmendada el 23-sep-2026 (decisiones §24) · el decisor económico y el
- * campeón en `CONFIRMADO` exigen una persona ligada. La evidencia **ya no
- * bloquea**: el negocio prefiere calificar primero y documentar después, así
- * que un componente en `PARCIAL` o `CONFIRMADO` sin evidencia se guarda y la
- * tarjeta lo señala (`faltaEvidencia`).
+ * RN-30, enmendada el 23-sep (§24) y el 24-sep-2026 (§27) · `CONFIRMADO`
+ * exige evidencia: confirmar es afirmar, y hay que decir en qué te basas. El
+ * decisor económico y el campeón confirmados exigen además una persona ligada.
+ * `PARCIAL` sigue sin exigir evidencia: se guarda y la tarjeta lo señala
+ * (`faltaEvidencia`).
  *
- * La evidencia sigue sin ser burocracia: sin ella el puntaje es una opinión, y
- * por eso se ve dónde falta.
+ * La evidencia no es burocracia: sin ella el puntaje es una opinión, y por eso
+ * se pide al confirmar y se ve dónde falta al calificar parcial.
  */
 export function validarComponente(a: MeddicAssessment): ResultadoValidacion {
+  if (a.status === "CONFIRMADO" && !a.evidence?.trim()) {
+    return {
+      ok: false,
+      motivo: `${NOMBRE_COMPONENTE[a.component]} confirmado necesita evidencia: escribe en qué te basas.`,
+    };
+  }
+
   if (a.status === "CONFIRMADO" && ANCLADOS_A_PERSONA.includes(a.component) && !a.personId) {
     return {
       ok: false,
@@ -137,10 +144,10 @@ const COMPONENTES: readonly string[] = Object.keys(NOMBRE_COMPONENTE);
 const ESTADOS: readonly string[] = Object.keys(NOMBRE_ESTADO);
 
 /**
- * Si un estado se puede marcar **sin abrir el panel**: cuando lo único que RN-30
- * todavía exige —la persona del decisor económico o del campeón al confirmar—
- * ya está en lo guardado. La evidencia no cuenta aquí: se pide, no se exige
- * (§24).
+ * Si un estado se puede marcar **sin abrir el panel**: cuando lo que RN-30
+ * exige para ese estado —evidencia al confirmar, y persona para el decisor y
+ * el campeón— ya está en lo guardado. Si no, el botón abre el panel con el
+ * estado elegido y el foco en lo que falta (§27).
  *
  * Recibe cadenas porque lo llama el cliente, que no conoce los enums de Prisma;
  * lo que no sea un componente o un estado conocido no se califica de ninguna

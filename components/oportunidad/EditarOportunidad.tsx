@@ -5,6 +5,9 @@ import type { ResultadoAccion } from "@/lib/acciones";
 import { problemaDe } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton } from "@/components/ui/primitivas";
+import { Icono } from "@/components/ui/iconos";
+import { AyudaEmergente } from "@/components/ui/AyudaEmergente";
+import { AYUDA_DE_PRONOSTICO } from "@/lib/etiquetas";
 import {
   AvisosDeAccion,
   Campo,
@@ -63,6 +66,7 @@ export function EditarOportunidad({
   puedeReasignar,
   minimoParaCompromiso,
   accion,
+  disparador = "boton",
 }: {
   datos: DatosEditables;
   personas: { id: string; name: string; jobTitle: string | null }[];
@@ -71,6 +75,8 @@ export function EditarOportunidad({
   puedeReasignar: boolean;
   minimoParaCompromiso: number;
   accion: (previo: ResultadoAccion | null, form: FormData) => Promise<ResultadoAccion>;
+  /** «icono»: el lápiz en el título de «Datos de la oportunidad»; «boton»: el botón de siempre. */
+  disparador?: "boton" | "icono";
 }) {
   const [abierto, setAbierto] = useState(false);
 
@@ -95,9 +101,21 @@ export function EditarOportunidad({
 
   return (
     <>
-      <Boton variante="secundario" onClick={() => setAbierto(true)}>
-        Editar
-      </Boton>
+      {disparador === "icono" ? (
+        <button
+          type="button"
+          onClick={() => setAbierto(true)}
+          aria-label="Editar oportunidad"
+          title="Editar oportunidad"
+          className="rounded-xs p-1.5 text-texto-tenue transition-colors duration-rapido ease-estandar hover:bg-superficie-sutil hover:text-texto-titulo focus:shadow-ring focus:outline-none"
+        >
+          <Icono nombre="lapiz" className="size-4" />
+        </button>
+      ) : (
+        <Boton variante="secundario" onClick={() => setAbierto(true)}>
+          Editar
+        </Boton>
+      )}
 
       <Panel
         titulo="Editar oportunidad"
@@ -215,8 +233,9 @@ export function EditarOportunidad({
             </Campo>
 
             <Campo
-              etiqueta="Categoría de pronóstico"
+              etiqueta="Pronóstico"
               htmlFor="forecastCategory"
+              ayudaEmergente={<AyudaEmergente titulo="Qué significa cada pronóstico" puntos={AYUDA_DE_PRONOSTICO} />}
               problema={problemaDe(resultado, "forecastCategory")}
               ayuda={
                 alcanzaCompromiso

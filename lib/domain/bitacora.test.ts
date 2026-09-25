@@ -184,3 +184,49 @@ describe("filtrarBitacora", () => {
     expect(filtrarBitacora(eventos, "lo-que-sea")).toHaveLength(eventos.length);
   });
 });
+
+describe("ganada y perdida en la bitácora · decisiones §25", () => {
+  const fuentes: FuentesDeBitacora = {
+    ...BASE,
+    auditoria: [
+      {
+        id: "g1",
+        at: new Date("2026-09-24T15:00:00Z"),
+        action: "MARCAR_GANADA",
+        before: { status: "ABIERTA", stage: "Negociación" },
+        after: { status: "GANADA", actualCloseDate: "2026-09-24T00:00:00.000Z", amount: "1000000.0000", stage: "Negociación" },
+        byUser: MIGUEL,
+      },
+      {
+        id: "p1",
+        at: new Date("2026-09-25T15:00:00Z"),
+        action: "MARCAR_PERDIDA",
+        before: { status: "ABIERTA", stage: "Propuesta" },
+        after: { status: "PERDIDA", actualCloseDate: "2026-09-25T00:00:00.000Z", lossReason: "Precio", lossCompetitor: "Rival S.A.", stage: "Propuesta" },
+        byUser: MIGUEL,
+      },
+    ],
+  };
+
+  it("ganada: tipo propio, con el importe y desde qué etapa", () => {
+    const e = construirBitacora(fuentes).find((x) => x.tipo === "GANADA")!;
+    expect(e).toBeDefined();
+    expect(e.titulo).toContain("Ganada");
+    expect(e.titulo).toContain("$1,000,000.00");
+    expect(e.detalle).toContain("Negociación");
+  });
+
+  it("perdida: con el motivo y el competidor", () => {
+    const e = construirBitacora(fuentes).find((x) => x.tipo === "PERDIDA")!;
+    expect(e).toBeDefined();
+    expect(e.titulo).toContain("Perdida");
+    expect(e.titulo).toContain("Precio");
+    expect(e.detalle).toContain("Rival S.A.");
+  });
+
+  it("las dos entran en el filtro «Cambios»", () => {
+    const tipos = filtrarBitacora(construirBitacora(fuentes), "cambios").map((e) => e.tipo);
+    expect(tipos).toContain("GANADA");
+    expect(tipos).toContain("PERDIDA");
+  });
+});

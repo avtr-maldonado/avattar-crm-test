@@ -36,8 +36,11 @@ const config: Config = {
         navy: {
           50: "var(--navy-50)", 100: "var(--navy-100)", 200: "var(--navy-200)",
           300: "var(--navy-300)", 400: "var(--navy-400)", 500: "var(--navy-500)",
-          600: "var(--navy-600)", 700: "var(--navy-700)", 800: "var(--navy-800)",
-          900: "var(--navy-900)", 950: "var(--navy-950)",
+          600: "var(--navy-600)", 700: "var(--navy-700)",
+          // Con canales: se usan con opacidad (velos de los paneles).
+          800: "rgb(var(--navy-800-rgb) / <alpha-value>)",
+          900: "var(--navy-900)",
+          950: "rgb(var(--navy-950-rgb) / <alpha-value>)",
         },
         gray: {
           "05": "var(--gray-05)", 10: "var(--gray-10)", 20: "var(--gray-20)",
@@ -45,17 +48,19 @@ const config: Config = {
           90: "var(--gray-90)",
         },
         // Estado. §13.1: si algo es rojo, requiere atención. Nunca decorativo.
-        exito: "var(--status-success)",
+        // Con canales y <alpha-value>: son los que se usan con opacidad
+        // (bg-exito/10, border-coral/40, bg-lima/25). Un var() a secas no acepta /10.
+        exito: "rgb(var(--status-success-rgb) / <alpha-value>)",
         alerta: "var(--status-warning)",
         peligro: "var(--status-danger)",
         informacion: "var(--status-info)",
         // Complementarios, de uso mínimo
         magenta: "var(--avattar-magenta)",
-        lima: "var(--avattar-lime)",
-        coral: "var(--avattar-coral)",
+        lima: "rgb(var(--avattar-lime-rgb) / <alpha-value>)",
+        coral: "rgb(var(--avattar-coral-rgb) / <alpha-value>)",
         // Alias semánticos — lo que los componentes deben usar
         acento: {
-          DEFAULT: "var(--accent)",
+          DEFAULT: "rgb(var(--accent-rgb) / <alpha-value>)",
           hover: "var(--accent-hover)",
           activo: "var(--accent-active)",
           texto: "var(--on-accent)",

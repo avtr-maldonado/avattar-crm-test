@@ -320,12 +320,17 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
     });
   }
 
-  it("guardar sin cambiar nada no escribe nada: ni totales, ni espejo, ni bitácora", async () => {
-    // Abrir la edición y guardar tal cual no es un cambio. Anotarlo llenaría
-    // la bitácora de ruido y la volvería inútil para lo que existe.
+  it("agregar o quitar una línea no anota nada por sí solo: la bitácora se escribe al guardar (§26)", async () => {
     const { quoteId, lineId } = await conUnaLinea();
-    const antes = await entradasDeBitacora(quoteId);
+    const cotizacion = await getCotizacion(jorge, quoteId);
+    await quitarLinea(jorge, cotizacion!, lineId);
+    expect(await entradasDeBitacora(quoteId)).toBe(0);
+  });
 
+  it("un guardado sin cambios de celda anota el total si cambió desde la última anotación", async () => {
+    // Se agregó una línea (sin anotar) y se pulsa Guardar tal cual: el total
+    // pasó de 0 a algo, y eso es lo que la bitácora tiene que decir.
+    const { quoteId, lineId } = await conUnaLinea();
     const cotizacion = await getCotizacion(jorge, quoteId);
     const r = await guardarCambiosDeCotizacion(
       jorge,
@@ -333,8 +338,54 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       [{ lineId, campos: { quantity: "4", discountRate: "0" } }],
       UMBRALES,
     );
-
     expect(r).toMatchObject({ ok: true, datos: { cambios: 0 } });
+    if (r.ok) expect(r.datos.total).not.toBeNull();
+    expect(await entradasDeBitacora(quoteId)).toBe(1);
+
+    const registro = await prisma.auditLog.findFirstOrThrow({
+      where: { entity: "Quote", entityId: quoteId, action: "EDITAR_COTIZACION" },
+      select: { before: true, after: true },
+    });
+    expect(registro.before).toMatchObject({ netSubtotal: "0.0000" });
+    expect((registro.after as { netSubtotal: string }).netSubtotal).toBe(cotizacion!.netSubtotal.toFixed(4));
+  });
+
+  it("guardar sin cambiar nada, con el total ya anotado, no escribe nada: ni totales, ni espejo, ni bitácora", async () => {
+    // Abrir la edición y guardar tal cual no es un cambio. Anotarlo llenaría
+    // la bitácora de ruido y la volvería inútil para lo que existe.
+    const { quoteId, lineId } = await conUnaLinea();
+    let cotizacion = await getCotizacion(jorge, quoteId);
+    await guardarCambiosDeCotizacion(jorge, cotizacion!, [], UMBRALES); // anota el total
+    const antes = await entradasDeBitacora(quoteId);
+
+    cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [{ lineId, campos: { quantity: "4", discountRate: "0" } }],
+      UMBRALES,
+    );
+
+    expect(r).toMatchObject({ ok: true, datos: { cambios: 0, total: null } });
+    expect(await entradasDeBitacora(quoteId)).toBe(antes);
+  });
+
+  it("un cambio que no mueve el total —solo el costo— se guarda, pero no se anota (§26)", async () => {
+    const { quoteId, lineId } = await conUnaLinea();
+    let cotizacion = await getCotizacion(jorge, quoteId);
+    await guardarCambiosDeCotizacion(jorge, cotizacion!, [], UMBRALES); // anota el total
+    const antes = await entradasDeBitacora(quoteId);
+
+    cotizacion = await getCotizacion(jorge, quoteId);
+    const r = await guardarCambiosDeCotizacion(
+      jorge,
+      cotizacion!,
+      [{ lineId, campos: { unitCost: "1" } }],
+      UMBRALES,
+    );
+    expect(r).toMatchObject({ ok: true, datos: { cambios: 1, total: null } });
+    const linea = await prisma.quoteLine.findUniqueOrThrow({ where: { id: lineId }, select: { unitCost: true } });
+    expect(linea.unitCost.toString()).toBe("1");
     expect(await entradasDeBitacora(quoteId)).toBe(antes);
   });
 
@@ -382,6 +433,9 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       where: { quoteId, description: "Bolsa de horas" },
       select: { id: true },
     });
+    // Primero se anota el total vigente; el guardado de abajo se compara con él.
+    cotizacion = await getCotizacion(jorge, quoteId);
+    await guardarCambiosDeCotizacion(jorge, cotizacion!, [], UMBRALES);
     const antes = await entradasDeBitacora(quoteId);
     const netoAntes = (await prisma.quote.findUniqueOrThrow({ where: { id: quoteId }, select: { netSubtotal: true } })).netSubtotal;
 

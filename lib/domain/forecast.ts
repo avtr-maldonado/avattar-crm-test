@@ -49,6 +49,12 @@ export type OportunidadParaForecast = {
   expectedCloseDate: Date;
   forecastCategory: ForecastCategory;
   stage: { probability: Money };
+  /**
+   * Si viene, solo `ABIERTA` suma (RN-12): las cerradas se acomodan en su
+   * columna para verlas, pero no son dinero por cerrar. Sin estatus, todo
+   * cuenta, como cuando el forecast solo recibía abiertas.
+   */
+  status?: string;
 };
 
 export type ColumnaDeForecast<T extends OportunidadParaForecast> = {
@@ -163,6 +169,8 @@ function columna<T extends OportunidadParaForecast>(
   >;
 
   for (const o of oportunidades) {
+    // RN-12 · una ganada o perdida se ve en la columna, pero no suma.
+    if (o.status !== undefined && o.status !== "ABIERTA") continue;
     total = total.plus(o.amount);
     ponderado = ponderado.plus(weightedAmount(o.amount, o.stage.probability));
     porCategoria[o.forecastCategory] = porCategoria[o.forecastCategory].plus(o.amount);

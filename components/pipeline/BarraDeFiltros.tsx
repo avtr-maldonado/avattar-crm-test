@@ -40,6 +40,18 @@ import { Icono } from "@/components/ui/iconos";
  */
 export type OpcionDeFiltro = { valor: string; etiqueta: string };
 
+/** §25 y §27 · un desplegable de varios, como Vendedor. Vacío = solo abiertas. */
+const ESTATUS: OpcionDeFiltro[] = [
+  { valor: "ABIERTA", etiqueta: "Abiertas" },
+  { valor: "GANADA", etiqueta: "Ganadas" },
+  { valor: "PERDIDA", etiqueta: "Perdidas" },
+];
+
+/** Solo abiertas es el reposo (§9.2): no se escribe en la URL. */
+function esEstatusPorOmision(status: string[]): boolean {
+  return status.length === 1 && status[0] === "ABIERTA";
+}
+
 export type FiltrosActivos = {
   org: string[];
   owner: string[];
@@ -49,6 +61,10 @@ export type FiltrosActivos = {
   from: string | null;
   to: string | null;
   atRisk: boolean;
+  /** Lo que se muestra; nunca vacío. */
+  status: string[];
+  /** Categorías de pronóstico (RN-15); vacío = todas. */
+  forecast: string[];
 };
 
 export type CatalogosDeFiltro = {
@@ -57,6 +73,7 @@ export type CatalogosDeFiltro = {
   pipeline: OpcionDeFiltro[];
   camposDeFecha: OpcionDeFiltro[];
   preajustes: OpcionDeFiltro[];
+  pronostico: OpcionDeFiltro[];
 };
 
 export function BarraDeFiltros({
@@ -91,6 +108,8 @@ export function BarraDeFiltros({
     for (const id of f.owner) p.append("owner", id);
     if (f.pipeline) p.set("pipeline", f.pipeline);
     if (f.atRisk) p.set("atRisk", "1");
+    if (!esEstatusPorOmision(f.status)) for (const s of f.status) p.append("status", s);
+    for (const c of f.forecast) p.append("forecast", c);
 
     // El campo va siempre que haya recorte de fechas, nunca implícito (§9.3).
     if (f.period !== "PERSONALIZADO" || f.from || f.to) p.set("dateField", f.dateField);
@@ -108,6 +127,8 @@ export function BarraDeFiltros({
   }
 
   const hayFiltros =
+    !esEstatusPorOmision(activos.status) ||
+    activos.forecast.length > 0 ||
     activos.org.length > 0 ||
     activos.owner.length > 0 ||
     activos.pipeline !== null ||
@@ -196,6 +217,43 @@ export function BarraDeFiltros({
           alAplicar={(v) => navegar(v)}
         />
       </Desplegable>
+
+      {visibles.includes("status") && (
+        <Desplegable
+          className={atenuado}
+          etiqueta="Estatus"
+          resumen={resumenDeVarios(ESTATUS, activos.status)}
+          activo={!esEstatusPorOmision(activos.status)}
+          abierto={abierto === "status"}
+          alAlternar={(v) => setAbierto(v ? "status" : null)}
+        >
+          <ListaDeVarios
+            opciones={ESTATUS}
+            elegidosAlAbrir={activos.status}
+            vacio=""
+            // Sin nada marcado vuelve al reposo: un tablero sin estatus no enseña nada.
+            alAplicar={(v) => navegar({ status: v.length > 0 ? v : ["ABIERTA"] })}
+          />
+        </Desplegable>
+      )}
+
+      {visibles.includes("forecast") && (
+        <Desplegable
+          className={atenuado}
+          etiqueta="Pronóstico"
+          resumen={resumenDeVarios(catalogos.pronostico, activos.forecast)}
+          activo={activos.forecast.length > 0}
+          abierto={abierto === "forecast"}
+          alAlternar={(v) => setAbierto(v ? "forecast" : null)}
+        >
+          <ListaDeVarios
+            opciones={catalogos.pronostico}
+            elegidosAlAbrir={activos.forecast}
+            vacio=""
+            alAplicar={(v) => navegar({ forecast: v })}
+          />
+        </Desplegable>
+      )}
 
       {visibles.includes("atRisk") && (
         <button

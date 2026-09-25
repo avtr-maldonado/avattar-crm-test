@@ -48,6 +48,16 @@ export type DatosTarjeta = {
   cierre: string;
   propietario: { nombre: string; iniciales: string };
   banderas: RiskFlag[];
+  /** §25 · una ganada se ve verde y una perdida coral, cuando el filtro las deja ver. */
+  estatus: "ABIERTA" | "GANADA" | "PERDIDA";
+};
+
+// Borde de color y relleno tenue del mismo color (24-sep-2026): verde es
+// ganar, coral es perder. La pastilla dice cuál es, por si el color no basta.
+const SUPERFICIE_POR_ESTATUS: Record<DatosTarjeta["estatus"], string> = {
+  ABIERTA: "border-borde bg-superficie-tarjeta",
+  GANADA: "border-exito bg-exito/10",
+  PERDIDA: "border-coral bg-coral/10",
 };
 
 export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
@@ -57,14 +67,22 @@ export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
       // Los enlaces son arrastrables de nacimiento: sin esto el navegador
       // inicia su propio arrastre de la URL y pisa el del tablero.
       draggable={false}
-      title={o.nombre}
-      className="block rounded-md border border-borde bg-superficie-tarjeta px-2.5 py-2 shadow-xs transition-shadow duration-rapido ease-estandar hover:shadow-sm col-angosta:px-2"
+      title={o.estatus === "ABIERTA" ? o.nombre : `${o.nombre} · ${o.estatus === "GANADA" ? "Ganada" : "Perdida"}`}
+      className={clsx(
+        "block rounded-md border px-2.5 py-2 shadow-xs transition-shadow duration-rapido ease-estandar hover:shadow-sm col-angosta:px-2",
+        SUPERFICIE_POR_ESTATUS[o.estatus],
+      )}
     >
       <div className="flex items-start gap-1.5">
         {/* Dos líneas de nombre como máximo. El título completo queda en `title`. */}
         <p className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-snug text-texto-titulo col-angosta:text-xs">
           {o.nombre}
         </p>
+        {o.estatus !== "ABIERTA" ? (
+          <Pastilla tono={o.estatus === "GANADA" ? "exito" : "peligro"}>
+            {o.estatus === "GANADA" ? "Ganada" : "Perdida"}
+          </Pastilla>
+        ) : null}
         {o.banderas.length > 0 && <SenalDeRiesgo banderas={o.banderas} />}
       </div>
 

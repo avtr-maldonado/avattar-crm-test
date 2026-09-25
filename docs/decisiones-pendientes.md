@@ -1349,3 +1349,164 @@ Dónde vive: `lib/domain/meddic.ts` (`validarComponente`, `faltaEvidencia`, `pue
 Las anotaciones «de la lista» y «por oportunidad» a la derecha de precio y costo unitario en
 «Agregar línea» comprimían el campo hasta esconder la cifra. Se quitaron: el subtítulo del panel
 ya dice de dónde vienen precio y costo, y el campo vuelve a su ancho.
+
+## 25. Ganada y perdida desde cualquier etapa, y el pipeline con cerradas (24 de septiembre de 2026)
+
+Siete pedidos del negocio en una mañana; los que cambian reglas están aquí.
+
+### Marcar ganada: INV-07 sigue, las condiciones cambian
+
+INV-07 dice «no se gana sin cumplir todas las condiciones». RN-06 y RN-28 las enumeraban: hitos
+cuadrados, contrato u orden de compra cargado, cero autorizaciones pendientes y MEDDIC sobre el
+mínimo con decisor, dolor y campeón confirmados. Y el flujo de §12.3 suponía llegar a Cierre.
+
+El negocio pidió: **desde cualquier etapa**, y «no se puede poner ganada sin cotización y sin
+hitos de facturación». Así queda:
+
+- **Se exige**: cotización con al menos una línea (sin ella no hay neto que ganar), hitos
+  capturados y **hitos que cuadran con el neto** (RN-06; AC-18: el mensaje dice cuánto falta).
+  Lo del cuadre no estaba en las palabras del pedido, pero es lo que hace que «hitos de
+  facturación» signifique algo: ayer se puso el tope al neto justo para esto.
+- **No se exige**: el puntaje MEDDIC mínimo (RN-28) ni el contrato cargado (RN-06). Las
+  autorizaciones pendientes no existen aún como módulo. Si el negocio quiere que MEDDIC vuelva a
+  contar, `componentesFaltantesParaGanar` ya existe: es agregar sus mensajes a
+  `requisitosParaGanar`. Lo mismo con el contrato: `tieneContratoOrdenCompra` está en
+  `contextoDeCompuerta`.
+- **La etapa no cambia** al ganar ni al perder: cerrar no es moverse de columna. Por eso las
+  cerradas se ven en el kanban en la etapa donde se decidieron.
+- **Perder** exige motivo (AC-20) y competidor cuando el motivo lo pide (RN-16). No exige
+  cotización.
+- Los dos sellan `actualCloseDate` con el día de hoy (UTC, `@db.Date`) y escriben
+  `MARCAR_GANADA` / `MARCAR_PERDIDA` en `AuditLog` dentro de la misma transacción (INV-09); la
+  bitácora los lee como tipos propios (`GANADA`, `PERDIDA`) dentro del filtro «Cambios».
+- Quién: el propietario o quien tenga alcance de oficina (Q-13), como editar. Reabrir sigue
+  siendo de Administración y sigue pendiente (RN-18).
+
+Dónde vive: `requisitosParaGanar` (puro), `marcarGanada`, `marcarPerdida` en
+`lib/domain/opportunity.ts`; `marcarGanadaAccion`, `marcarPerdidaAccion`; `CerrarOportunidad`;
+`motivosDePerdida` en `lib/scope/configuracion.ts`. Pruebas en `tests/integracion/cierre.test.ts`
+y `lib/domain/bitacora.test.ts`.
+
+### El pipeline con cerradas: filtro, orden y color
+
+- **Filtro de estatus** con tres pastillas (Abiertas, Ganadas, Perdidas), solas o combinadas,
+  al menos una encendida. **Sin estatus en la URL se ven solo las abiertas**: §9.2 lo pedía, y
+  se había quitado porque era «un recorte que nadie podía ver»; con la barra, se ve. La consulta
+  no recorta por estatus —las cerradas hacen falta para «Ganado»—; el recorte va en memoria,
+  después del alcance (AC-25).
+- **Orden**: abiertas, ganadas, perdidas (`ordenarPorEstatus`, estable), en kanban y forecast.
+- **Color**: ganada con borde y relleno verde, perdida con borde y relleno coral, en la tarjeta;
+  en la tabla, una pastilla. Las cerradas no se arrastran.
+- **RN-12 se conserva**: total y ponderado de cada columna del kanban y del forecast suman solo
+  abiertas; las cerradas se ven pero no son dinero por cerrar.
+- **Q1–Q4** en las columnas del forecast por trimestre, aunque el año sea fiscal; el resto del
+  sistema sigue diciendo «trimestre».
+
+### El lápiz de «Datos de la oportunidad»
+
+El botón «Editar» del encabezado pasa a ser un lápiz en el título de la tarjeta «Datos de la
+oportunidad», que es donde están los datos que edita. El encabezado se queda con «Ver cuenta»,
+«Ganada» y «Perdida».
+
+## 26. La bitácora de la cotización anota el total, al guardar (24 de septiembre de 2026)
+
+§21 dejó «cada guardado con cambios escribe en la bitácora», y alta y baja de línea anotaban
+al momento. El negocio pidió que la historia de la cotización se escriba **solo al guardar y
+solo cuando el total cambie**, suba o baje.
+
+- **Agregar y quitar líneas ya no anotan.** Siguen siendo inmediatos y recalculan y espejan
+  (una cotización sin líneas devuelve la oportunidad a su estimado), pero no dejan entrada.
+- **Al guardar**, el servidor compara el neto que quedó contra **el neto de la última
+  anotación** en la bitácora (cero si no hay ninguna: es el total con el que se abre). Si es
+  distinto, una entrada `EDITAR_COTIZACION` con `before.netSubtotal` = lo anotado,
+  `after.netSubtotal` = lo de ahora y `after.lineas` = las celdas que cambiaron en ese guardado.
+  Si es igual, nada.
+- **Por qué contra la última anotación y no contra el neto de antes del guardado**: así cada
+  entrada empalma con la anterior aunque en medio se hayan agregado o quitado líneas sin
+  pulsar Guardar. La bitácora queda como una cadena de totales, no como un muestrario de
+  celdas.
+- **Lo que se pierde a propósito**: un guardado que no mueve el neto —cambiar solo el costo,
+  o dos cambios que se compensan— se guarda sin anotar. El margen cambió y la bitácora no lo
+  dice; el negocio prefiere una bitácora de totales. Si mañana quiere el margen, es comparar
+  también `grossMargin` en `guardarCambiosDeCotizacion`.
+- El aviso lo dice: «Total $80,000.00 → $95,000.00, en la bitácora», «El total no cambió: nada
+  nuevo en la bitácora» o «Sin cambios».
+
+Dónde vive: `guardarCambiosDeCotizacion` y `ultimoNetoAnotado` en `lib/domain/quoteService.ts`;
+`guardarCotizacionAccion` formatea el total. Pruebas en `tests/integracion/cotizacion.test.ts`.
+
+### Lo demás de la misma mañana
+
+- «Perdida» en coral lleno, como «Ganada» en verde: las dos decisiones grandes, las dos con
+  color.
+- Tarjetas cerradas: **borde de color y relleno tenue** (10 %) del mismo color, verde o coral,
+  más la pastilla. Primero se probó con el borde de siempre; el negocio pidió el borde de color.
+  **El relleno no se veía**: los colores de estado estaban definidos en Tailwind como
+  `var(--status-success)` sin `<alpha-value>`, y Tailwind descarta en silencio cualquier
+  `bg-exito/10` sobre un color así —también en las pastillas y banners que ya existían: 28 usos
+  sin efecto—. Se definieron con canales RGB (`--status-success-rgb`, `--avattar-coral-rgb`,
+  `--avattar-lime-rgb`, `--navy-800-rgb`, `--navy-950-rgb`, `--accent-rgb`) y `<alpha-value>`;
+  el hex sigue para lo que lo usa directo.
+- Alta: «Tipo de negocio» abre en «Sin especificar» y es obligatorio (Zod: «Elige el tipo de
+  negocio»); «Categoría de pronóstico» pasa a «Pronóstico» con un icono de ayuda
+  (`AyudaEmergente`, un `<details>`) que explica las cuatro categorías
+  (`DESCRIPCION_CATEGORIA`, `AYUDA_DE_PRONOSTICO` en `lib/etiquetas.ts`); también al editar.
+- El historial de etapas sale del resumen: vive en la bitácora desde §21.
+
+## 27. Riesgo sin margen, evidencia al confirmar, persona desde MEDDIC y dos filtros (24 de septiembre de 2026)
+
+### El margen bajo deja de ser bandera de riesgo · RN-13 enmendada
+
+RN-13 tenía tres banderas: sin actividad, estancada y margen bajo. El negocio pidió que el
+margen no cuente como riesgo. Tiene sentido: el margen ya se ve en cada tarjeta, verde o coral
+contra el piso (§13.1), y como bandera duplicaba la señal y llenaba la cola de riesgo de cosas
+que no son de seguimiento comercial.
+
+- `RiskFlag` queda en `SIN_ACTIVIDAD | ESTANCADA`; `explainRiskFlags`/`computeRiskFlags` ya no
+  reciben la política (no hay piso que comparar). `RiskInputs` deja de llevar `grossMargin`.
+- El filtro `risk` de la URL solo acepta las dos; `MARGEN_BAJO` en una URL vieja se ignora.
+- El coral del margen en la tarjeta y en la cotización **no cambia**: sigue siendo la señal más
+  importante de la interfaz. Lo que cambió es que ya no dispara «en riesgo».
+- Si el negocio quiere reponerla, es volver a agregar el bloque en `explainRiskFlags` con la
+  política por parámetro; las pruebas viejas están en el historial.
+
+### Confirmar exige evidencia · RN-30, segunda enmienda
+
+§24 quitó la evidencia como requisito para calificar. Hoy el negocio pidió pedirla **al pasar a
+confirmado**. Así queda: `PARCIAL` se guarda sin evidencia y la tarjeta lo señala («⚠ Sin
+evidencia»); `CONFIRMADO` la exige —«confirmado necesita evidencia: escribe en qué te basas»— y
+el botón rápido abre el panel con el estado elegido y el foco en la evidencia. Decisor y campeón
+confirmados exigen además la persona, como siempre.
+
+### La persona del comité se crea desde el panel MEDDIC
+
+En el panel de decisor económico y campeón, el desplegable de persona trae «Nueva persona…»:
+nombre, cargo y rol en el comité (propuesto según el componente, si el catálogo lo tiene). Nace
+en la cuenta de la oportunidad en la misma transacción que la calificación
+(`guardarComponenteMeddic` con `nuevaPersona`), igual que en el alta de oportunidad. Sin nombre
+no se crea ni se liga.
+
+### Filtros: Estatus como desplegable y Pronóstico nuevo
+
+Las tres pastillas de estatus se juntan en un desplegable de varios, como el de Vendedor, con el
+mismo reposo (solo abiertas; aplicar sin marcar nada vuelve ahí). Se agrega «Pronóstico», por
+categoría (RN-15), que `toWhere` ya sabía traducir a la consulta; solo faltaba el control.
+
+### La evidencia vuelve a la tarjeta MEDDIC
+
+El 22-sep se quitó para compactar; hoy el negocio la pidió de vuelta. Va bajo la descripción,
+solo cuando existe; cuando falta, la marca ya lo dice.
+
+Dónde vive: `lib/domain/riskFlags.ts`, `lib/domain/meddic.ts` (`validarComponente`),
+`lib/domain/meddicService.ts`, `tabs.acciones.ts` (`NUEVA_PERSONA`), `PanelMeddic`
+(`FormularioDeCalificacion`), `BarraDeFiltros`. Pruebas en `riskFlags.test.ts`,
+`meddic.test.ts`, `meddic-hitos.test.ts`.
+
+### La barra del pipeline en dos filas (misma tarde)
+
+Arriba: selector de vistas, un botón de embudo que muestra u oculta la fila de filtros y «Nueva
+oportunidad» a la derecha. Abajo: los filtros. Que la fila se vea o no es estado de pantalla
+(`BarraDeHerramientas`, `useState`), no de la URL: INV-10 es para los filtros, y esos siguen
+en la URL. Cuando están ocultos y hay alguno activo, el botón lleva un punto de acento: el
+recorte sigue aunque no se vea. Y en el panel MEDDIC, la persona nueva pide «Nombre», «Puesto» y
+«Rol», sin más palabras.
