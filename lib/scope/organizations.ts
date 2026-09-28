@@ -1,45 +1,36 @@
 import type { Prisma } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
+import { personScope } from "./people";
 
 /**
- * El alcance de organizaciones · §5.3.
+ * El alcance de organizaciones · decisiones §29.
  *
- * Un Vendedor ve una cuenta si es su propietario **o** si tiene al menos una
- * oportunidad propia en ella. Solo lo primero dejaría a un vendedor con una
- * oportunidad en cuenta ajena sin poder abrir la ficha de esa cuenta.
+ * **Todos ven todas las cuentas.** El negocio lo decidió el 25 de septiembre
+ * de 2026: una empresa es de toda la operación, y esconderla por propietario
+ * producía duplicados y cuentas que nadie encontraba. Lo que sí tiene
+ * propietario y se recorta son las **personas** (`personScope`), y las
+ * **oportunidades** siguen con su alcance por rol (`opportunityScope`).
  *
- * Consecuencia que §5.3 subraya: los indicadores de la ficha —pipeline abierto,
- * ganado 12 meses— se calculan solo sobre las oportunidades que ese usuario
- * puede ver. Si se calcularan sobre el total de la cuenta, un vendedor
- * deduciría el pipeline de su compañero restando.
+ * Consecuencia que §5.3 subraya y sigue valiendo: los indicadores de la ficha
+ * —pipeline abierto, ganado 12 meses— se calculan solo sobre las oportunidades
+ * que ese usuario puede ver. Si se calcularan sobre el total de la cuenta, un
+ * vendedor deduciría el pipeline de su compañero restando.
  *
- * ## Las cuentas no son de un país · decisiones §18
- *
- * Un gerente de país ve **todas** las cuentas, no las de su oficina. El
- * negocio revisó la regla original —una cuenta pertenece a un país y solo se
- * ve desde él— y no le resultó conveniente: una empresa se atiende desde
- * cualquier oficina y se le venden oportunidades en cualquier país. El país
- * sigue recortando **oportunidades** (`opportunityScope`), que es donde vive
- * el alcance por oficina; la cuenta es una sola para toda la operación.
+ * Se conserva la firma con sesión, aunque hoy no la use, porque es la que INV-01
+ * fija para todo alcance: el día que vuelva a recortar, cambia esta función y
+ * nada más.
  */
 export function organizationScope(session: Session): Prisma.OrganizationWhereInput {
-  const base: Prisma.OrganizationWhereInput = { deletedAt: null };
-
+  // Un caso por rol, todos iguales, a propósito: se lee de un vistazo que
+  // ningún rol recorta cuentas, y agregar un recorte es tocar un solo caso.
   switch (session.role) {
     case "VENDEDOR":
     case "PREVENTA":
-      return {
-        ...base,
-        OR: [
-          { ownerId: session.userId },
-          { opportunities: { some: { ownerId: session.userId, deletedAt: null } } },
-        ],
-      };
     case "GERENTE_PAIS":
     case "DIRECCION":
     case "ADMINISTRADOR":
-      return base;
+      return { deletedAt: null };
   }
 }
 
@@ -88,8 +79,10 @@ export async function getOrganization(session: Session, id: string) {
       creditDays: true,
       isStrategic: true,
       owner: { select: { id: true, name: true, initials: true } },
+      // Las personas de la cuenta, solo las que la sesión alcanza (§29): ver la
+      // cuenta ya no significa ver a toda su gente.
       people: {
-        where: { deletedAt: null },
+        where: personScope(session),
         select: {
           id: true,
           name: true,
@@ -97,6 +90,9 @@ export async function getOrganization(session: Session, id: string) {
           jobTitle: true,
           email: true,
           phone: true,
+          ownerId: true,
+          owner: { select: { id: true, name: true, initials: true, countryCodes: true } },
+          shares: { select: { userId: true, sharedBy: { select: { name: true } } } },
           committeeRole: { select: { id: true, name: true } },
         },
         orderBy: { name: "asc" },
@@ -148,9 +144,8 @@ export async function buscarOrganizacionesParaAlta(session: Session, texto: stri
 /**
  * Las personas de una organización, para el campo de persona principal.
  *
- * Aquí **sí** aplica el alcance: elegida la organización, sus contactos son
- * dato de la cuenta y `getOrganization` ya decide quién la alcanza. Si la
- * sesión no llega a esa organización, no hay personas que ofrecer.
+ * Aquí **sí** aplica el alcance: `getOrganization` trae solo las personas que
+ * la sesión alcanza (`personScope`, §29). Lo demás de la cuenta no se ofrece.
  */
 export async function buscarPersonasDeOrganizacion(session: Session, organizationId: string) {
   const organizacion = await getOrganization(session, organizationId);

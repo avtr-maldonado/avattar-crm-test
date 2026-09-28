@@ -86,8 +86,8 @@ describe("crearPersona · las iniciales se derivan", () => {
   });
 });
 
-describe("editarPersona · quién puede · Q-15", () => {
-  it("quien alcanza la organización edita a su gente", async () => {
+describe("editarPersona · quién puede · Q-15 y §29", () => {
+  it("el propietario edita a su gente", async () => {
     const organizacion = await getOrganization(jorge, organizacionId);
     const creada = await crearPersona(jorge, organizacion!, { name: "Tomás Bravo" });
     if (!creada.ok) throw new Error("no se pudo preparar");
@@ -124,21 +124,20 @@ describe("editarPersona · quién puede · Q-15", () => {
     expect(p.initials).toBe("AL");
   });
 
-  it("una persona fuera del alcance no llega siquiera al dominio", async () => {
-    // Paulina no es dueña de esta cuenta ni tiene oportunidades en ella.
-    const organizacion = await prisma.organization.findFirstOrThrow({
-      where: { countryCode: "MX", deletedAt: null, NOT: { ownerId: paulina.userId } },
-      select: { id: true },
-    });
+  it("una persona ajena, no compartida y sin oportunidad de por medio no llega siquiera al dominio (§29)", async () => {
     const gente = await prisma.person.findFirst({
-      where: { organizationId: organizacion.id, deletedAt: null },
+      where: {
+        deletedAt: null,
+        NOT: { ownerId: paulina.userId },
+        shares: { none: { userId: paulina.userId } },
+        organization: { opportunities: { none: { ownerId: paulina.userId, deletedAt: null } } },
+      },
       select: { id: true },
     });
     if (!gente) return;
 
-    const alcanzadas = await listPersonas(paulina);
-    const alcanza = alcanzadas.some((p) => p.id === gente.id);
-    if (!alcanza) expect(await getPersona(paulina, gente.id)).toBeNull();
+    expect((await listPersonas(paulina)).some((p) => p.id === gente.id)).toBe(false);
+    expect(await getPersona(paulina, gente.id)).toBeNull();
   });
 });
 

@@ -303,6 +303,9 @@ export async function crearOportunidad(
           jobTitle: input.personaNueva.jobTitle || null,
           email: input.personaNueva.email || null,
           committeeRoleId: input.personaNueva.committeeRoleId || null,
+          // La persona es de quien la captura (§29), aunque la oportunidad se
+          // asigne a otro: quien la recibe la ve por su oportunidad.
+          ownerId: session.userId,
         },
         select: { id: true },
       });
@@ -570,6 +573,20 @@ export async function editarOportunidad(
         before: { ownerId: detalle.owner.id },
         after: { ownerId: cambios.ownerId! },
       });
+      // §29 · quien recibe la oportunidad recibe también a la gente de la
+      // cuenta: se le comparten (solo lectura) las personas que no sean suyas.
+      // Verlas por su oportunidad ya lo garantiza `personScope`; la fila deja
+      // constancia y sobrevive a que la oportunidad cambie otra vez de manos.
+      const gente = await tx.person.findMany({
+        where: { organizationId: detalle.organization.id, deletedAt: null, ownerId: { not: cambios.ownerId! } },
+        select: { id: true },
+      });
+      if (gente.length > 0) {
+        await tx.personShare.createMany({
+          data: gente.map((p) => ({ personId: p.id, userId: cambios.ownerId!, sharedById: session.userId })),
+          skipDuplicates: true,
+        });
+      }
     }
     if (cambiaCierre) {
       await audit({

@@ -9,6 +9,7 @@ import {
   crearPersona,
   editarOrganizacion,
   editarPersona,
+  guardarAccesoDePersona,
 } from "@/lib/domain/contact";
 import { getOrganization } from "@/lib/scope/organizations";
 import { getPersona } from "@/lib/scope/people";
@@ -111,6 +112,47 @@ export async function crearPersonaAccion(
   revalidatePath(`/contactos/organizaciones/${d.organizationId}`);
   revalidatePath("/oportunidades", "layout");
   return ok(r.datos);
+}
+
+const esquemaAcceso = z.object({
+  personId: z.string().min(1),
+  ownerId: z.string().min(1, "Elige el propietario."),
+  compartirCon: z.array(z.string().min(1)),
+});
+
+/**
+ * Compartir y transferir un contacto · decisiones §29.
+ *
+ * Las casillas marcadas llegan repetidas en el FormData, así que no se
+ * aplana con `Object.fromEntries`: se leen con `getAll`.
+ */
+export async function guardarAccesoDePersonaAccion(
+  _previo: ResultadoDeContacto | null,
+  form: FormData,
+): Promise<ResultadoDeContacto> {
+  const datos = esquemaAcceso.safeParse({
+    personId: form.get("personId"),
+    ownerId: form.get("ownerId"),
+    compartirCon: form.getAll("compartirCon"),
+  });
+  if (!datos.success) return deZod(datos.error);
+  const d = datos.data;
+
+  const session = await requireSession();
+  const persona = await getPersona(session, d.personId);
+  if (!persona) return falla("AUTORIZACION", NO_ALCANZA);
+
+  const r = await guardarAccesoDePersona(session, persona, {
+    ownerId: d.ownerId,
+    compartirCon: d.compartirCon,
+  });
+  if (!r.ok) return r;
+
+  revalidatePath("/contactos");
+  revalidatePath(`/contactos/organizaciones/${persona.organization.id}`);
+  // El detalle de oportunidad ofrece a la gente de la cuenta: cambió quién la ve.
+  revalidatePath("/oportunidades", "layout");
+  return ok(null);
 }
 
 // ══════════════════════════════════════════════════════════ Organizaciones

@@ -76,6 +76,8 @@ export async function guardarComponenteMeddic(
           initials: iniciales(nuevaPersona.name.trim()),
           jobTitle: nuevaPersona.jobTitle?.trim() || null,
           committeeRoleId: nuevaPersona.committeeRoleId || null,
+          // Es de quien la captura (§29); se comparte después, si hace falta.
+          ownerId: session.userId,
         },
         select: { id: true },
       });

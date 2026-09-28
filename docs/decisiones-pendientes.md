@@ -1572,3 +1572,78 @@ Dónde vive: `lib/filters/analisis.ts` (parser y `hrefDeAnalisis`), `lib/scope/a
 Pruebas: `lib/domain/analisis.test.ts` (24), `lib/filters/analisis.test.ts` (6) y, contra la base,
 `tests/integracion/analisis.test.ts` (INV-02, AC-25, RN-31; solo lectura, no depende del escenario §15).
 
+## 29. Las personas tienen propietario y se comparten; las cuentas se ven todas (25 de septiembre de 2026)
+
+**Decisión del negocio**, con sus respuestas a las preguntas que dejó el análisis del 24-sep:
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Aplica solo a personas o también a cuentas? | Solo a personas. Las cuentas las ven todos |
+| ¿Creador fijo o propietario transferible? | Transferible, como las oportunidades |
+| ¿Compartir da lectura o también edición? | Solo lectura |
+| ¿Quien tiene una oportunidad en la cuenta ve a sus contactos aunque los haya creado otro? | Sí; y al transferir la oportunidad se comparten los contactos |
+| ¿Qué pasa con los contactos que ya existen? | Se comparten con todos los vendedores |
+| ¿Gerencia puede compartir en nombre de un vendedor? | Sí. Un gerente, dentro de su país; Dirección, con todos |
+
+### Quién ve qué
+
+- **Cuentas:** todos los roles ven todas (`organizationScope` devuelve solo `deletedAt: null`).
+  Los indicadores de la ficha siguen acotados a las oportunidades que cada quien ve (§5.3).
+- **Personas** (`personScope`): el vendedor ve las suyas (`ownerId`), las que le compartieron
+  (`person_shares`) y las de las cuentas donde tiene una oportunidad; el gerente, además, las de
+  los usuarios de su país; Dirección y Administración, todas. Preventa, como el vendedor pero por
+  las oportunidades que apoya. La tercera condición se escribe con `opportunityScope`, así que
+  sigue a RN-31 sin repetirla.
+- Las personas de una cuenta que viajan en la ficha, en el detalle de oportunidad (persona
+  principal, comité MEDDIC) y en el buscador global pasan por el mismo alcance.
+
+### Quién administra: editar, compartir, transferir
+
+`administraPersona` (`lib/domain/personAccess.ts`, pura): el propietario; el gerente si el
+propietario opera en su país; Dirección y Administración siempre. Compartir da lectura y nada
+más: quien la recibe no edita ni vuelve a compartir. Con esto **`Q-15` queda resuelta** por el
+negocio: la persona la edita quien la administra, no cualquiera que alcance la cuenta.
+
+`guardarAccesoDePersona` recibe el estado final —propietario y lista completa de usuarios con
+lectura— y calcula qué cambió. Cambiar de propietario escribe `CAMBIAR_PROPIETARIO` sobre
+`Person`; cambiar con quién se comparte escribe `COMPARTIR_CONTACTO` con la lista de antes y la
+de después, todo en la misma transacción (INV-09). Un gerente o vendedor solo comparte y
+transfiere con usuarios de su país; Dirección y Administración, con cualquiera.
+
+### Reasignar una oportunidad comparte a la gente de la cuenta
+
+`editarOportunidad`, al cambiar de propietario, crea filas de `person_shares` para todas las
+personas vivas de la cuenta que no sean ya del nuevo propietario, en la misma transacción.
+Verlas por su oportunidad ya lo garantiza `personScope`; la fila deja constancia y sobrevive a
+que la oportunidad cambie otra vez de manos.
+
+### Los datos que ya existían
+
+Migración `20260925120000_personas_por_propietario`: `people.owner_id` se rellena con el dueño
+de la cuenta —no hay otro dato de quién capturó— y se comparten con todos los vendedores activos,
+como se pidió. La CLI de Supabase rechazó aplicarla por historial (las anteriores se aplicaron
+con el MCP y llevan otra versión), así que se aplicó con `prisma db execute` y se anotó la
+versión a mano en `supabase_migrations.schema_migrations`.
+
+### Lo que cambia en el spec y en las decisiones anteriores
+
+§5.3 (alcance del vendedor sobre cuentas) queda superado: ya no hay cuentas ajenas. §18 sigue en
+todo lo demás. `AC-05` no cambia. La persona nueva desde el alta de oportunidad y desde el panel
+MEDDIC nace de quien la captura, aunque la oportunidad se asigne a otro.
+
+**Pendiente de decidir (Q-19):** si un vendedor debería poder compartir con usuarios de otro país.
+Hoy el límite por país aplica a vendedores y gerentes; Dirección no lo tiene.
+
+**Costo de cambiarlo:** volver a recortar cuentas es cambiar `organizationScope`; dar edición a
+quien recibe una compartida es cambiar `administraPersona`.
+
+Dónde vive: `prisma/schema.prisma` (`Person.ownerId`, `PersonShare`), `lib/scope/people.ts`
+(`personScope`, `listPersonas`, `getPersona`, `usuariosParaCompartir`), `lib/scope/organizations.ts`,
+`lib/scope/organizationIndicators.ts` y `lib/scope/opportunityDetail.ts` (gente acotada),
+`lib/domain/personAccess.ts`, `lib/domain/contact.ts` (`crearPersona`, `editarPersona`,
+`guardarAccesoDePersona`), `lib/domain/opportunity.ts` (reasignación),
+`lib/domain/meddicService.ts`, `app/(app)/contactos/acciones.ts` (`guardarAccesoDePersonaAccion`),
+`components/contactos/AccesoDePersona.tsx`, la pestaña Personas y la ficha de cuenta. Pruebas:
+`lib/domain/personAccess.test.ts`, `lib/scope/scope.test.ts`, `tests/integracion/contactos-acceso.test.ts`
+(6, con limpieza) y las de contactos ajustadas.
+

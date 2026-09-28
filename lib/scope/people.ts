@@ -1,23 +1,55 @@
 import type { Prisma } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { organizationScope } from "./organizations";
+import { opportunityScope } from "./opportunities";
 
 /**
- * El alcance de personas · derivado de §5.3.
+ * El alcance de personas · decisiones §29.
  *
- * **Una persona se ve si se ve su organización.** El spec solo declara el
- * alcance de cuentas; esta es la única regla coherente con él. Si un vendedor
- * no alcanza «Hidrosistemas del Valle», tampoco tiene por qué conocer a su
- * director de sistemas: el contacto es dato de la cuenta, no un directorio
- * aparte.
+ * Las cuentas las ve todo el mundo; las **personas** tienen propietario. Un
+ * vendedor ve las suyas, las que le compartieron y las de las cuentas donde
+ * tiene una oportunidad: capturar al contacto que acabas de conocer es parte
+ * de trabajar la oportunidad, y trabajarla exige ver a quién ya conocen. El
+ * gerente ve además las de los usuarios de su país; Dirección y
+ * Administración, todas.
  *
- * Se escribe delegando en `organizationScope` y no repitiendo sus condiciones:
- * el día que cambie quién ve qué cuenta —`Q-01` sigue abierta—, las personas
- * cambian con ellas sin que nadie tenga que acordarse.
+ * La tercera condición se escribe con `opportunityScope`, no repitiendo sus
+ * reglas: «las cuentas donde tengo oportunidad» es exactamente «las cuentas
+ * con una oportunidad que alcanzo», y así cambia con RN-31 sin que nadie
+ * tenga que acordarse.
+ *
+ * Compartir da solo lectura; quién edita, comparte o transfiere lo decide
+ * `administraPersona` (`lib/domain/personAccess.ts`).
  */
 export function personScope(session: Session): Prisma.PersonWhereInput {
-  return { deletedAt: null, organization: organizationScope(session) };
+  const base: Prisma.PersonWhereInput = { deletedAt: null };
+  const compartidaConmigo: Prisma.PersonWhereInput = {
+    shares: { some: { userId: session.userId } },
+  };
+  const deCuentaConOportunidad: Prisma.PersonWhereInput = {
+    organization: { opportunities: { some: opportunityScope(session) } },
+  };
+
+  switch (session.role) {
+    case "DIRECCION":
+    case "ADMINISTRADOR":
+      return base;
+    case "GERENTE_PAIS":
+      return {
+        ...base,
+        OR: [
+          { owner: { countryCodes: { hasSome: session.countryCodes } } },
+          compartidaConmigo,
+          deCuentaConOportunidad,
+        ],
+      };
+    case "VENDEDOR":
+    case "PREVENTA":
+      return {
+        ...base,
+        OR: [{ ownerId: session.userId }, compartidaConmigo, deCuentaConOportunidad],
+      };
+  }
 }
 
 export function withPersonScope(
@@ -28,10 +60,13 @@ export function withPersonScope(
 }
 
 /**
- * Las personas que la sesión alcanza, con su empresa y su rol en el comité.
+ * Las personas que la sesión alcanza, con su empresa, su rol en el comité y
+ * quién la tiene.
  *
  * Para la pestaña «Personas» de P-03. El rol de comité es la información que
- * convierte una lista de nombres en un mapa del comité de compra (§2.1).
+ * convierte una lista de nombres en un mapa del comité de compra (§2.1). Las
+ * compartidas viajan completas: quien mira sabe si se la compartieron, y quien
+ * la administra ve con quién está.
  */
 export async function listPersonas(session: Session, where?: Prisma.PersonWhereInput) {
   return prisma.person.findMany({
@@ -43,6 +78,9 @@ export async function listPersonas(session: Session, where?: Prisma.PersonWhereI
       jobTitle: true,
       email: true,
       phone: true,
+      ownerId: true,
+      owner: { select: { id: true, name: true, initials: true, countryCodes: true } },
+      shares: { select: { userId: true, sharedBy: { select: { name: true } } } },
       committeeRole: { select: { id: true, name: true } },
       organization: {
         select: { id: true, name: true, type: true, city: true, countryCode: true },
@@ -64,6 +102,9 @@ export async function getPersona(session: Session, id: string) {
       jobTitle: true,
       email: true,
       phone: true,
+      ownerId: true,
+      owner: { select: { id: true, name: true, countryCodes: true } },
+      shares: { select: { userId: true } },
       committeeRole: { select: { id: true, name: true } },
       organization: { select: { id: true, name: true, ownerId: true, countryCode: true } },
     },
@@ -71,3 +112,25 @@ export async function getPersona(session: Session, id: string) {
 }
 
 export type PersonaEditable = NonNullable<Awaited<ReturnType<typeof getPersona>>>;
+
+/**
+ * Con quién se puede compartir o a quién transferir una persona.
+ *
+ * Un gerente comparte dentro de su país; Dirección y Administración, con
+ * cualquiera. El vendedor, con la gente de su oficina: es a quien le pasa un
+ * contacto. Siempre usuarios activos.
+ */
+export async function usuariosParaCompartir(session: Session) {
+  const todos = session.role === "DIRECCION" || session.role === "ADMINISTRADOR";
+  return prisma.user.findMany({
+    where: {
+      active: true,
+      deletedAt: null,
+      ...(todos ? {} : { countryCodes: { hasSome: session.countryCodes } }),
+    },
+    select: { id: true, name: true, initials: true, role: true, countryCodes: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+export type UsuarioParaCompartir = Awaited<ReturnType<typeof usuariosParaCompartir>>[number];

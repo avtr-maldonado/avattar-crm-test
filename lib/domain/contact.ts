@@ -1,30 +1,29 @@
 import type { CountryCode, OrganizationType, Prisma } from "@prisma/client";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
+import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { iniciales } from "@/lib/etiquetas";
 import type { OrganizacionConGente } from "@/lib/scope/organizations";
 import type { PersonaEditable } from "@/lib/scope/people";
+import { administraPersona } from "./personAccess";
 
 /**
  * Contactos: la ficha de la cuenta y su gente · P-03 y P-04.
  *
- * ## Dos permisos distintos, y la diferencia importa · `Q-15`
- *
- * El spec no dice quién edita un contacto. Se derivan dos reglas, no una:
+ * ## Dos permisos distintos, y la diferencia importa · `Q-15` y §29
  *
  * - **La ficha de la empresa** —razón social, identificador fiscal, giro, días
  *   de crédito, propietario— la edita su propietario o quien tenga alcance de
  *   oficina. El registro de la cuenta es de quien la lleva.
- * - **Las personas** las edita cualquiera que alcance la organización.
+ * - **Las personas** tienen propietario propio (decisiones §29, 25-sep-2026):
+ *   quien las captura, transferible. Las edita, comparte y transfiere quien
+ *   las **administra** —`administraPersona`: el propietario, el gerente de su
+ *   país, Dirección y Administración—. Compartir da solo lectura.
  *
- * La razón de la asimetría: capturar al contacto que acabas de conocer es parte
- * de trabajar la oportunidad. Si un vendedor con una oportunidad en cuenta
- * ajena no pudiera hacerlo, o no lo captura —y el dato se pierde— o le pide a
- * otro que lo haga —y no se hace—. La ficha, en cambio, sí es del dueño.
- *
- * Queda registrada como `Q-15` para confirmar con el Director junto con `Q-01`,
- * `Q-13` y `Q-14`: son de la misma familia.
+ * Capturar al contacto que acabas de conocer sigue siendo parte de trabajar la
+ * oportunidad: cualquiera que vea la cuenta —hoy, todos— puede agregar gente, y
+ * la que agrega es suya.
  */
 
 // ═══════════════════════════════════════════════════════════════ Personas
@@ -86,7 +85,7 @@ function datosDePersona(
  * Recibe la organización cargada por `lib/scope`: si llegó, la sesión la ve.
  */
 export async function crearPersona(
-  _session: Session,
+  session: Session,
   organizacion: OrganizacionConGente,
   entrada: DatosDePersona & { name: string },
 ): Promise<ResultadoAccion<{ id: string }>> {
@@ -101,6 +100,8 @@ export async function crearPersona(
       name: entrada.name.trim(),
       initials: iniciales(entrada.name),
       organization: { connect: { id: organizacion.id } },
+      // Es de quien la captura (§29); se comparte o transfiere después.
+      owner: { connect: { id: session.userId } },
     },
     select: { id: true },
   });
@@ -116,10 +117,17 @@ export async function crearPersona(
  * empresa: es una persona nueva que hay que dar de alta allá.
  */
 export async function editarPersona(
-  _session: Session,
+  session: Session,
   persona: PersonaEditable,
   entrada: DatosDePersona,
 ): Promise<ResultadoAccion> {
+  // §29 · compartir da solo lectura: quien la recibió la consulta, no la toca.
+  if (!administraPersona(session, persona)) {
+    return falla(
+      "AUTORIZACION",
+      "Solo el propietario del contacto o Gerencia lo editan; a ti te lo compartieron para consultarlo.",
+    );
+  }
   const traducido = datosDePersona(entrada);
   if (!traducido.ok) {
     return falla("VALIDACION", { campo: traducido.campo, mensaje: traducido.mensaje });
@@ -127,6 +135,104 @@ export async function editarPersona(
   if (Object.keys(traducido.datos).length === 0) return ok(null);
 
   await prisma.person.update({ where: { id: persona.id }, data: traducido.datos });
+  return ok(null);
+}
+
+export type AccesoDePersona = {
+  /** El propietario nuevo, o el mismo. */
+  ownerId: string;
+  /** Con quién queda compartida, completo: lo que no esté aquí se deja de compartir. */
+  compartirCon: string[];
+};
+
+/**
+ * Compartir y transferir una persona · decisiones §29.
+ *
+ * Una sola operación con el estado final: propietario y lista completa de
+ * usuarios con lectura. Lo que no está en la lista se descomparte; el
+ * propietario nunca figura en ella. Quien recibe la persona compartida la ve
+ * y nada más. Un gerente solo comparte y transfiere dentro de su país;
+ * Dirección y Administración, con quien sea.
+ *
+ * Cambiar de propietario y cambiar con quién se comparte dejan rastro en
+ * `AuditLog`, en la misma transacción que el cambio (INV-09).
+ */
+export async function guardarAccesoDePersona(
+  session: Session,
+  persona: PersonaEditable,
+  entrada: AccesoDePersona,
+): Promise<ResultadoAccion> {
+  if (!administraPersona(session, persona)) {
+    return falla(
+      "AUTORIZACION",
+      "Compartir o transferir un contacto es de su propietario o de Gerencia.",
+    );
+  }
+
+  const ownerId = entrada.ownerId || persona.ownerId;
+  const despues = [...new Set(entrada.compartirCon)].filter((id) => id !== ownerId).sort();
+  const ids = [...new Set([ownerId, ...despues])];
+
+  const usuarios = await prisma.user.findMany({
+    where: { id: { in: ids }, active: true, deletedAt: null },
+    select: { id: true, countryCodes: true },
+  });
+  if (usuarios.length !== ids.length) {
+    return falla("VALIDACION", {
+      campo: "compartirCon",
+      mensaje: "Alguno de esos usuarios no existe o no está activo.",
+    });
+  }
+  const sinLimiteDePais = session.role === "DIRECCION" || session.role === "ADMINISTRADOR";
+  const fueraDelPais = usuarios.find(
+    (u) => !sinLimiteDePais && !u.countryCodes.some((c) => session.countryCodes.includes(c)),
+  );
+  if (fueraDelPais) {
+    return falla("VALIDACION", {
+      campo: "compartirCon",
+      mensaje: "Solo puedes compartir o transferir con usuarios de tu país.",
+    });
+  }
+
+  const antes = persona.shares.map((s) => s.userId).sort();
+  const cambiaDueno = ownerId !== persona.ownerId;
+  const cambiaCompartidos = antes.join(",") !== despues.join(",");
+  if (!cambiaDueno && !cambiaCompartidos) return ok(null);
+
+  await auditedTransaction(async (tx, audit) => {
+    if (cambiaDueno) {
+      await tx.person.update({ where: { id: persona.id }, data: { ownerId } });
+      await audit({
+        entity: "Person",
+        entityId: persona.id,
+        action: "CAMBIAR_PROPIETARIO",
+        byUserId: session.userId,
+        before: { ownerId: persona.ownerId },
+        after: { ownerId },
+      });
+    }
+    if (cambiaCompartidos) {
+      await tx.personShare.deleteMany({
+        where: { personId: persona.id, userId: { notIn: despues } },
+      });
+      const nuevos = despues.filter((u) => !antes.includes(u));
+      if (nuevos.length > 0) {
+        await tx.personShare.createMany({
+          data: nuevos.map((userId) => ({ personId: persona.id, userId, sharedById: session.userId })),
+          skipDuplicates: true,
+        });
+      }
+      await audit({
+        entity: "Person",
+        entityId: persona.id,
+        action: "COMPARTIR_CONTACTO",
+        byUserId: session.userId,
+        before: { compartidaCon: antes },
+        after: { compartidaCon: despues },
+      });
+    }
+  });
+
   return ok(null);
 }
 

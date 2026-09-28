@@ -59,24 +59,25 @@ describe("P-03 · qué cuentas se ven · §5.3", () => {
     expect(organizaciones.length).toBeGreaterThanOrEqual(ORGANIZACIONES.length);
   });
 
-  it("el vendedor ve las suyas Y aquellas donde tiene una oportunidad", async () => {
-    // Paulina es propietaria de Farmacéutica Anáhuac, Cimarrón y Seguros
-    // Altamira, y tiene oportunidades en esas mismas tres.
+  it("el vendedor también ve todas: las cuentas son de toda la operación (§29)", async () => {
+    // Hasta el 25-sep-2026 Paulina veía solo las suyas y aquellas con una
+    // oportunidad propia. El negocio decidió que la cuenta se ve siempre; lo
+    // que tiene propietario es la persona.
     const paulina = await sesionDe("pe@avattar.com");
     const { organizaciones } = await listOrganizationsConIndicadores(paulina);
-    const nombres = organizaciones.map((o) => o.name).sort();
+    const vistas = new Set(organizaciones.map((o) => o.name));
 
-    expect(nombres).toEqual([
-      "Cimarrón Manufactura",
-      "Farmacéutica Anáhuac",
-      "Seguros Altamira",
-    ]);
+    for (const sembrada of ORGANIZACIONES) {
+      expect(vistas.has(sembrada.name), `no ve ${sembrada.name}`).toBe(true);
+    }
   });
 
-  it("un vendedor no ve una cuenta ajena donde no tiene nada", async () => {
+  it("una cuenta ajena donde no tiene nada se ve, pero sin pipeline: los agregados siguen acotados", async () => {
     const paulina = await sesionDe("pe@avattar.com");
     const { organizaciones } = await listOrganizationsConIndicadores(paulina);
-    expect(organizaciones.map((o) => o.name)).not.toContain("Aceros del Norte");
+    const aceros = organizaciones.find((o) => o.name === "Aceros del Norte");
+    expect(aceros).toBeDefined();
+    expect(aceros!.indicadores.abiertas).toBe(0);
   });
 });
 
@@ -190,10 +191,17 @@ describe("P-03 · «sin histórico» no es «cero» · C-02", () => {
 });
 
 describe("P-04 · ficha de organización", () => {
-  it("un vendedor no alcanza una cuenta ajena: devuelve null, no lanza", async () => {
+  it("un vendedor alcanza una cuenta ajena, pero no a su gente ni a sus oportunidades (§29)", async () => {
     const paulina = await sesionDe("pe@avattar.com");
     const aceros = await cuentaPorNombre("Aceros del Norte");
-    expect(await getOrganizationDetail(paulina, aceros.id)).toBeNull();
+    const ficha = await getOrganizationDetail(paulina, aceros.id);
+    expect(ficha).not.toBeNull();
+    // Las personas sembradas son de Jorge; Paulina solo las ve si se las
+    // comparten o si tiene una oportunidad en Aceros, y no tiene ninguna.
+    for (const p of ficha!.people) {
+      expect(p.ownerId === paulina.userId || p.shares.some((s) => s.userId === paulina.userId)).toBe(true);
+    }
+    expect(await oportunidadesDeCuenta(paulina, aceros.id)).toHaveLength(0);
   });
 
   it("Aceros del Norte trae su jerarquía y su comité", async () => {

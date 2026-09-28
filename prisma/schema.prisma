@@ -167,6 +167,9 @@ model User {
   ownedOpportunities   Opportunity[]               @relation("OpportunityOwner")
   createdOpportunities Opportunity[]               @relation("OpportunityCreator")
   ownedOrganizations   Organization[]              @relation("OrganizationOwner")
+  ownedPeople          Person[]                    @relation("PersonOwner")
+  personShares         PersonShare[]               @relation("PersonShareTarget")
+  personSharesGiven    PersonShare[]               @relation("PersonShareGiver")
   supportAssignments   OpportunitySupport[]
   stageTransitions     StageTransition[]
   meddicUpdates        MeddicComponentAssessment[]
@@ -331,18 +334,43 @@ model Person {
   committeeRoleId String?   @map("committee_role_id")
   email           String?
   phone           String?
+  /// Quién ve a la persona (decisiones §29): su propietario, transferible como
+  /// el de una oportunidad. Nace siendo quien la captura.
+  ownerId         String    @map("owner_id")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
   deletedAt       DateTime? @map("deleted_at")
 
   organization      Organization                @relation(fields: [organizationId], references: [id])
   committeeRole     CommitteeRole?              @relation(fields: [committeeRoleId], references: [id])
+  owner             User                        @relation("PersonOwner", fields: [ownerId], references: [id])
+  shares            PersonShare[]
   primaryFor        Opportunity[]
   meddicAssessments MeddicComponentAssessment[]
 
   @@index([organizationId])
   @@index([committeeRoleId])
+  @@index([ownerId])
   @@map("people")
+}
+
+/// Una persona compartida con un usuario, solo lectura (decisiones §29). La
+/// comparte su propietario o quien administra al propietario; reasignar una
+/// oportunidad comparte los contactos de la cuenta con el nuevo propietario.
+model PersonShare {
+  id         String   @id @default(cuid())
+  personId   String   @map("person_id")
+  userId     String   @map("user_id")
+  sharedById String   @map("shared_by_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  user     User   @relation("PersonShareTarget", fields: [userId], references: [id])
+  sharedBy User   @relation("PersonShareGiver", fields: [sharedById], references: [id])
+
+  @@unique([personId, userId])
+  @@index([userId])
+  @@map("person_shares")
 }
 
 // ───────────────────────────────────────────────────────────────────────────
