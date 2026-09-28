@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { money, sum, type Money } from "@/lib/money";
 import type { GateContext } from "@/lib/domain/stageGate";
 import { opportunityScope } from "./opportunities";
+import { personScope } from "./people";
 
 /**
  * Todo lo que P-02 necesita, en una sola lectura.
@@ -58,8 +59,10 @@ export async function getOpportunityDetail(session: Session, id: string) {
           city: true,
           countryCode: true,
           isStrategic: true,
+          // Solo las personas que la sesión alcanza (§29): quien ve la
+          // oportunidad ve a la gente de la cuenta que le toca, no a toda.
           people: {
-            where: { deletedAt: null },
+            where: personScope(session),
             select: {
               id: true,
               name: true,

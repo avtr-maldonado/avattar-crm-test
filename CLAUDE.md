@@ -97,7 +97,9 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
                     bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta),
                     analisis (P-09: ganadas con cotización vigente, abiertas con etapa y MEDDIC, actividades
-                    hechas, objetivos de varios países; costo solo con VER_COSTO)
+                    hechas, objetivos de varios países; costo solo con VER_COSTO),
+                    people (personScope: propietario, compartidas y cuentas con oportunidad → §29;
+                    usuariosParaCompartir) · organizations (todas las cuentas para todos → §29)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
                     riskFlags (banderas + evidencia con su número), folio, funnel (embudo y tasa de
                     paso), forecast (columnas por periodo de cierre estimado, ventana fija que avanza,
@@ -108,10 +110,12 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     nombra pero no se cifra),
                     analisis (los ocho reportes de P-09 como agregaciones puras: agruparVentas,
                     completarTrimestres, historicoDeVentas, rentabilidad, embudoDeForecast, cicloDeVenta,
-                    antiguedadYEstancamiento, actividadPorVendedor, saludMeddic → decisiones §28).
+                    antiguedadYEstancamiento, actividadPorVendedor, saludMeddic → decisiones §28),
+                    personAccess (administraPersona: quién edita, comparte y transfiere una persona → §29).
                     Servicios con transacción:
                     opportunity, activity (registrar y editar; responsable, duración y calendario por
-                    parámetro), contact, product, quoteService, milestoneService, meddicService, document,
+                    parámetro), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
+                    product, quoteService, milestoneService, meddicService, document,
                     usuario, objetivo (fijar cuota)
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
 lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
@@ -164,6 +168,8 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     no anticipa margen) · estadoDeEdicion (reductor puro: modo, generación, borrador) ·
                     AbrirCotizacion
                     objetivos: PanelDeAvance · TiraDeTrimestres · TablaDeEquipo · FijarObjetivo
+                    contactos: EditarOrganizacion · EditarPersona · AccesoDePersona (propietario y con quién se
+                    comparte una persona; lo ve solo quien la administra → §29)
                     analisis: FiltrosDeAnalisis (cliente; navega reescribiendo la URL) · TablaDeAnalisis + Reporte
                     (tabla de reporte con total, barras de proporción y conmutador por enlaces) ·
                     PestanaVentas · PestanaForecast · PestanaActividad (servidor; reciben datos acotados y
@@ -226,11 +232,16 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   nuevas que no están en el spec): precio de lista y costo estándar **van juntos o no van**; sin
   ellos el producto existe y se fija precio y costo en cada cotización, sin piso de SKU. La suma de
   hitos **no supera el neto** al guardar, con las cifras; sin cotización con líneas no hay tope.
-- **Las cuentas no son de un país** (decisiones §18, revisado con el negocio): gerencia, dirección
-  y administración ven todas; el vendedor ve las suyas por propiedad, no por país. El país vive en
-  la **oportunidad** y sale del **pipeline** elegido; `Organization.countryCode` es la sede,
-  opcional e informativa. El homónimo se rechaza en cualquier país. `AC-05` sigue para
-  oportunidades, actividades y objetivos; no para cuentas ni personas.
+- **Las cuentas se ven todas; las personas tienen propietario** (decisiones §18 y §29): toda
+  cuenta se ve desde toda la operación, sin importar rol ni oficina. Cada persona es de quien la
+  captura —transferible— y la ve su propietario, quien la administra (el gerente de su país,
+  dirección, administración), a quien se la compartan (solo lectura) y quien tenga una
+  oportunidad en la cuenta (`personScope`). Editar, compartir y transferir es de quien la
+  administra (`administraPersona`). Reasignar una oportunidad comparte la gente de la cuenta con
+  el nuevo propietario. El país vive en la **oportunidad** y sale del **pipeline** elegido;
+  `Organization.countryCode` es la sede, opcional e informativa. El homónimo se rechaza en
+  cualquier país. `AC-05` sigue para oportunidades, actividades y objetivos; no para cuentas ni
+  personas.
 
 ## Sistema de diseño
 
@@ -264,6 +275,7 @@ versionar, alertas de política. De E3, las pestañas MEDDIC, hitos y documentos
 objetivos**, con medición acumulada (decisiones §17). **Marcar ganada/perdida** existe desde el
 24-sep-2026 (§25). **P-09 análisis** existe desde el 25-sep-2026 (§28): ocho reportes en tres
 pestañas, con filtros y agrupaciones en la URL; los bloques D y E de la propuesta quedaron fuera.
+Las **personas tienen propietario y se comparten** desde el 25-sep-2026 (§29); las cuentas se ven todas.
 **Pendiente y visible:** reabrir (RN-18) y las autorizaciones de descuento, fuera de este alcance
 por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
@@ -286,7 +298,10 @@ pnpm react-doctor           # calidad de las pantallas · NO `pnpm doctor`, ese 
 el SQL con `pnpm db:diff`, se guarda en `supabase/migrations/` y se aplica con el MCP de Supabase,
 que además permite verificar en el acto con `list_tables` y `get_advisors`. Si el MCP no está
 autorizado en la sesión, `node aplicar-migraciones.mjs` hace lo mismo con la CLI global de Supabase
-(no `npx supabase`: resuelve a una copia vieja). Nunca editar una migración ya aplicada.
+(no `npx supabase`: resuelve a una copia vieja). Nunca editar una migración ya aplicada. Si
+`supabase db push` rechaza el historial —las aplicadas con el MCP llevan otra versión—, aplicar
+con `pnpm exec prisma db execute --file <sql> --url $DIRECT_URL` y anotar la versión a mano en
+`supabase_migrations.schema_migrations` (pasó el 25-sep-2026 con `personas_por_propietario`).
 
 ## Cómo trabajamos
 

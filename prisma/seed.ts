@@ -328,6 +328,10 @@ async function main() {
             initials: p.initials,
             jobTitle: p.jobTitle,
             committeeRoleId: rolesComite.get(p.rolComite)!,
+            // Las personas tienen propietario (§29): el de la cuenta.
+            ownerId: usuarios.get(
+              ORGANIZACIONES.find((o) => o.name === "Aceros del Norte")!.propietario,
+            )!,
           },
         });
     personas.set(p.name, fila.id);

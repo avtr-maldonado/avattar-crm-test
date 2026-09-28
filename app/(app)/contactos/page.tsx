@@ -1,11 +1,19 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/session";
+import type { Session } from "@/lib/auth/permissions";
 import { listOrganizationsConIndicadores } from "@/lib/scope/organizationIndicators";
-import { listPersonas } from "@/lib/scope/people";
+import { listPersonas, usuariosParaCompartir, type UsuarioParaCompartir } from "@/lib/scope/people";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
+import { administraPersona } from "@/lib/domain/personAccess";
+import { AccesoDePersona } from "@/components/contactos/AccesoDePersona";
 import { EditarOrganizacion } from "@/components/contactos/EditarOrganizacion";
 import { EditarPersona, type CuentaElegible } from "@/components/contactos/EditarPersona";
-import { crearOrganizacionAccion, crearPersonaAccion, editarPersonaAccion } from "./acciones";
+import {
+  crearOrganizacionAccion,
+  crearPersonaAccion,
+  editarPersonaAccion,
+  guardarAccesoDePersonaAccion,
+} from "./acciones";
 import { formatUSD } from "@/lib/money";
 import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
@@ -31,7 +39,13 @@ import { Avatar, ControlSegmentado, EstadoVacio, Pastilla, StatTile } from "@/co
  * ninguna oportunidad cerrada, «ganado 12 meses» no vale cero: no tiene dato.
  * Un cero afirmaría que la cuenta no compró, y eso es falso.
  *
- * La pestaña de Personas llega con P-05, en un incremento posterior.
+ * ## Las cuentas son de todos; las personas, de alguien · decisiones §29
+ *
+ * Toda cuenta se ve desde toda la operación. Cada persona tiene propietario y
+ * la ve él, quien la administra (gerente de su país, Dirección,
+ * Administración), a quien se la compartan —solo lectura— y quien tenga una
+ * oportunidad en la cuenta. La pestaña dice de quién es cada una y ofrece
+ * editar, compartir y transferir solo a quien la administra.
  */
 const DIAS_SIN_ACTIVIDAD = 30;
 
@@ -45,10 +59,11 @@ export default async function ContactosPage({
   // Todas las cuentas y personas que el rol alcanza, sin recorte por oficina:
   // las cuentas no son de un país (decisiones §18). La oficina activa sigue
   // mandando en oportunidades, que sí lo tienen.
-  const [{ organizaciones, hayHistoricoDeCierres }, personas, catalogos] = await Promise.all([
+  const [{ organizaciones, hayHistoricoDeCierres }, personas, catalogos, usuarios] = await Promise.all([
     listOrganizationsConIndicadores(session),
     listPersonas(session),
     catalogosParaAlta(),
+    usuariosParaCompartir(session),
   ]);
 
   // La pestaña vive en la URL (INV-10): la vista es compartible y el botón de
@@ -122,6 +137,8 @@ export default async function ContactosPage({
             personas={personas}
             rolesDeComite={catalogos.rolesComite}
             accionVacia={botonDeAlta}
+            session={session}
+            usuarios={usuarios}
           />
         ) : (
         <>
@@ -129,7 +146,7 @@ export default async function ContactosPage({
           <StatTile denso
             etiqueta="Cuentas"
             valor={String(organizaciones.length)}
-            subtexto="que puedes ver"
+            subtexto="en toda la operación"
           />
           <StatTile denso
             etiqueta="Con pipeline abierto"
@@ -153,8 +170,8 @@ export default async function ContactosPage({
         {organizaciones.length === 0 ? (
           <div className="mt-6">
             <EstadoVacio
-              titulo="No hay cuentas que puedas ver"
-              explicacion="Ves una cuenta si eres su propietario o si tienes al menos una oportunidad propia en ella. Si esperabas ver alguna, revisa a quién está asignada; si es nueva, créala aquí."
+              titulo="Todavía no hay cuentas"
+              explicacion="Las cuentas se ven desde toda la operación. Crea la primera aquí; las personas que agregues serán tuyas y podrás compartirlas."
               accion={botonDeAlta}
             />
           </div>
@@ -248,11 +265,15 @@ function TablaDePersonas({
   personas,
   rolesDeComite,
   accionVacia,
+  session,
+  usuarios,
 }: {
   personas: Awaited<ReturnType<typeof listPersonas>>;
   rolesDeComite: { id: string; name: string }[];
   /** El alta, para que el estado vacío proponga la acción siguiente. */
   accionVacia: React.ReactNode;
+  session: Session;
+  usuarios: UsuarioParaCompartir[];
 }) {
   if (personas.length === 0) {
     return (
@@ -276,11 +297,16 @@ function TablaDePersonas({
             <Th>Empresa</Th>
             <Th>Correo</Th>
             <Th>Teléfono</Th>
+            <Th>Propietario</Th>
             <Th alineacion="derecha">&nbsp;</Th>
           </tr>
         </thead>
         <tbody>
-          {personas.map((p) => (
+          {personas.map((p) => {
+            const administra = administraPersona(session, p);
+            const esMia = p.ownerId === session.userId;
+            const compartidaConmigo = p.shares.find((s) => s.userId === session.userId);
+            return (
             <tr
               key={p.id}
               className="border-t border-borde transition-colors duration-rapido hover:bg-superficie-sutil"
@@ -311,23 +337,60 @@ function TablaDePersonas({
               </td>
               <td className="px-3 py-2.5 text-texto-tenue">{p.email ?? "—"}</td>
               <td className="tabular px-3 py-2.5 text-texto-tenue">{p.phone ?? "—"}</td>
+              <td className="px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <Avatar iniciales={p.owner.initials} titulo={p.owner.name} />
+                  <div className="min-w-0">
+                    <p className="text-sm text-texto-cuerpo">{esMia ? "Tú" : p.owner.name}</p>
+                    {/* Por qué la ves, o con cuántos la compartes: la fila lo dice sin abrir nada. */}
+                    {compartidaConmigo ? (
+                      <p className="text-xs text-texto-tenue">
+                        Compartida contigo por {compartidaConmigo.sharedBy.name}
+                      </p>
+                    ) : administra && p.shares.length > 0 ? (
+                      <p className="text-xs text-texto-tenue">
+                        Compartida con {p.shares.length} {p.shares.length === 1 ? "persona" : "personas"}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </td>
               <td className="px-3 py-2.5 text-right">
-                <EditarPersona
-                  persona={{
-                    id: p.id,
-                    name: p.name,
-                    jobTitle: p.jobTitle,
-                    email: p.email,
-                    phone: p.phone,
-                    committeeRoleId: p.committeeRole?.id ?? null,
-                  }}
-                  rolesDeComite={rolesDeComite}
-                  accion={editarPersonaAccion}
-                  variante="fantasma"
-                />
+                {administra ? (
+                  <div className="flex items-center justify-end gap-1">
+                    <EditarPersona
+                      persona={{
+                        id: p.id,
+                        name: p.name,
+                        jobTitle: p.jobTitle,
+                        email: p.email,
+                        phone: p.phone,
+                        committeeRoleId: p.committeeRole?.id ?? null,
+                      }}
+                      rolesDeComite={rolesDeComite}
+                      accion={editarPersonaAccion}
+                      variante="fantasma"
+                    />
+                    <AccesoDePersona
+                      persona={{
+                        id: p.id,
+                        name: p.name,
+                        ownerId: p.ownerId,
+                        compartidaCon: p.shares.map((s) => s.userId),
+                      }}
+                      usuarios={usuarios}
+                      accion={guardarAccesoDePersonaAccion}
+                    />
+                  </div>
+                ) : (
+                  <span className="text-xs text-texto-tenue" title="Te la compartieron para consultarla, o la ves por tu oportunidad en la cuenta.">
+                    Solo lectura
+                  </span>
+                )}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

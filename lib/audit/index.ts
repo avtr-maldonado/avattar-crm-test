@@ -66,7 +66,9 @@ export type AuditAction =
   // y el cierre estimado se anota porque explica, meses después, por qué un
   // trimestre no cerró como se prometió.
   | "EDITAR_COTIZACION"
-  | "CAMBIAR_CIERRE_ESTIMADO";
+  | "CAMBIAR_CIERRE_ESTIMADO"
+  /** Persona compartida o descompartida (decisiones §29). Entidad `Person`. */
+  | "COMPARTIR_CONTACTO";
 
 export type AuditEntry = {
   /** El modelo, en singular y como lo llama Prisma: "Opportunity", "Quote". */

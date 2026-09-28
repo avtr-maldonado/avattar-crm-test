@@ -4,6 +4,7 @@ import { activityScope } from "./activities";
 import { objectiveScope } from "./objectives";
 import { opportunityScope } from "./opportunities";
 import { organizationScope } from "./organizations";
+import { personScope } from "./people";
 import { quoteLineSelect, quoteSelect } from "./selectors";
 
 function sesion(p: Partial<Session> & Pick<Session, "role" | "userId">): Session {
@@ -71,23 +72,53 @@ describe("opportunityScope · INV-01, AC-01, AC-05", () => {
   });
 });
 
-describe("organizationScope · §5.3", () => {
-  it("el vendedor ve la cuenta si es suya O si tiene una oportunidad propia ahí", () => {
-    // Si fuera solo por propietario, un vendedor con una oportunidad en una
-    // cuenta ajena no podría abrir la ficha de esa cuenta.
-    expect(organizationScope(vendedor)).toEqual({
+describe("organizationScope · decisiones §29", () => {
+  it("todos ven todas las cuentas; solo lo borrado queda fuera (INV-15)", () => {
+    // 25-sep-2026: las cuentas son de toda la operación. Lo que se recorta por
+    // propietario son las personas, no las empresas.
+    for (const s of [vendedor, preventa, gerenteMx, direccion, administrador]) {
+      expect(organizationScope(s)).toEqual({ deletedAt: null });
+    }
+  });
+});
+
+describe("personScope · decisiones §29", () => {
+  it("el vendedor ve las suyas, las compartidas con él y las de cuentas donde tiene oportunidad", () => {
+    expect(personScope(vendedor)).toEqual({
       deletedAt: null,
       OR: [
         { ownerId: "u-paulina" },
-        { opportunities: { some: { ownerId: "u-paulina", deletedAt: null } } },
+        { shares: { some: { userId: "u-paulina" } } },
+        { organization: { opportunities: { some: { deletedAt: null, ownerId: "u-paulina" } } } },
       ],
     });
   });
 
-  it("el gerente ve todas las cuentas: las cuentas no son de un país (§18)", () => {
-    // Decisión del negocio del 17-sep-2026: una empresa se atiende desde
-    // cualquier oficina. El país sede es informativo y no recorta nada.
-    expect(organizationScope(gerenteMx)).toEqual({ deletedAt: null });
+  it("el gerente ve las de los usuarios de su país, las compartidas y las de cuentas con oportunidad en su país", () => {
+    expect(personScope(gerenteDosPaises)).toEqual({
+      deletedAt: null,
+      OR: [
+        { owner: { countryCodes: { hasSome: ["CO", "CL"] } } },
+        { shares: { some: { userId: "u-multi" } } },
+        { organization: { opportunities: { some: { deletedAt: null, countryCode: { in: ["CO", "CL"] } } } } },
+      ],
+    });
+  });
+
+  it("preventa ve las suyas, las compartidas y las de cuentas donde apoya", () => {
+    expect(personScope(preventa)).toEqual({
+      deletedAt: null,
+      OR: [
+        { ownerId: "u-ivan" },
+        { shares: { some: { userId: "u-ivan" } } },
+        { organization: { opportunities: { some: { deletedAt: null, supportUsers: { some: { userId: "u-ivan" } } } } } },
+      ],
+    });
+  });
+
+  it("dirección y administración ven todas, nunca las borradas", () => {
+    expect(personScope(direccion)).toEqual({ deletedAt: null });
+    expect(personScope(administrador)).toEqual({ deletedAt: null });
   });
 });
 

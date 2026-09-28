@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { money, type Money } from "@/lib/money";
 import { opportunityScope } from "./opportunities";
 import { organizationScope, withOrganizationScope } from "./organizations";
+import { personScope } from "./people";
 
 /**
  * Indicadores de cuenta · §5.3.
@@ -202,7 +203,9 @@ export async function getOrganizationDetail(session: Session, id: string) {
         orderBy: { name: "asc" },
       },
       people: {
-        where: { deletedAt: null },
+        // Solo las personas que la sesión alcanza (§29): ver la cuenta ya no
+        // significa ver a toda su gente.
+        where: personScope(session),
         select: {
           id: true,
           name: true,
@@ -210,6 +213,9 @@ export async function getOrganizationDetail(session: Session, id: string) {
           jobTitle: true,
           email: true,
           phone: true,
+          ownerId: true,
+          owner: { select: { id: true, name: true, initials: true, countryCodes: true } },
+          shares: { select: { userId: true, sharedBy: { select: { name: true } } } },
           committeeRole: { select: { id: true, name: true } },
         },
         orderBy: { name: "asc" },

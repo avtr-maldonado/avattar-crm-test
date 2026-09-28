@@ -336,20 +336,22 @@ y el alta. No es una tabla nueva; es una lectura (decisiones §21).
 
 ### F-20 · Ver las cuentas
 
-Pestaña Organizaciones. **Las cuentas no son de un país** (§18): gerencia, dirección y
-administración las ven todas, sin importar la oficina activa; el vendedor ve las suyas.
+Pestaña Organizaciones. **Las cuentas se ven todas** (§18 y §29): cualquier rol, desde cualquier
+oficina. Lo que tiene propietario y se recorta son las personas.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-20.1 Listar | Cualquier rol | Entra a Contactos | Nombre, tipo (y la sede si la tiene), oportunidades abiertas, pipeline, ganado 12 meses, propietario y última actividad (en rojo pasados 30 días). Indicadores: cuentas, con pipeline abierto, estratégicas, sin actividad |
-| CU-20.2 Vendedor | Vendedor | — | Ve solo las cuentas donde es propietario o tiene una oportunidad propia, y **los agregados se calculan solo sobre sus oportunidades** (§5.3): no puede deducir por resta el pipeline de un compañero en un cliente compartido |
+| CU-20.2 Vendedor | Vendedor | — | Ve todas las cuentas, pero **los agregados se calculan solo sobre sus oportunidades** (§5.3): una cuenta ajena aparece sin pipeline, y no puede deducir por resta el de un compañero |
 | CU-20.3 Sin histórico | Cualquier rol | Ninguna oportunidad cerrada todavía | «Ganado 12 meses» dice «sin histórico», no cero: el sistema arrancó en limpio y un cero afirmaría que la cuenta no compró (`C-02`) |
 
 ### F-21 · Ver las personas
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-21.1 Listar | Cualquier rol | Pestaña Personas | Nombre, cargo, correo, teléfono, rol en el comité de compra y empresa, de las cuentas que alcanza |
+| CU-21.1 Listar | Cualquier rol | Pestaña Personas | Nombre, cargo, correo, teléfono, rol en el comité de compra, empresa y **propietario**. La fila dice si te la compartieron y quién, o con cuántos la compartes |
+| CU-21.2 Vendedor | Vendedor, Preventa | — | Ve las suyas, las que le compartieron y las de cuentas donde tiene una oportunidad (§29). Lo demás no viaja |
+| CU-21.3 Gerente | Gerente de país | — | Además, las de todos los usuarios de su país. Dirección y Administración ven todas |
 
 ### F-22 · Crear una organización
 
@@ -362,7 +364,7 @@ administración las ven todas, sin importar la oficina activa; el vendedor ve la
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-23.1 Desde Personas | Cualquier rol | «Nueva persona»: elige la empresa entre las que alcanza, nombre, cargo, correo, teléfono, rol en el comité | Agregar gente exige alcanzar la cuenta (`Q-15`) |
+| CU-23.1 Desde Personas | Cualquier rol | «Nueva persona»: elige la empresa, nombre, cargo, correo, teléfono, rol en el comité | Nace siendo de quien la captura (§29); se comparte o transfiere después |
 | CU-23.2 Desde la ficha de la cuenta | Cualquier rol | «Agregar persona» en el comité de compra | Nace ligada a esa cuenta |
 
 ### F-24 · Editar organización y persona
@@ -370,13 +372,27 @@ administración las ven todas, sin importar la oficina activa; el vendedor ve la
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-24.1 Editar la cuenta | Propietario, o Gerencia con alcance de oficina (`Q-15`) | Desde su ficha | Mismo formulario del alta con los datos cargados, sede incluida. Reasignar la cuenta admite cualquier usuario activo: no hay país que lo limite (§18) |
-| CU-24.2 Editar una persona | Quien alcance su cuenta | Desde Personas o desde el comité de la ficha | Ídem |
+| CU-24.2 Editar una persona | Quien la administra: su propietario, el gerente de su país, Dirección, Administración (§29) | Desde Personas o desde el comité de la ficha | Ídem. A quien se la compartieron le aparece «Solo lectura» y el servidor rechaza la edición |
 
 ### F-25 · Ficha de la cuenta
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-25.1 Abrir | Quien la alcance | Pulsa la cuenta | Encabezado con jerarquía matriz-filial si la hay; indicadores de pipeline abierto, ponderado, cerradas y personas; oportunidades abiertas (para un vendedor, solo las suyas) y cerradas; bitácora cronológica; comité de compra con roles; datos de la cuenta (razón social, propietario, empleados, días de crédito, alta) |
+| CU-25.1 Abrir | Cualquier rol | Pulsa la cuenta | Encabezado con jerarquía matriz-filial si la hay; indicadores de pipeline abierto, ponderado, cerradas y personas; oportunidades abiertas (para un vendedor, solo las suyas) y cerradas; bitácora cronológica; comité de compra con roles (solo las personas que alcanza, con su propietario); datos de la cuenta (razón social, propietario, empleados, días de crédito, alta) |
+
+### F-42 · Compartir y transferir personas
+
+Botón «Compartir» junto a cada persona, en Personas y en el comité de la ficha, solo para quien
+la administra. Un panel con el propietario y las casillas de con quién se comparte (§29).
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-42.1 Compartir | Propietario, gerente de su país, Dirección, Administración | Marca a uno o varios usuarios y guarda | Ellos la ven en Personas, en la ficha y en el detalle de oportunidad, **solo lectura**. Queda en la bitácora con quién estaba y con quién queda (`INV-09`) |
+| CU-42.2 Dejar de compartir | Los mismos | Desmarca y guarda | Deja de verla, salvo que tenga una oportunidad en la cuenta |
+| CU-42.3 Transferir | Los mismos | Cambia el propietario | Quien la recibe la administra; quien la entrega deja de verla salvo que se la compartan o tenga oportunidad ahí. Bitácora `CAMBIAR_PROPIETARIO` |
+| CU-42.4 Límite por país | Vendedor, Gerente | Elige a alguien de otro país | No aparece en la lista; el servidor lo rechaza. Dirección no tiene el límite |
+| CU-42.5 Reasignar una oportunidad | Gerencia | Cambia el propietario de una oportunidad | Las personas de la cuenta se comparten con el nuevo propietario, en la misma transacción |
+| CU-42.6 Contactos que ya existían | — | Migración del 25-sep-2026 | Su propietario es el dueño de la cuenta y quedaron compartidos con todos los vendedores |
 
 ---
 

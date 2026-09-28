@@ -4,12 +4,17 @@ import { requireSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
+import { usuariosParaCompartir, type UsuarioParaCompartir } from "@/lib/scope/people";
+import type { Session } from "@/lib/auth/permissions";
+import { administraPersona } from "@/lib/domain/personAccess";
+import { AccesoDePersona } from "@/components/contactos/AccesoDePersona";
 import { EditarOrganizacion } from "@/components/contactos/EditarOrganizacion";
 import { EditarPersona } from "@/components/contactos/EditarPersona";
 import {
   crearPersonaAccion,
   editarOrganizacionAccion,
   editarPersonaAccion,
+  guardarAccesoDePersonaAccion,
 } from "../../acciones";
 import { listActivities } from "@/lib/scope";
 import {
@@ -52,6 +57,10 @@ export default async function FichaDeOrganizacionPage({
   // 404 tanto si no existe como si no la alcanza: distinguirlas revelaría que
   // la cuenta del compañero existe.
   if (!cuenta) notFound();
+
+  // Con quién se comparte o a quién se transfiere una persona (§29). Solo lo
+  // usa quien administra a alguna; es una lista corta y sin costo de calcular.
+  const usuarios = await usuariosParaCompartir(session);
 
   const puedeReasignar = can(session, "VER_OPORTUNIDADES_OFICINA");
   // Q-15 · la ficha es del dueño de la cuenta. Alcanzarla por tener una
@@ -224,60 +233,12 @@ export default async function FichaDeOrganizacionPage({
           </div>
 
           <div className="space-y-6">
-            <Tarjeta
-              titulo="Comité de compra"
-              accion={
-                <EditarPersona
-                  organizationId={cuenta.id}
-                  rolesDeComite={catalogos.rolesComite}
-                  accion={crearPersonaAccion}
-                  etiquetaBoton="Agregar"
-                  variante="fantasma"
-                />
-              }
-            >
-              {cuenta.people.length === 0 ? (
-                <p className="text-sm text-texto-tenue">
-                  Sin personas registradas. El comité es lo que ancla el decisor
-                  económico y el campeón en MEDDIC, así que sin él esas compuertas
-                  no se pueden cerrar.
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {cuenta.people.map((p) => (
-                    <li key={p.id} className="flex items-start gap-3">
-                      <Avatar iniciales={p.initials} titulo={p.name} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-texto-titulo">
-                          {p.name}
-                        </p>
-                        <p className="truncate text-xs text-texto-tenue">
-                          {p.jobTitle ?? "Sin puesto registrado"}
-                        </p>
-                        {p.committeeRole && (
-                          <span className="mt-1 inline-block">
-                            <Pastilla tono="acento">{p.committeeRole.name}</Pastilla>
-                          </span>
-                        )}
-                      </div>
-                      <EditarPersona
-                        persona={{
-                          id: p.id,
-                          name: p.name,
-                          jobTitle: p.jobTitle,
-                          email: p.email,
-                          phone: p.phone,
-                          committeeRoleId: p.committeeRole?.id ?? null,
-                        }}
-                        rolesDeComite={catalogos.rolesComite}
-                        accion={editarPersonaAccion}
-                        variante="fantasma"
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Tarjeta>
+            <ComiteDeCompra
+              cuenta={cuenta}
+              session={session}
+              usuarios={usuarios}
+              rolesDeComite={catalogos.rolesComite}
+            />
 
             <Tarjeta titulo="Datos de la cuenta">
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -416,3 +377,101 @@ const ETIQUETA_TIPO: Record<string, string> = {
   PROVEEDOR: "Proveedor",
 };
 
+/**
+ * El comité de compra de la cuenta · §2.1 y decisiones §29.
+ *
+ * Solo las personas que la sesión alcanza; cada una dice de quién es, y editar,
+ * compartir y transferir aparecen solo para quien la administra.
+ */
+function ComiteDeCompra({
+  cuenta,
+  session,
+  usuarios,
+  rolesDeComite,
+}: {
+  cuenta: NonNullable<Awaited<ReturnType<typeof getOrganizationDetail>>>;
+  session: Session;
+  usuarios: UsuarioParaCompartir[];
+  rolesDeComite: { id: string; name: string }[];
+}) {
+  return (
+    <Tarjeta
+      titulo="Comité de compra"
+      accion={
+        <EditarPersona
+          organizationId={cuenta.id}
+          rolesDeComite={rolesDeComite}
+          accion={crearPersonaAccion}
+          etiquetaBoton="Agregar"
+          variante="fantasma"
+        />
+      }
+    >
+      {cuenta.people.length === 0 ? (
+        <p className="text-sm text-texto-tenue">
+          Sin personas registradas. El comité es lo que ancla el decisor
+          económico y el campeón en MEDDIC, así que sin él esas compuertas
+          no se pueden cerrar.
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {cuenta.people.map((p) => (
+            <li key={p.id} className="flex items-start gap-3">
+              <Avatar iniciales={p.initials} titulo={p.name} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-texto-titulo">
+                  {p.name}
+                </p>
+                <p className="truncate text-xs text-texto-tenue">
+                  {p.jobTitle ?? "Sin puesto registrado"}
+                </p>
+                {p.committeeRole && (
+                  <span className="mt-1 inline-block">
+                    <Pastilla tono="acento">{p.committeeRole.name}</Pastilla>
+                  </span>
+                )}
+                <p className="mt-1 text-xs text-texto-tenue">
+                  {p.ownerId === session.userId ? "Tuya" : `De ${p.owner.name}`}
+                  {p.shares.some((s) => s.userId === session.userId)
+                    ? " · compartida contigo"
+                    : administraPersona(session, p) && p.shares.length > 0
+                      ? ` · compartida con ${p.shares.length}`
+                      : ""}
+                </p>
+              </div>
+              {administraPersona(session, p) ? (
+                <div className="flex items-center gap-1">
+                  <EditarPersona
+                    persona={{
+                      id: p.id,
+                      name: p.name,
+                      jobTitle: p.jobTitle,
+                      email: p.email,
+                      phone: p.phone,
+                      committeeRoleId: p.committeeRole?.id ?? null,
+                    }}
+                    rolesDeComite={rolesDeComite}
+                    accion={editarPersonaAccion}
+                    variante="fantasma"
+                  />
+                  <AccesoDePersona
+                    persona={{
+                      id: p.id,
+                      name: p.name,
+                      ownerId: p.ownerId,
+                      compartidaCon: p.shares.map((s) => s.userId),
+                    }}
+                    usuarios={usuarios}
+                    accion={guardarAccesoDePersonaAccion}
+                  />
+                </div>
+              ) : (
+                <span className="text-xs text-texto-tenue">Solo lectura</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Tarjeta>
+  );
+}
