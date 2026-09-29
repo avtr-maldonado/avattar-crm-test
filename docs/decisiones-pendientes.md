@@ -1647,3 +1647,25 @@ Dónde vive: `prisma/schema.prisma` (`Person.ownerId`, `PersonShare`), `lib/scop
 `lib/domain/personAccess.test.ts`, `lib/scope/scope.test.ts`, `tests/integracion/contactos-acceso.test.ts`
 (6, con limpieza) y las de contactos ajustadas.
 
+## 30. Las actividades se editan desde la bandeja; el alta vive en la oportunidad (29 de septiembre de 2026)
+
+La pantalla de Actividades tenía un botón «Registrar actividad» que llevaba a `/actividades/nueva`,
+una ruta que nunca existió. El negocio pidió quitarlo y poner edición. Así queda:
+
+- **Editar en el sitio.** Cada actividad de la bandeja (vencidas, hoy) y de la semana trae el
+  mismo lápiz que la pestaña Actividades del detalle: abre `ComposerDeActividad` cargado y
+  guarda con `guardarActividadAccion`, la misma acción. La zona y los responsables son los del
+  **país de la oportunidad de esa actividad** (§20), no los de la oficina activa: la bandeja de
+  Dirección mezcla países, y `agenda.ts` ahora trae `opportunity.countryCode` y los campos
+  editables (`outcome`, `completedAt`, `externalEventId`, ids de tipo y responsable).
+- **El alta no vive aquí.** Una actividad nueva es el siguiente paso de una oportunidad y se
+  agenda desde ella (o desde «Agendar» en la lista de oportunidades sin próximo paso). Poner un
+  alta suelta en la bandeja obligaría a elegir la oportunidad en un formulario que hoy no la
+  conoce; si el negocio lo pide, es un `Autocompletado` de oportunidad más, no otra ruta.
+- **Actividades sin oportunidad** se listan pero no traen lápiz: la acción autoriza cargando la
+  oportunidad por `lib/scope`, y sin ella no hay por dónde entrar. Es la misma limitación del
+  detalle; hoy no hay pantalla que las cree.
+
+Dónde vive: `app/(app)/actividades/page.tsx` (`EditorDeActividad`, `contextosPorPais`),
+`lib/scope/agenda.ts`. Sin regla de negocio nueva.
+

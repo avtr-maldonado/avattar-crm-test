@@ -256,7 +256,7 @@ calendario de Microsoft 365 está configurado, lo agendado aparece en el calenda
 | CU-15.10 El calendario no responde | Ídem | Guarda con Microsoft 365 caído, sin permisos o sin configurar | La actividad se guarda igual. Si había credenciales y falló, un aviso dice que no llegó al calendario y que editar y guardar de nuevo reintenta. Sin credenciales, no se menciona el calendario |
 | CU-15.11 Editar una actividad | Quien alcance la oportunidad | Pulsa el lápiz de la fila | El mismo formulario, con los datos cargados. Cambiar horario o notas actualiza el evento del calendario; cambiar de responsable lo mueve a su calendario. Completar la última pendiente pregunta como al registrar (§12.4). La última y la próxima actividad de la oportunidad se recalculan |
 | CU-15.12 Un tipo que no está en los botones | Ídem | Lo elige en «Otro…» | Se aplica igual. Los botones son los seis con dibujo; si Administración renombra un tipo, ese tipo pasa al desplegable y nada más |
-| CU-15.13 Desde Actividades | Cualquiera | Pulsa «+ Registrar actividad» en la pantalla de Actividades | **Pendiente:** el botón apunta a una ruta que todavía no existe. Hoy se captura desde el detalle de la oportunidad |
+| CU-15.13 Desde Actividades | Cualquiera | Pulsa el lápiz de una actividad en la bandeja o en la semana | Se edita en el sitio con el mismo formulario del detalle, en la zona del país de su oportunidad y con sus responsables (F-29, F-30). El alta sigue viviendo en la oportunidad: el botón «Registrar actividad», que no llevaba a ningún lado, se quitó el 29-sep-2026 |
 
 ### F-16 · Cotizar
 
@@ -387,7 +387,7 @@ la administra. Un panel con el propietario y las casillas de con quién se compa
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-42.1 Compartir | Propietario, gerente de su país, Dirección, Administración | Marca a uno o varios usuarios y guarda | Ellos la ven en Personas, en la ficha y en el detalle de oportunidad, **solo lectura**. Queda en la bitácora con quién estaba y con quién queda (`INV-09`) |
+| CU-42.1 Compartir | Propietario, gerente de su país, Dirección, Administración | Busca por nombre y elige a uno o varios usuarios (quedan como fichas con «quitar») y guarda | Ellos la ven en Personas, en la ficha y en el detalle de oportunidad, **solo lectura**. Queda en la bitácora con quién estaba y con quién queda (`INV-09`) |
 | CU-42.2 Dejar de compartir | Los mismos | Desmarca y guarda | Deja de verla, salvo que tenga una oportunidad en la cuenta |
 | CU-42.3 Transferir | Los mismos | Cambia el propietario | Quien la recibe la administra; quien la entrega deja de verla salvo que se la compartan o tenga oportunidad ahí. Bitácora `CAMBIAR_PROPIETARIO` |
 | CU-42.4 Límite por país | Vendedor, Gerente | Elige a alguien de otro país | No aparece en la lista; el servidor lo rechaza. Dirección no tiene el límite |
@@ -432,14 +432,17 @@ Acotadas a la oficina activa, igual que el contador del menú, para que los dos 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-29.1 Abrir | Cualquier rol | Entra a Actividades | Tres listas que piden acciones distintas: **Vencidas** (deuda, lo más viejo primero), **Hoy** (el plan del día) y **Sin próximo paso** (oportunidades abiertas sin nada agendado, por importe · `RN-10`) |
-| CU-29.2 Resolver | Cualquier rol | Pulsa la actividad o la oportunidad | Lleva al detalle, donde se registra lo hecho y su siguiente paso (F-15) |
-| CU-29.3 Nada pendiente | Cualquier rol | — | Estados vacíos que lo dicen: «Nada agendado para hoy» |
+| CU-29.2 Resolver en el sitio | Cualquier rol | Pulsa el lápiz de la fila | Abre la actividad cargada: marcarla hecha con su resultado, reprogramarla, cambiar responsable. Misma acción y mismas reglas que el detalle (F-15), incluida la pregunta de §12.4 si la oportunidad se queda sin pendiente |
+| CU-29.3 Ir al detalle | Cualquier rol | Pulsa la oportunidad, o «Agendar» en las que no tienen próximo paso | Lleva al detalle, donde se agenda el siguiente paso |
+| CU-29.4 Sin oportunidad | Cualquier rol | Una actividad suelta, sin oportunidad | Se lista pero no trae lápiz: la acción autoriza cargando la oportunidad |
+| CU-29.5 Nada pendiente | Cualquier rol | — | Estados vacíos que lo dicen: «Nada agendado para hoy» |
 
 ### F-30 · Agenda semanal
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-30.1 Ver la semana | Cualquier rol | Pulsa «Semana» | Siete días desde el lunes, siempre los siete aunque alguno quede vacío, con lo realizado y lo pendiente |
+| CU-30.2 Editar | Cualquier rol | Pulsa el lápiz junto a la hora | Igual que en la bandeja (CU-29.2); también las ya realizadas |
 
 ---
 
@@ -544,7 +547,6 @@ Pestaña Usuarios, solo con `ADMINISTRAR_USUARIOS`. Cada operación deja bitáco
 |---|---|---|
 | Marcar ganada o perdida (`RN-07`, `INV-07`, `AC-19`) | Pendiente | La validación de dominio existe en parte (`componentesFaltantesParaGanar`); falta la acción y su pantalla |
 | Reabrir una oportunidad (`RN-18`) | Pendiente | Solo Administración; sin pantalla |
-| Registrar actividad desde la pantalla de Actividades | Pendiente | El botón existe; la ruta no. Se registra desde el detalle |
 | Autorizaciones de descuento · P-10 | Fuera de este alcance | Decisión del negocio. La compuerta «sin autorización pendiente» existe pero nunca se activa |
 | Reportes D y E de la propuesta de Análisis (cuentas y catálogo; gobierno) | Fuera de esta entrega | Decisión del negocio del 25-sep-2026; A, B y C están construidos (decisiones §28) |
 | Vistas guardadas (§9.5) | Pendiente | Los filtros ya viven en la URL, que es el prerrequisito |

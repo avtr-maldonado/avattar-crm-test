@@ -193,7 +193,10 @@ export function Panel({
         alCerrar();
       }}
       className={clsx(
-        "w-full rounded-lg bg-superficie-tarjeta p-0 text-texto-cuerpo shadow-md",
+        // `text-left` a propósito: el <dialog> se dibuja en la capa superior
+        // pero hereda del DOM donde se montó. Abierto desde una celda con
+        // `text-right`, el título y el subtítulo salían corridos.
+        "w-full rounded-lg bg-superficie-tarjeta p-0 text-left text-texto-cuerpo shadow-md",
         "backdrop:bg-navy-950/45 backdrop:backdrop-blur-[2px]",
         ancho === "lg" ? "max-w-3xl" : "max-w-xl",
       )}
