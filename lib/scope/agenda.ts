@@ -39,15 +39,20 @@ export async function bandejaDeTrabajo(
   const enOficina = pais ? actividadEnOficina(pais) : {};
   const { inicio: inicioDeHoy, fin: finDeHoy } = diaEn(fechaEn(ahora, zona), zona);
 
+  // Lo que la fila muestra y lo que el lápiz necesita para editar en el sitio:
+  // el país de la oportunidad decide la zona y los responsables (decisiones §20).
   const seleccion = {
     id: true,
     subject: true,
     notes: true,
+    outcome: true,
     startsAt: true,
     durationMin: true,
+    completedAt: true,
+    externalEventId: true,
     type: { select: { id: true, name: true } },
     user: { select: { id: true, name: true, initials: true } },
-    opportunity: { select: { id: true, folio: true, name: true, amount: true } },
+    opportunity: { select: { id: true, folio: true, name: true, amount: true, countryCode: true } },
     organization: { select: { id: true, name: true } },
   } as const;
 
@@ -145,12 +150,15 @@ export async function agendaSemanal(
     select: {
       id: true,
       subject: true,
+      notes: true,
+      outcome: true,
       startsAt: true,
       completedAt: true,
       durationMin: true,
-      type: { select: { name: true } },
-      user: { select: { name: true, initials: true } },
-      opportunity: { select: { id: true, folio: true, name: true } },
+      externalEventId: true,
+      type: { select: { id: true, name: true } },
+      user: { select: { id: true, name: true, initials: true } },
+      opportunity: { select: { id: true, folio: true, name: true, countryCode: true } },
     },
     orderBy: { startsAt: "asc" },
   });

@@ -1,7 +1,12 @@
 import Link from "next/link";
+import type { CountryCode } from "@/lib/dto";
 import { oficinaActiva, requireSession } from "@/lib/auth/session";
 import { agendaSemanal, bandejaDeTrabajo } from "@/lib/scope/agenda";
+import { tiposDeActividad } from "@/lib/scope/configuracion";
+import { destinatariosValidos } from "@/lib/domain/opportunity";
 import { getCountry } from "@/lib/policy";
+import { configurado as calendarioConfigurado } from "@/lib/graph/token";
+import { ciudadDe } from "@/lib/tiempo";
 import { formatUSD } from "@/lib/money";
 import { iniciales } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
@@ -13,6 +18,12 @@ import {
   Pastilla,
   StatTile,
 } from "@/components/ui/primitivas";
+import {
+  ComposerDeActividad,
+  type ActividadEditable,
+  type TipoDeActividad,
+} from "@/components/oportunidad/ComposerDeActividad";
+import { guardarActividadAccion } from "@/app/(app)/oportunidades/[id]/acciones";
 
 /**
  * P-07 · Actividades.
@@ -31,12 +42,16 @@ import {
  * porque justamente no hay nada agendado. Mezclarlas daría una lista larga que
  * nadie termina.
  *
- * ## Lo que falta y por qué
+ * ## Se edita aquí; se da de alta en la oportunidad
  *
- * Registrar una actividad **y su siguiente paso en el mismo formulario** es la
- * mitad del flujo de §12.4, y es una mutación: Server Action con validación de
- * dominio. Llega con el resto de las acciones de E1. Lo que ya está es la
- * lectura, que es lo que ordena el día.
+ * Cada fila trae el mismo lápiz que la pestaña Actividades del detalle: abre
+ * `ComposerDeActividad` cargado y guarda con la misma acción, en la zona del
+ * país de la oportunidad y con sus responsables (decisiones §20). Resolver una
+ * vencida —marcarla hecha o reprogramarla— no exige salir de la bandeja.
+ *
+ * El alta no vive aquí: una actividad nueva es el siguiente paso de **una**
+ * oportunidad, y se agenda desde ella. El botón «Registrar actividad» que
+ * llevaba a una ruta inexistente se quitó el 29-sep-2026 (decisiones §30).
  */
 const VISTAS = [
   { valor: "bandeja", etiqueta: "Bandeja" },
@@ -64,10 +79,19 @@ export default async function ActividadesPage({
   const zona = codigoDeZona ? (await getCountry(codigoDeZona)).timezone : "UTC";
   const f = formatos(zona);
 
-  const [bandeja, semana] = await Promise.all([
+  const [bandeja, semana, tipos, contextos] = await Promise.all([
     bandejaDeTrabajo(session, ahora, pais, zona),
     agendaSemanal(session, ahora, pais, zona),
+    tiposDeActividad(),
+    contextosPorPais(session.countryCodes),
   ]);
+
+  const edicion: Edicion = {
+    tipos,
+    contextos,
+    usuarioActual: session.userId,
+    calendarioConfigurado: calendarioConfigurado(),
+  };
 
   const pendientes = bandeja.vencidas.length + bandeja.hoy.length;
 
@@ -90,16 +114,11 @@ export default async function ActividadesPage({
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <ControlSegmentado
-            opciones={VISTAS}
-            activa={vista}
-            hrefDe={(v) => `/actividades?vista=${v}`}
-          />
-          <div className="ml-auto">
-            <Boton href="/actividades/nueva">+ Registrar actividad</Boton>
-          </div>
-        </div>
+        <ControlSegmentado
+          opciones={VISTAS}
+          activa={vista}
+          hrefDe={(v) => `/actividades?vista=${v}`}
+        />
 
         <div className="mt-5 grid grid-cols-3 gap-4">
           <StatTile denso
@@ -124,13 +143,105 @@ export default async function ActividadesPage({
 
         <div className="mt-6">
           {vista === "semana" ? (
-            <VistaSemana semana={semana} f={f} />
+            <VistaSemana semana={semana} f={f} edicion={edicion} />
           ) : (
-            <VistaBandeja bandeja={bandeja} f={f} />
+            <VistaBandeja bandeja={bandeja} f={f} edicion={edicion} />
           )}
         </div>
       </div>
     </>
+  );
+}
+
+// ───────────────────────────────────────────────────── Edición en el sitio
+
+/** Lo que el lápiz necesita y no cambia de fila en fila. */
+type Edicion = {
+  tipos: TipoDeActividad[];
+  contextos: Map<CountryCode, ContextoDePais>;
+  usuarioActual: string;
+  calendarioConfigurado: boolean;
+};
+
+type ContextoDePais = {
+  zona: string;
+  zonaEtiqueta: string;
+  usuarios: { id: string; name: string }[];
+};
+
+/**
+ * La zona y los responsables de cada país del alcance, una sola vez.
+ *
+ * Una actividad se edita en la zona del país de **su** oportunidad, no en la de
+ * la oficina activa (decisiones §20); la bandeja de Dirección mezcla países.
+ */
+async function contextosPorPais(paises: CountryCode[]): Promise<Map<CountryCode, ContextoDePais>> {
+  const entradas = await Promise.all(
+    paises.map(async (codigo) => {
+      const [pais, usuarios] = await Promise.all([getCountry(codigo), destinatariosValidos(codigo)]);
+      return [
+        codigo,
+        {
+          zona: pais.timezone,
+          zonaEtiqueta: ciudadDe(pais.timezone),
+          usuarios: usuarios.map((u) => ({ id: u.id, name: u.name })),
+        },
+      ] as const;
+    }),
+  );
+  return new Map(entradas);
+}
+
+/** Lo que cualquiera de las dos lecturas trae de una actividad y el lápiz usa. */
+type ActividadDeAgenda = {
+  id: string;
+  subject: string;
+  notes: string | null;
+  outcome: string | null;
+  startsAt: Date;
+  durationMin: number | null;
+  completedAt: Date | null;
+  externalEventId: string | null;
+  type: { id: string };
+  user: { id: string };
+  opportunity: { id: string; countryCode: CountryCode } | null;
+};
+
+/**
+ * El lápiz de una fila. Solo para actividades ligadas a una oportunidad: la
+ * acción autoriza cargando la oportunidad por `lib/scope`, y una actividad
+ * suelta no tiene por dónde entrar. Es la misma limitación del detalle.
+ */
+function EditorDeActividad({ a, edicion }: { a: ActividadDeAgenda; edicion: Edicion }) {
+  if (!a.opportunity) return null;
+  const contexto = edicion.contextos.get(a.opportunity.countryCode);
+  if (!contexto) return null;
+
+  const actividad: ActividadEditable = {
+    id: a.id,
+    typeId: a.type.id,
+    subject: a.subject,
+    notes: a.notes,
+    outcome: a.outcome,
+    startsAt: a.startsAt.toISOString(),
+    durationMin: a.durationMin,
+    hecha: a.completedAt != null,
+    userId: a.user.id,
+    enCalendario: a.externalEventId != null,
+  };
+
+  return (
+    <ComposerDeActividad
+      opportunityId={a.opportunity.id}
+      tipos={edicion.tipos}
+      usuarios={contexto.usuarios}
+      usuarioActual={edicion.usuarioActual}
+      zona={contexto.zona}
+      zonaEtiqueta={contexto.zonaEtiqueta}
+      calendarioConfigurado={edicion.calendarioConfigurado}
+      actividad={actividad}
+      accion={guardarActividadAccion}
+    />
   );
 }
 
@@ -139,9 +250,11 @@ export default async function ActividadesPage({
 function VistaBandeja({
   bandeja,
   f,
+  edicion,
 }: {
   bandeja: Awaited<ReturnType<typeof bandejaDeTrabajo>>;
   f: Formatos;
+  edicion: Edicion;
 }) {
   const todoResuelto =
     bandeja.vencidas.length === 0 &&
@@ -172,7 +285,7 @@ function VistaBandeja({
         vacio="Sin actividades vencidas."
       >
         {bandeja.vencidas.map((a) => (
-          <FilaActividad key={a.id} a={a} f={f} vencida />
+          <FilaActividad key={a.id} a={a} f={f} vencida editor={<EditorDeActividad a={a} edicion={edicion} />} />
         ))}
       </Grupo>
 
@@ -184,7 +297,7 @@ function VistaBandeja({
         vacio="Nada agendado para hoy."
       >
         {bandeja.hoy.map((a) => (
-          <FilaActividad key={a.id} a={a} f={f} />
+          <FilaActividad key={a.id} a={a} f={f} editor={<EditorDeActividad a={a} edicion={edicion} />} />
         ))}
       </Grupo>
 
@@ -266,10 +379,13 @@ function FilaActividad({
   a,
   f,
   vencida = false,
+  editor,
 }: {
   a: Awaited<ReturnType<typeof bandejaDeTrabajo>>["hoy"][number];
   f: Formatos;
   vencida?: boolean;
+  /** El lápiz, o nada si la actividad no se puede editar desde aquí. */
+  editor: React.ReactNode;
 }) {
   return (
     <li className="flex items-center gap-3 rounded-md border border-borde bg-superficie-tarjeta px-4 py-3">
@@ -295,6 +411,7 @@ function FilaActividad({
       </div>
       {vencida && <Pastilla tono="peligro">Vencida</Pastilla>}
       <Avatar iniciales={a.user.initials} titulo={a.user.name} />
+      {editor}
     </li>
   );
 }
@@ -304,16 +421,22 @@ function FilaActividad({
 function VistaSemana({
   semana,
   f,
+  edicion,
 }: {
   semana: Awaited<ReturnType<typeof agendaSemanal>>;
   f: Formatos;
+  edicion: Edicion;
 }) {
   if (semana.total === 0) {
     return (
       <EstadoVacio
         titulo="Semana sin actividades"
-        explicacion="No hay nada registrado ni agendado entre el lunes y el domingo de esta semana."
-        accion={<Boton href="/actividades/nueva">Registrar actividad</Boton>}
+        explicacion="No hay nada registrado ni agendado entre el lunes y el domingo de esta semana. Las actividades se agendan desde cada oportunidad."
+        accion={
+          <Boton href="/oportunidades" variante="secundario">
+            Ir al pipeline
+          </Boton>
+        }
       />
     );
   }
@@ -337,7 +460,10 @@ function VistaSemana({
           <ul className="mt-3 space-y-2">
             {d.actividades.map((a) => (
               <li key={a.id} className="text-xs">
-                <span className="tabular text-texto-tenue">{f.hora.format(a.startsAt)}</span>
+                <div className="flex items-center justify-between gap-1">
+                  <span className="tabular text-texto-tenue">{f.hora.format(a.startsAt)}</span>
+                  <EditorDeActividad a={a} edicion={edicion} />
+                </div>
                 <p
                   className={
                     a.completedAt

@@ -137,6 +137,9 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     desde onSubmit para que React no reinicie el formulario cuando la acción devuelve VALIDACION;
                     useProblemas apaga el error de un campo al corregirlo) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
+                    · SelectorDeVarios (elegir varios de una lista corta buscando por nombre; fichas con «quitar» y
+                    un hidden por elegido, la acción lo lee con form.getAll) · el Panel lleva text-left: el <dialog>
+                    hereda la alineación del DOM donde se montó
                     · AyudaEmergente (<details> con un icono junto a la etiqueta; lo usa el campo «Pronóstico»)
                     · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
@@ -276,6 +279,7 @@ objetivos**, con medición acumulada (decisiones §17). **Marcar ganada/perdida*
 24-sep-2026 (§25). **P-09 análisis** existe desde el 25-sep-2026 (§28): ocho reportes en tres
 pestañas, con filtros y agrupaciones en la URL; los bloques D y E de la propuesta quedaron fuera.
 Las **personas tienen propietario y se comparten** desde el 25-sep-2026 (§29); las cuentas se ven todas.
+Las actividades se **editan desde la bandeja y la semana** (§30, 29-sep); el alta sigue en la oportunidad.
 **Pendiente y visible:** reabrir (RN-18) y las autorizaciones de descuento, fuera de este alcance
 por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.

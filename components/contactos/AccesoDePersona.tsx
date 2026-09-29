@@ -4,12 +4,15 @@ import { useActionState, useState } from "react";
 import type { ResultadoAccion } from "@/lib/acciones";
 import { problemaDe } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
+import type { Role } from "@/lib/dto";
+import { ETIQUETA_ROL } from "@/lib/etiquetas";
 import { Boton } from "@/components/ui/primitivas";
-import { AvisosDeAccion, Campo, Casilla, Panel, Seleccion } from "@/components/ui/formulario";
+import { SelectorDeVarios } from "@/components/ui/SelectorDeVarios";
+import { AvisosDeAccion, Campo, Panel, Seleccion } from "@/components/ui/formulario";
 
 type ResultadoDeContacto = ResultadoAccion<{ id: string } | null>;
 
-export type UsuarioElegible = { id: string; name: string; role: string };
+export type UsuarioElegible = { id: string; name: string; role: Role };
 
 /**
  * Quién ve a una persona · decisiones §29.
@@ -50,10 +53,10 @@ export function AccesoDePersona({
   );
 
   const idFormulario = `acceso-${persona.id}`;
-  const compartidas = new Set(persona.compartidaCon);
   // El propietario no se comparte consigo mismo. Si se transfiere, quien la
   // entrega deja de verla; para que siga consultándola, se comparte después.
   const conQuien = usuarios.filter((u) => u.id !== persona.ownerId);
+  const idsElegibles = new Set(conQuien.map((u) => u.id));
 
   return (
     <>
@@ -106,27 +109,22 @@ export function AccesoDePersona({
             </Seleccion>
           </Campo>
 
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium text-texto-titulo">Compartir con</legend>
-            {conQuien.length === 0 ? (
-              <p className="text-sm text-texto-tenue">No hay nadie más con quien compartirla.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {conQuien.map((u) => (
-                  <Casilla
-                    key={u.id}
-                    name="compartirCon"
-                    value={u.id}
-                    etiqueta={u.name}
-                    defaultChecked={compartidas.has(u.id)}
-                  />
-                ))}
-              </div>
-            )}
-            {problemaDe(resultado, "compartirCon") ? (
-              <p className="text-xs text-coral">{problemaDe(resultado, "compartirCon")}</p>
-            ) : null}
-          </fieldset>
+          <Campo
+            etiqueta="Compartir con"
+            htmlFor={`${idFormulario}-compartirCon`}
+            problema={problemaDe(resultado, "compartirCon")}
+            ayuda="Pueden consultarla; no editarla ni volver a compartirla."
+          >
+            <SelectorDeVarios
+              id={`${idFormulario}-compartirCon`}
+              name="compartirCon"
+              opciones={conQuien.map((u) => ({ id: u.id, nombre: u.name, detalle: ETIQUETA_ROL[u.role] }))}
+              iniciales={persona.compartidaCon.filter((id) => idsElegibles.has(id))}
+              placeholder="Busca a quien compartirla"
+              vacio="No hay nadie más con quien compartirla."
+              problema={problemaDe(resultado, "compartirCon")}
+            />
+          </Campo>
 
           <AvisosDeAccion resultado={resultado} />
         </form>
