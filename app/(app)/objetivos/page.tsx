@@ -14,22 +14,27 @@ import { trimestreDe } from "@/lib/filters";
 import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { ControlSegmentado, EstadoVacio, StatTile } from "@/components/ui/primitivas";
-import { PanelDeAvance, type AvanceVisible } from "@/components/objetivos/PanelDeAvance";
 import { TiraDeTrimestres } from "@/components/objetivos/TiraDeTrimestres";
 import { TablaDeEquipo, type RenglonDeEquipo } from "@/components/objetivos/TablaDeEquipo";
-import { FijarObjetivo } from "@/components/objetivos/FijarObjetivo";
-import { fijarObjetivoAccion } from "./acciones";
+import { TablaDeObjetivos, type FilaDeObjetivos } from "@/components/objetivos/TablaDeObjetivos";
+import { guardarCuotasAccion } from "./acciones";
 
 /**
  * P-08 · Objetivos por trimestre y año.
  *
+ * ## Dos vistas
+ *
+ * **Objetivos** es la hoja del negocio (decisiones §34): una fila por vendedor,
+ * Q1 a Q4, total anual y total compañía. Quien fija cuotas teclea ahí; los
+ * demás la leen. **Avance** es la medición: la tira de trimestres y la tabla
+ * del equipo con cumplimiento, arrastre y cobertura.
+ *
  * ## La medición es acumulada
  *
  * El negocio lo pidió así el 14 de septiembre de 2026: un objetivo de 100 por
- * trimestre que no se cumple en el T1 no se perdona, se arrastra; vender 200 en
- * el T2 cubre los 100 del T1 y los 100 del T2. Lo que se compara entonces no es
- * trimestre contra trimestre, sino **acumulado contra acumulado**, y por eso la
- * cifra grande de esta pantalla es la del año a la fecha, no la del trimestre.
+ * trimestre que no se cumple en el Q1 no se perdona, se arrastra; vender 200 en
+ * el Q2 cubre los 100 del Q1 y los 100 del Q2. Lo que se compara entonces no es
+ * trimestre contra trimestre, sino **acumulado contra acumulado**.
  *
  * Es una regla que **no está en el spec** —§10.2 medía cada periodo por
  * separado— y queda anotada en `decisiones-pendientes.md` §17.
@@ -38,15 +43,15 @@ import { fijarObjetivoAccion } from "./acciones";
  *
  * Un vendedor ve **solo su renglón** (§2.3, AC-29): ni la cuota ni el avance de
  * sus compañeros. Lo garantiza `objectiveScope` en la consulta, no esta
- * pantalla. Con `VER_OBJETIVOS_EQUIPO` aparece además la tabla del equipo, y su
- * total se suma **de las filas visibles** (§10.3).
+ * pantalla. Los cuatro indicadores de arriba se suman **de las filas visibles**
+ * (§10.3): para él son los suyos; para gerencia, los de su equipo.
  *
  * La oficina activa de la barra superior manda sobre qué país se mide, dentro
  * del alcance del rol y sin ampliarlo nunca.
  */
-const PERIODOS = [
-  { valor: "trimestre", etiqueta: "Trimestre" },
-  { valor: "anio", etiqueta: "Año" },
+const VISTAS = [
+  { valor: "objetivos", etiqueta: "Objetivos" },
+  { valor: "avance", etiqueta: "Avance" },
 ] as const;
 
 const METRICAS = [
@@ -54,7 +59,7 @@ const METRICAS = [
   { valor: "utilidad", etiqueta: "Utilidad de venta" },
 ] as const;
 
-type Periodo = (typeof PERIODOS)[number]["valor"];
+type Vista = (typeof VISTAS)[number]["valor"];
 type Metrica = (typeof METRICAS)[number]["valor"];
 
 export default async function ObjetivosPage({
@@ -69,7 +74,7 @@ export default async function ObjetivosPage({
   const ahora = new Date();
   const enCurso = trimestreDe(ahora, configuracion.fiscalYearStartMonth);
 
-  const periodo: Periodo = sp.periodo === "anio" ? "anio" : "trimestre";
+  const vista: Vista = sp.vista === "avance" ? "avance" : "objetivos";
   const anio = unEntero(sp.fy) ?? enCurso.fiscalYear;
   const trimestre = Math.min(Math.max(unEntero(sp.q) ?? enCurso.quarter, 1), 4);
 
@@ -99,8 +104,7 @@ export default async function ObjetivosPage({
   ]);
 
   /** Qué par de columnas se está mirando. La aritmética es la misma para las dos. */
-  const cuotaDe = (r: RenglonDeObjetivo) =>
-    metrica === "venta" ? r.cuotaVenta : r.cuotaUtilidad;
+  const cuotaDe = (r: RenglonDeObjetivo) => (metrica === "venta" ? r.cuotaVenta : r.cuotaUtilidad);
   const logradoDe = (r: RenglonDeObjetivo) =>
     metrica === "venta" ? r.logradoVenta : r.logradoUtilidad;
   const cuotaAnualDe = (r: RenglonDeObjetivo) =>
@@ -112,57 +116,63 @@ export default async function ObjetivosPage({
     const delAnio = pista[3]!;
 
     // §10.1 · «Si coexisten, la suma de los cuatro trimestres debe igualar el
-    // anual; el anual manda para el reporte de año» (RN-32).
+    // anual; el anual manda para el reporte de año» (RN-32). Desde §34 la
+    // anual ya no se captura: solo sobrevive en filas fijadas antes.
     const cuotaAnual = cuotaAnualDe(r) ?? delAnio.cuota;
-    const anualDesalineado =
-      cuotaAnualDe(r) !== null && !cuotaAnualDe(r)!.equals(delAnio.cuota);
+    const anualDesalineado = cuotaAnualDe(r) !== null && !cuotaAnualDe(r)!.equals(delAnio.cuota);
 
     return {
       renglon: r,
       pista,
       alTrimestre,
-      anual: {
-        cuota: cuotaAnual,
-        logrado: delAnio.logrado,
-        ...computePeriodProgress(cuotaAnual, delAnio.logrado),
-      },
+      anual: { cuota: cuotaAnual, logrado: delAnio.logrado, pipeline: sum(r.pipelineVenta) },
       anualDesalineado,
     };
   });
 
-  const mio = conPista.find((c) => c.renglon.usuario.id === session.userId);
   const hayAlgo = conPista.some((c) => c.renglon.tieneCuota || !c.alTrimestre.logrado.isZero());
-
-  const etiquetaDePeriodo =
-    periodo === "anio" ? `${anio}` : `acumulada al T${trimestre} ${anio}`;
+  const desalineados = conPista.filter((c) => c.anualDesalineado).length;
 
   const href = (cambio: Record<string, string>) => {
-    const p = new URLSearchParams({
-      periodo,
-      fy: String(anio),
-      q: String(trimestre),
-      metrica,
-      ...cambio,
-    });
+    const p = new URLSearchParams({ vista, fy: String(anio), q: String(trimestre), metrica, ...cambio });
     return `/objetivos?${p.toString()}`;
   };
 
-  const editor = puedeFijar ? (
-    <FijarObjetivo
-      personas={personas.map((p) => ({ id: p.id, nombre: p.name }))}
-      pais={pais}
-      anio={anio}
-      accion={fijarObjetivoAccion}
-    />
-  ) : null;
+  // ── Los cuatro indicadores: el año en «Objetivos», el acumulado al Q en «Avance».
+  // Se suman de las filas visibles, nunca de una consulta aparte (§10.3).
+  const anual = vista === "objetivos";
+  const cuota = sum(conPista.map((c) => (anual ? c.anual.cuota : c.alTrimestre.cuota)));
+  const logrado = sum(conPista.map((c) => (anual ? c.anual.logrado : c.alTrimestre.logrado)));
+  const pipeline = sum(
+    conPista.map((c) => (anual ? c.anual.pipeline : c.renglon.pipelineVenta[trimestre - 1]!)),
+  );
+  const progreso = computePeriodProgress(cuota, logrado);
+  const cobertura = computeCoverage(progreso.faltante, pipeline);
+  const periodoVisible = anual ? `año ${anio}` : `acumulado al Q${trimestre} ${anio}`;
+  const nombreDeMetrica = metrica === "venta" ? "Venta" : "Utilidad de venta";
+
+  const filasDeObjetivos: FilaDeObjetivos[] = conPista.flatMap((c) =>
+    c.renglon.tieneCuota
+      ? [
+          {
+            userId: c.renglon.usuario.id,
+            nombre: c.renglon.usuario.name,
+            iniciales: c.renglon.usuario.initials,
+            cuotas: cuotaDe(c.renglon).map((m) => m.toFixed()),
+            esQuienMira: c.renglon.usuario.id === session.userId,
+          },
+        ]
+      : [],
+  );
+  // Tras guardar, la página relee y esta huella cambia: la cuadrícula se remonta
+  // con lo guardado como punto de partida, sin arrastrar el borrador anterior.
+  const huella = filasDeObjetivos.map((f) => `${f.userId}:${f.cuotas.join(",")}`).join("|");
 
   return (
     <>
       <BarraSuperior
         titulo="Objetivos"
-        subtitulo={`${NOMBRE_PAIS[pais]} · año fiscal ${anio} · ${
-          periodo === "anio" ? "vista anual" : `acumulado al T${trimestre}`
-        }`}
+        subtitulo={`${NOMBRE_PAIS[pais]} · ${nombreDeMetrica.toLocaleLowerCase("es")} · ${periodoVisible}`}
         usuario={{
           nombre: session.name,
           correo: session.email,
@@ -174,11 +184,7 @@ export default async function ObjetivosPage({
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
         <div className="flex flex-wrap items-center gap-3">
-          <ControlSegmentado
-            opciones={PERIODOS}
-            activa={periodo}
-            hrefDe={(v) => href({ periodo: v })}
-          />
+          <ControlSegmentado opciones={VISTAS} activa={vista} hrefDe={(v) => href({ vista: v })} />
 
           {puedeVerUtilidad && (
             <ControlSegmentado
@@ -189,111 +195,140 @@ export default async function ObjetivosPage({
           )}
 
           <SelectorDeAnio anios={anios} activo={anio} href={href} />
-
-          {editor && <div className="ml-auto">{editor}</div>}
         </div>
 
-        {!hayAlgo ? (
+        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile denso etiqueta="Cuota" valor={formatUSD(cuota)} subtexto={periodoVisible} />
+          <StatTile
+            denso
+            etiqueta="Logrado"
+            valor={formatUSD(logrado)}
+            subtexto="Ganado con fecha de cierre real en el periodo"
+            tono={logrado.isZero() ? "neutro" : "acento"}
+          />
+          <StatTile
+            denso
+            etiqueta="Cumplimiento"
+            valor={progreso.cumplimiento === null ? "—" : `${Math.round(progreso.cumplimiento * 100)} %`}
+            subtexto={
+              progreso.cumplimiento === null
+                ? "Sin cuota fijada"
+                : progreso.faltante.isZero()
+                  ? `${formatUSD(progreso.excedente)} arriba de la cuota`
+                  : `Faltan ${formatUSD(progreso.faltante)}`
+            }
+            tono={
+              progreso.cumplimiento === null ? "neutro" : progreso.cumplimiento >= 1 ? "exito" : "peligro"
+            }
+          />
+          <StatTile
+            denso
+            etiqueta="Cobertura"
+            valor={cobertura === null ? "Cubierta" : `${cobertura.toFixed(1)} ×`}
+            subtexto={
+              cobertura === null ? "No hay brecha que cubrir" : "Pipeline abierto del periodo sobre la brecha"
+            }
+            tono={cobertura !== null && cobertura < 1 ? "peligro" : "exito"}
+          />
+        </div>
+
+        {vista === "objetivos" ? (
+          <div className="mt-5">
+            <TablaDeObjetivos
+              key={`${pais}-${anio}-${metrica}-${huella}`}
+              filas={filasDeObjetivos}
+              candidatos={personas.map((p) => ({ id: p.id, nombre: p.name }))}
+              puedeFijar={puedeFijar}
+              pais={pais}
+              anio={anio}
+              metrica={metrica === "venta" ? "VENTA" : "UTILIDAD"}
+              accion={guardarCuotasAccion}
+            />
+          </div>
+        ) : !hayAlgo ? (
           <div className="mt-6">
             <EstadoVacio
               titulo={`Sin objetivos fijados para ${NOMBRE_PAIS[pais]} en ${anio}`}
               explicacion={
                 puedeFijar
-                  ? "Fija la cuota de venta y de utilidad de cada persona, por trimestre o por año. Se mide contra lo que ya cerraron."
+                  ? "Captura la cuota de cada vendedor por trimestre en la vista Objetivos. Se mide contra lo que ya cerraron."
                   : "Administración todavía no carga las cuotas de esta oficina para este año fiscal."
               }
-              accion={editor ?? <span className="text-sm text-texto-tenue">Nada que hacer aquí.</span>}
+              accion={
+                puedeFijar ? (
+                  <a
+                    href={href({ vista: "objetivos" })}
+                    className="rounded-sm bg-acento px-3.5 py-2 text-sm font-semibold text-white"
+                  >
+                    Ir a Objetivos
+                  </a>
+                ) : (
+                  <span className="text-sm text-texto-tenue">Nada que hacer aquí.</span>
+                )
+              }
             />
           </div>
         ) : (
           <>
-            {periodo === "trimestre" && (
-              <div className="mt-5">
-                <TiraDeTrimestres
-                  trimestres={[1, 2, 3, 4].map((q) => {
-                    // La tira suma las filas visibles, igual que el total: para
-                    // un vendedor es su propio año, para un gerente el de su
-                    // equipo (§10.3).
-                    const cuota = sum(conPista.map((c) => c.pista[q - 1]!.cuotaDelTrimestre));
-                    const logrado = sum(conPista.map((c) => c.pista[q - 1]!.logradoDelTrimestre));
-                    return {
-                      quarter: q,
-                      href: href({ q: String(q) }),
-                      cuota: formatUSD(cuota),
-                      logrado: formatUSD(logrado),
-                      cumplimiento: cuota.isZero() ? null : logrado.div(cuota).toNumber(),
-                      esActual: q === trimestre,
-                      enCurso: q === enCurso.quarter && anio === enCurso.fiscalYear,
-                    };
-                  })}
-                />
-              </div>
-            )}
+            <div className="mt-5">
+              <TiraDeTrimestres
+                trimestres={[1, 2, 3, 4].map((q) => {
+                  // La tira suma las filas visibles, igual que los indicadores:
+                  // para un vendedor es su propio año, para un gerente el de su
+                  // equipo (§10.3).
+                  const cuotaQ = sum(conPista.map((c) => c.pista[q - 1]!.cuotaDelTrimestre));
+                  const logradoQ = sum(conPista.map((c) => c.pista[q - 1]!.logradoDelTrimestre));
+                  return {
+                    quarter: q,
+                    href: href({ q: String(q) }),
+                    cuota: formatUSD(cuotaQ),
+                    logrado: formatUSD(logradoQ),
+                    cumplimiento: cuotaQ.isZero() ? null : logradoQ.div(cuotaQ).toNumber(),
+                    esActual: q === trimestre,
+                    enCurso: q === enCurso.quarter && anio === enCurso.fiscalYear,
+                  };
+                })}
+              />
+            </div>
 
-            {mio && (
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <PanelDeAvance
-                  avance={
-                    periodo === "trimestre"
-                      ? avanceTrimestral(mio.alTrimestre, trimestre, metrica)
-                      : avanceAnual(mio.anual, anio, metrica)
-                  }
-                />
-                <IndicadoresPersonales
-                  pista={mio.alTrimestre}
-                  pipeline={mio.renglon.pipelineVenta[trimestre - 1]!}
-                  periodo={periodo}
-                  anual={mio.anual}
-                />
-              </div>
-            )}
-
-            {mio?.anualDesalineado && (
+            {desalineados > 0 && (
               <p className="mt-4 rounded-sm border border-borde-fuerte bg-superficie-tinte px-4 py-2.5 text-xs text-navy-700">
-                Los cuatro trimestres no suman la cuota anual (RN-32). Para el reporte de año manda
-                la anual; la diferencia está en algún trimestre sin cargar.
+                {desalineados === 1
+                  ? "Una persona tiene una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres (RN-32)."
+                  : `${desalineados} personas tienen una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres (RN-32).`}{" "}
+                Para el año manda la anual; volver a guardar sus trimestres en Objetivos la retira.
               </p>
             )}
 
             {verEquipo && (
               <div className="mt-6">
                 <TablaDeEquipo
-                  periodo={etiquetaDePeriodo}
-                  metrica={metrica === "venta" ? "Venta" : "Utilidad de venta"}
+                  periodo={`acumulada al Q${trimestre} ${anio}`}
+                  metrica={nombreDeMetrica}
                   renglones={conPista.map((c): RenglonDeEquipo => {
-                    const cuota =
-                      periodo === "anio" ? c.anual.cuota : c.alTrimestre.cuota;
-                    const logrado =
-                      periodo === "anio" ? c.anual.logrado : c.alTrimestre.logrado;
-                    const faltante =
-                      periodo === "anio" ? c.anual.faltante : c.alTrimestre.faltante;
-                    const cobertura = computeCoverage(
-                      faltante,
+                    const coberturaQ = computeCoverage(
+                      c.alTrimestre.faltante,
                       c.renglon.pipelineVenta[trimestre - 1]!,
                     );
-
                     return {
                       id: c.renglon.usuario.id,
                       nombre: c.renglon.usuario.name,
                       iniciales: c.renglon.usuario.initials,
-                      cuota: formatUSD(cuota),
-                      logrado: formatUSD(logrado),
-                      cumplimiento: cuota.isZero() ? null : logrado.div(cuota).toNumber(),
-                      arrastre:
-                        periodo === "anio" || c.alTrimestre.arrastre.isZero()
-                          ? ""
-                          : conSigno(c.alTrimestre.arrastre),
+                      cuota: formatUSD(c.alTrimestre.cuota),
+                      logrado: formatUSD(c.alTrimestre.logrado),
+                      cumplimiento: c.alTrimestre.cumplimiento,
+                      arrastre: c.alTrimestre.arrastre.isZero() ? "" : conSigno(c.alTrimestre.arrastre),
                       arrastreEsDeuda: c.alTrimestre.arrastre.isNegative(),
-                      cobertura: faltante.isZero()
+                      cobertura: c.alTrimestre.faltante.isZero()
                         ? "Cubierta"
-                        : cobertura === null
+                        : coberturaQ === null
                           ? "—"
-                          : `${cobertura.toFixed(1)} ×`,
-                      coberturaBaja: cobertura !== null && cobertura < 1,
+                          : `${coberturaQ.toFixed(1)} ×`,
+                      coberturaBaja: coberturaQ !== null && coberturaQ < 1,
                       esQuienMira: c.renglon.usuario.id === session.userId,
                     };
                   })}
-                  total={totalDelEquipo(conPista, periodo)}
+                  total={totalDelEquipo(conPista)}
                 />
               </div>
             )}
@@ -305,60 +340,6 @@ export default async function ObjetivosPage({
 }
 
 // ───────────────────────────────────────────────────────────── Redacción
-
-/**
- * El pie del panel acumulado.
- *
- * Es la frase que explica la regla sin enunciarla: «entras al T3 debiendo
- * $120,000» dice más sobre cómo funciona la medición que cualquier leyenda.
- */
-function avanceTrimestral(
-  a: AvanceDeTrimestre,
-  quarter: number,
-  metrica: Metrica,
-): AvanceVisible {
-  const anterior = a.cuota.minus(a.cuotaDelTrimestre);
-  const entrada = a.arrastre.isZero()
-    ? `Entras al T${quarter} a la par.`
-    : a.arrastre.isNegative()
-      ? `Entras al T${quarter} debiendo ${formatUSD(a.arrastre.negated())} de los trimestres anteriores.`
-      : `Entras al T${quarter} con ${formatUSD(a.arrastre)} de adelanto.`;
-
-  const cierre = a.cuota.isZero()
-    ? "No hay cuota fijada para este periodo."
-    : a.faltante.isZero()
-      ? `Vas ${formatUSD(a.excedente)} arriba del acumulado.`
-      : `Faltan ${formatUSD(a.faltante)} para ir a la par.`;
-
-  return {
-    titulo: metrica === "venta" ? "Venta acumulada" : "Utilidad acumulada",
-    logrado: formatUSD(a.logrado),
-    cuota: formatUSD(a.cuota),
-    cumplimiento: a.cumplimiento,
-    marcaDeArrastre: a.cuota.isZero() ? null : anterior.div(a.cuota).toNumber(),
-    pie: `${entrada} ${cierre}`,
-  };
-}
-
-function avanceAnual(
-  a: { cuota: Money; logrado: Money; cumplimiento: number | null; faltante: Money; excedente: Money },
-  anio: number,
-  metrica: Metrica,
-): AvanceVisible {
-  return {
-    titulo: metrica === "venta" ? `Venta ${anio}` : `Utilidad ${anio}`,
-    logrado: formatUSD(a.logrado),
-    cuota: formatUSD(a.cuota),
-    cumplimiento: a.cumplimiento,
-    // El año es el periodo completo: no hay nada anterior que arrastrar.
-    marcaDeArrastre: null,
-    pie: a.cuota.isZero()
-      ? "No hay cuota anual fijada."
-      : a.faltante.isZero()
-        ? `Cerrado con ${formatUSD(a.excedente)} arriba de la cuota.`
-        : `Faltan ${formatUSD(a.faltante)} para cerrar el año.`,
-  };
-}
 
 function conSigno(v: Money): string {
   return v.isNegative() ? `−${formatUSD(v.negated())}` : `+${formatUSD(v)}`;
@@ -372,40 +353,6 @@ function unEntero(v: string | string[] | undefined): number | null {
 }
 
 // ─────────────────────────────────────────────────────────── Subcomponentes
-
-function IndicadoresPersonales({
-  pista,
-  pipeline,
-  periodo,
-  anual,
-}: {
-  pista: AvanceDeTrimestre;
-  pipeline: Money;
-  periodo: Periodo;
-  anual: { faltante: Money; excedente: Money };
-}) {
-  const faltante = periodo === "anio" ? anual.faltante : pista.faltante;
-  const cobertura = computeCoverage(faltante, pipeline);
-
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <StatTile
-        etiqueta="Brecha"
-        valor={formatUSD(faltante)}
-        subtexto={faltante.isZero() ? "cuota cubierta" : "para ir a la par"}
-        tono={faltante.isZero() ? "exito" : "peligro"}
-      />
-      <StatTile
-        etiqueta="Cobertura"
-        valor={cobertura === null ? "Cubierta" : `${cobertura.toFixed(1)} ×`}
-        subtexto={
-          cobertura === null ? "no hay brecha que cubrir" : "pipeline del trimestre sobre la brecha"
-        }
-        tono={cobertura !== null && cobertura < 1 ? "peligro" : "exito"}
-      />
-    </div>
-  );
-}
 
 function SelectorDeAnio({
   anios,
@@ -430,20 +377,10 @@ function SelectorDeAnio({
 }
 
 function totalDelEquipo(
-  conPista: {
-    pista: AvanceDeTrimestre[];
-    alTrimestre: AvanceDeTrimestre;
-    anual: { cuota: Money; logrado: Money };
-  }[],
-  periodo: Periodo,
+  conPista: { alTrimestre: AvanceDeTrimestre }[],
 ): { cuota: string; logrado: string; cumplimiento: number | null } {
-  const cuota = sum(
-    conPista.map((c) => (periodo === "anio" ? c.anual.cuota : c.alTrimestre.cuota)),
-  );
-  const logrado = sum(
-    conPista.map((c) => (periodo === "anio" ? c.anual.logrado : c.alTrimestre.logrado)),
-  );
-
+  const cuota = sum(conPista.map((c) => c.alTrimestre.cuota));
+  const logrado = sum(conPista.map((c) => c.alTrimestre.logrado));
   return {
     cuota: formatUSD(cuota),
     logrado: formatUSD(logrado),

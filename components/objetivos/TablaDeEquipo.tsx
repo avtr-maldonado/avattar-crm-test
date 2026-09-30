@@ -40,7 +40,7 @@ export function TablaDeEquipo({
 }: {
   renglones: RenglonDeEquipo[];
   total: { cuota: string; logrado: string; cumplimiento: number | null };
-  /** «acumulado al T3 2026» o «2026». Va en el encabezado de las columnas. */
+  /** «acumulada al Q3 2026». Va en el encabezado de las columnas. */
   periodo: string;
   /**
    * «Venta» o «Utilidad de venta». Una sola métrica a la vez, elegida con el
@@ -85,7 +85,7 @@ export function TablaDeEquipo({
                 key={r.id}
                 className={clsx(
                   "transition-colors duration-rapido hover:bg-superficie-sutil",
-                  r.esQuienMira && "bg-superficie-tinte/60",
+                  r.esQuienMira && "bg-superficie-tinte",
                 )}
               >
                 <td className="px-5 py-2.5">

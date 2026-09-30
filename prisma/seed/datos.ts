@@ -59,8 +59,6 @@ export const PAISES = [
 
 /** Política comercial. §15 la fija para México; CO y CL arrancan igual. */
 export const POLITICA_BASE = {
-  marginFloor: "0.2000",
-  lineMarginFloor: "0.1000",
   discountThresholdMgmt: "0.1500",
   discountThresholdDir: "0.3000",
   approvalSlaHours: 24,
@@ -331,8 +329,7 @@ export type OportunidadSeed = {
  *
  * `diasEnEtapa` y `proximaActividadEnDias` están calibrados para reproducir las
  * banderas que el prototipo declara: 00374 y 00322 sin actividad futura, 00355
- * y 00304 estancadas. Las de margen se derivan solas al compararlas contra el
- * piso de 20 %, y por eso salen tres y no una (INV-11).
+ * y 00304 estancadas. El margen ya no es bandera (§27, §33).
  */
 export const OPORTUNIDADES: OportunidadSeed[] = [
   { folio: "OPP-2026-00417", name: "Migración ERP a nube privada", organizacion: "Aceros del Norte", etapa: "Negociación", amount: "2850000", grossMargin: "0.3100", expectedCloseDate: "2026-10-15", propietario: "JM", businessType: "NUEVO", forecastCategory: "COMPROMISO", diasEnEtapa: 8, proximaActividadEnDias: 3, meddicScore: 84 },

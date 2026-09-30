@@ -5,7 +5,7 @@ import { Prisma } from "@prisma/client";
  *
  * Todo importe es `Decimal(18,4)` en la base y se opera con `Decimal` en el
  * servidor. Nunca con `number`: `0.1 + 0.2` no es `0.3`, y en un sistema que
- * dispara autorizaciones cuando el margen cae bajo un piso, un centavo mal
+ * decide cierres y cuotas al centavo, un centavo mal
  * redondeado cambia una decisión de negocio.
  *
  * `Prisma.Decimal` es `decimal.js`. Se usa esa misma clase, y no otra copia,

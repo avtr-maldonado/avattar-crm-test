@@ -184,8 +184,9 @@ export async function guardarAccesoDePersona(
     });
   }
   const sinLimiteDePais = session.role === "DIRECCION" || session.role === "ADMINISTRADOR";
+  const operados = new Set<string>(session.countryCodes);
   const fueraDelPais = usuarios.find(
-    (u) => !sinLimiteDePais && !u.countryCodes.some((c) => session.countryCodes.includes(c)),
+    (u) => !sinLimiteDePais && !u.countryCodes.some((c) => operados.has(c)),
   );
   if (fueraDelPais) {
     return falla("VALIDACION", {
@@ -215,7 +216,8 @@ export async function guardarAccesoDePersona(
       await tx.personShare.deleteMany({
         where: { personId: persona.id, userId: { notIn: despues } },
       });
-      const nuevos = despues.filter((u) => !antes.includes(u));
+      const yaEstaban = new Set(antes);
+      const nuevos = despues.filter((u) => !yaEstaban.has(u));
       if (nuevos.length > 0) {
         await tx.personShare.createMany({
           data: nuevos.map((userId) => ({ personId: persona.id, userId, sharedById: session.userId })),

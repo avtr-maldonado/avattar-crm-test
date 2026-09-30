@@ -15,22 +15,18 @@ import type { ProductoEditable } from "@/lib/scope/productos";
  * actual y abre una nueva desde hoy**. La anterior queda como histórico, y es lo
  * que permite explicar por qué una cotización vieja tiene otro precio.
  *
- * ## El piso se deriva · `RN-08` e `INV-05`
+ * ## Sin piso de precio · decisiones §33
  *
- * `minPrice` no se captura. Sale de `costo / (1 − piso de margen por línea)`,
- * topado al precio de lista —el arreglo de §9.1—. El piso viene de
- * `CommercialPolicy`, por parámetro: `lib/domain` no lee `lib/policy` (AC-31).
- *
- * La lista es única en USD para los tres países, pero el piso de margen es por
- * país. **Se hereda del seed usar el de México.** Si el negocio prefiere el más
- * estricto de los tres, es una línea en la acción que lee la política.
+ * Hasta el 29-sep-2026 cada vigencia traía `minPrice`, derivado del piso de
+ * margen por línea (RN-08). El negocio dejó el piso fuera del alcance: la
+ * lista trae precio y costo, y el descuento no tiene tope por SKU.
  *
  * ## Un producto puede no tener lista · decisiones §22
  *
  * Hay servicios cuyo precio y costo se fijan en cada oportunidad. Se crean con
  * precio y costo vacíos y **sin vigencia**: la ausencia de `PriceListEntry` ya es
- * el estado, no hace falta columna. Precio y costo **van juntos o no van**: el
- * piso RN-08 se deriva de los dos, y una lista con uno solo no significa nada.
+ * el estado, no hace falta columna. Precio y costo **van juntos o no van**: una
+ * lista con uno solo no significa nada.
  */
 
 /**
@@ -53,21 +49,6 @@ function diaAnterior(fecha: Date): Date {
   return d;
 }
 
-/**
- * `RN-08` · el piso duro de descuento, derivado del costo y del piso de margen.
- *
- * Con `Decimal` de punta a punta (INV-03) y a cuatro decimales, que es la
- * precisión de la columna.
- */
-export function pisoDePrecio(costo: Money, lista: Money, pisoMargen: Money): Money {
-  const porMargen = costo.div(money(1).minus(pisoMargen)).toDecimalPlaces(4);
-  // Un piso por encima del techo no significa nada: el producto no se podría
-  // vender ni a precio de lista (§9.1).
-  return porMargen.gt(lista) ? lista : porMargen;
-}
-
-type Umbrales = { lineMarginFloor: string };
-
 /** Lo que valida cualquier par precio/costo antes de escribirse. Van juntos o no van. */
 function validarPrecios(
   listPrice: Money | null,
@@ -75,7 +56,7 @@ function validarPrecios(
 ): { campo: string; mensaje: string } | null {
   if (listPrice === null && standardCost === null) return null;
   if (listPrice === null || standardCost === null) {
-    // El piso RN-08 se deriva de los dos: con uno solo no hay lista que valga.
+    // Van juntos: con uno solo no hay lista que valga (§22).
     return {
       campo: listPrice === null ? "listPrice" : "standardCost",
       mensaje:
@@ -115,7 +96,6 @@ export type AltaDeProducto = {
 export async function crearProducto(
   session: Session,
   input: AltaDeProducto,
-  umbrales: Umbrales,
 ): Promise<ResultadoAccion<{ id: string }>> {
   if (!can(session, "EDITAR_CATALOGOS")) {
     return falla("AUTORIZACION", "El catálogo de productos lo edita Administración.");
@@ -168,7 +148,6 @@ export async function crearProducto(
             prices: {
               create: {
                 ...lista,
-                minPrice: pisoDePrecio(lista.standardCost, lista.listPrice, money(umbrales.lineMarginFloor)),
                 validFrom: hoy,
                 validTo: VIGENCIA_ABIERTA,
               },
@@ -205,7 +184,6 @@ export async function editarProducto(
   session: Session,
   producto: ProductoEditable,
   cambios: EdicionDeProducto,
-  umbrales: Umbrales,
 ): Promise<ResultadoAccion> {
   if (!can(session, "EDITAR_CATALOGOS")) {
     return falla("AUTORIZACION", "El catálogo de productos lo edita Administración.");
@@ -232,13 +210,13 @@ export async function editarProducto(
 
   // ── Precio o costo: nueva vigencia · RN-26 ───────────────────────────────
   const tocaPrecios = cambios.listPrice !== undefined || cambios.standardCost !== undefined;
-  let nuevaVigencia: { listPrice: Money; minPrice: Money; standardCost: Money } | null = null;
+  let nuevaVigencia: { listPrice: Money; standardCost: Money } | null = null;
   // La vigencia de hoy, si la hay. Un producto sin lista (§22) no tiene ninguna.
   const vigente = producto.prices.find((p) => p.validFrom <= new Date()) ?? null;
 
   if (tocaPrecios) {
     // INV-02 · el costo actual no viene en el detalle si la sesión no puede
-    // verlo, y sin él no hay contra qué derivar el piso.
+    // verlo, y sin él no se puede abrir una vigencia completa.
     if (!can(session, "VER_COSTO") || (vigente && !("standardCost" in vigente))) {
       return falla("AUTORIZACION", "Cambiar precio o costo exige poder ver el costo.");
     }
@@ -256,7 +234,6 @@ export async function editarProducto(
       nuevaVigencia = {
         listPrice,
         standardCost,
-        minPrice: pisoDePrecio(standardCost, listPrice, money(umbrales.lineMarginFloor)),
       };
 
       if (

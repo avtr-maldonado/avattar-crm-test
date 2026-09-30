@@ -402,7 +402,6 @@ async function unaOportunidadConNeto() {
     jorge,
     cotizacion!,
     { productId: producto.id, quantity: "1", discountRate: "0", unitPrice: "1000000" },
-    { lineMarginFloor: "0.10" },
   );
   if (!linea.ok) throw new Error(`no se pudo agregar la línea: ${JSON.stringify(linea)}`);
   return id;

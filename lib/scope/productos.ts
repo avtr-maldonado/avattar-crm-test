@@ -15,9 +15,8 @@ import { prisma } from "@/lib/db";
  * inútil la vista «sin costo» del esquema archivado, donde bastaba restar la
  * utilidad del importe.
  *
- * Así que sin `VER_COSTO` esta consulta **no trae costo ni margen**. Lo que sí
- * trae es `minPrice`, que es el piso duro de RN-08 y lo que el vendedor
- * realmente necesita para saber hasta dónde puede bajar.
+ * Así que sin `VER_COSTO` esta consulta **no trae costo ni margen**: solo el
+ * precio de lista, que es lo que el vendedor necesita para cotizar.
  *
  * Queda anotado en `docs/decisiones-pendientes.md`: RN-09 al nivel de línea de
  * cotización tiene el mismo problema, y esa sí es una decisión de negocio.
@@ -46,7 +45,6 @@ export async function listProductos(session: Session) {
         select: {
           id: true,
           listPrice: true,
-          minPrice: true,
           validFrom: true,
           validTo: true,
           ...(verCosto ? { standardCost: true } : {}),
@@ -78,7 +76,6 @@ export async function listVigenciasDePrecio(session: Session) {
     select: {
       id: true,
       listPrice: true,
-      minPrice: true,
       validFrom: true,
       validTo: true,
       ...(verCosto ? { standardCost: true } : {}),
@@ -117,7 +114,6 @@ export async function getProducto(session: Session, id: string) {
         select: {
           id: true,
           listPrice: true,
-          minPrice: true,
           validFrom: true,
           validTo: true,
           ...(verCosto ? { standardCost: true } : {}),

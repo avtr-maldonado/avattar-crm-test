@@ -20,7 +20,8 @@ export type TipoDeEvento =
   | "COTIZACION"
   | "ACTIVIDAD"
   | "GANADA"
-  | "PERDIDA";
+  | "PERDIDA"
+  | "REAPERTURA";
 
 export type FiltroDeBitacora = "todo" | "etapas" | "cotizacion" | "actividades" | "cambios";
 
@@ -186,6 +187,17 @@ function eventoDeAuditoria(
       };
     }
 
+    // RN-18 · se reabrió: desde qué estatus y en qué etapa queda.
+    case "REABRIR_OPORTUNIDAD":
+      return {
+        id: a.id,
+        tipo: "REAPERTURA",
+        cuando: a.at,
+        quien: a.byUser.name,
+        titulo: `Reabierta · estaba ${String(antes.status ?? "cerrada").toLowerCase()}`,
+        detalle: despues.stage ? `Sigue en ${String(despues.stage)}` : undefined,
+      };
+
     case "CAMBIAR_PROPIETARIO":
       return {
         id: a.id,
@@ -246,7 +258,7 @@ const GRUPOS: Record<Exclude<FiltroDeBitacora, "todo">, ReadonlySet<TipoDeEvento
   etapas: new Set(["ETAPA", "CREACION"]),
   cotizacion: new Set(["COTIZACION"]),
   actividades: new Set(["ACTIVIDAD"]),
-  cambios: new Set(["CIERRE", "PROPIETARIO", "GANADA", "PERDIDA"]),
+  cambios: new Set(["CIERRE", "PROPIETARIO", "GANADA", "PERDIDA", "REAPERTURA"]),
 };
 
 export const FILTROS_DE_BITACORA: { valor: FiltroDeBitacora; etiqueta: string }[] = [

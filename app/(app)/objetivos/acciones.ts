@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { deZod, type ResultadoAccion } from "@/lib/acciones";
+import { deZod, falla, type ResultadoAccion } from "@/lib/acciones";
 import { requireSession } from "@/lib/auth/session";
-import { fijarObjetivo } from "@/lib/domain/objetivo";
+import { guardarCuotasDelEquipo } from "@/lib/domain/objetivo";
 
 /**
  * Server Actions de P-08 · Objetivos.
@@ -18,43 +18,56 @@ import { fijarObjetivo } from "@/lib/domain/objetivo";
  */
 const CIFRA = /^\d+(\.\d{1,4})?$/;
 
-const esquema = z.object({
-  userId: z.string().min(1, "Elige a quién se le fija la cuota."),
-  countryCode: z.enum(["MX", "CO", "CL"]),
-  fiscalYear: z.coerce.number().int().min(2000).max(2200),
-  periodType: z.enum(["TRIMESTRAL", "ANUAL"]),
-  quarter: z.coerce.number().int().min(1).max(4).nullable(),
-  revenueQuota: z
-    .string()
-    .regex(CIFRA, "Escribe la cuota como número, sin signo ni comas: 450000 o 450000.50."),
-  grossProfitQuota: z
-    .string()
-    .regex(CIFRA, "Escribe la cuota como número, sin signo ni comas: 135000 o 135000.50."),
+const esquemaCambios = z.object({
+  filas: z.array(
+    z.object({
+      userId: z.string().min(1),
+      cuotas: z
+        .array(z.string().trim().regex(CIFRA, "Escribe la cuota como número, sin signo ni comas: 450000 o 450000.50."))
+        .length(4),
+    }),
+  ),
+  eliminar: z.array(z.string().min(1)),
 });
 
-export async function fijarObjetivoAccion(
-  _previo: ResultadoAccion<{ id: string }> | null,
-  form: FormData,
-): Promise<ResultadoAccion<{ id: string }>> {
-  const session = await requireSession();
+const esquema = z.object({
+  countryCode: z.enum(["MX", "CO", "CL"]),
+  fiscalYear: z.coerce.number().int().min(2000).max(2200),
+  metrica: z.enum(["VENTA", "UTILIDAD"]),
+  cambios: z.string().min(1),
+});
 
-  const crudo = Object.fromEntries(form);
-  const analisis = esquema.safeParse({
-    ...crudo,
-    // El control queda deshabilitado en ANUAL, así que el campo no viaja: el
-    // esquema no debe exigir lo que el formulario decidió no mandar.
-    quarter: crudo.periodType === "ANUAL" ? null : (crudo.quarter ?? null),
+/**
+ * Guarda la cuadrícula por vendedor y trimestre · decisiones §34.
+ *
+ * Las filas viajan como JSON en un campo oculto —veinte celdas de dinero no
+ * caben cómodamente como campos sueltos— y se validan aquí una por una.
+ */
+export async function guardarCuotasAccion(
+  _previo: ResultadoAccion<{ cambios: number }> | null,
+  form: FormData,
+): Promise<ResultadoAccion<{ cambios: number }>> {
+  const datos = esquema.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+
+  let crudo: unknown;
+  try {
+    crudo = JSON.parse(datos.data.cambios);
+  } catch {
+    return falla("VALIDACION", { campo: "cambios", mensaje: "No se pudieron leer los cambios. Vuelve a intentar." });
+  }
+  const cambios = esquemaCambios.safeParse(crudo);
+  if (!cambios.success) return deZod(cambios.error);
+
+  const session = await requireSession();
+  const resultado = await guardarCuotasDelEquipo(session, {
+    countryCode: datos.data.countryCode,
+    fiscalYear: datos.data.fiscalYear,
+    metrica: datos.data.metrica,
+    filas: cambios.data.filas,
+    eliminar: cambios.data.eliminar,
   });
 
-  if (!analisis.success) return deZod(analisis.error);
-
-  const resultado = await fijarObjetivo(session, analisis.data);
-
-  // La pantalla se relee con la cuota nueva. El formulario se queda abierto
-  // —cargar los cuatro trimestres de alguien seguidos es el caso normal—, así
-  // que `router.refresh()` del cliente no bastaría por sí solo para invalidar
-  // el caché del servidor.
   if (resultado.ok) revalidatePath("/objetivos");
-
   return resultado;
 }

@@ -21,6 +21,7 @@ razonadas en `decisiones-pendientes.md` §10 a §13. **No se resuelven en el có
 ## Stack
 
 Next.js (App Router) · TypeScript · Prisma · PostgreSQL (Supabase) · Tailwind · Server Actions.
+Recharts solo en Análisis de ventas, cargado con `next/dynamic` (decisiones §35).
 Autenticación con Microsoft Entra ID vía Supabase Auth.
 
 Supabase es **identidad y almacenamiento**, no la capa de datos: los datos de negocio pasan por
@@ -39,9 +40,10 @@ improvisar. Detalle en `docs/CRM-AVTR-SPEC.md` §3.
 3. **INV-03** El dinero es `Decimal(18,4)` y se opera con `Decimal`, nunca con `number`. Los
    porcentajes se guardan como fracción (`0.1500` = 15 %).
 4. **INV-04** Todo importe viaja con su moneda. Bajo monomoneda (D-A) esa moneda es siempre `USD`.
-5. **INV-05** Ningún umbral en el código. Piso de margen, umbrales de descuento, mínimos MEDDIC,
-   días para estancada, tasa de impuesto y probabilidad de etapa se leen de la base. Un literal
-   `0.20`, `0.15`, `0.16` o `0.30` en `lib/domain` es un defecto.
+5. **INV-05** Ningún umbral en el código. Umbrales de descuento, mínimos MEDDIC, días para
+   estancada, tasa de impuesto y probabilidad de etapa se leen de la base. Un literal `0.15`,
+   `0.16` o `0.30` en `lib/domain` es un defecto. **El piso de margen (RN-05, RN-08) salió del
+   sistema el 29-sep-2026 (decisiones §33):** no hay umbral de margen ni precio mínimo por SKU.
 6. **INV-06** ~~Una cotización congelada es inmutable. Editar = versión nueva.~~ **Enmendado el 22 de
    septiembre de 2026 (decisiones §21):** una cotización por oportunidad, editable mientras la
    oportunidad está abierta; **cada guardado que deje el total distinto del de la última
@@ -137,6 +139,8 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     desde onSubmit para que React no reinicie el formulario cuando la acción devuelve VALIDACION;
                     useProblemas apaga el error de un campo al corregirlo) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
+                    · Desplegable + ListaDeVarios/ListaDeUno (las pastillas de filtro con borrador, «Ninguno» y «Aplicar»;
+                    salieron de BarraDeFiltros el 30-sep-2026 porque Análisis las usa igual)
                     · SelectorDeVarios (elegir varios de una lista corta buscando por nombre; fichas con «quitar» y
                     un hidden por elegido, la acción lo lee con form.getAll) · el Panel lleva text-left: el <dialog>
                     hereda la alineación del DOM donde se montó
@@ -147,9 +151,11 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
 components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,analisis}/   por pantalla
                     pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
                     por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
-                    BarraDeHerramientas (dos filas: vistas, botón de embudo que oculta los filtros y alta;
-                    debajo los filtros) · BarraDeFiltros (§9; Estatus y Pronóstico como desplegables de
-                    varios, solo abiertas por omisión → §25, §27) ·
+                    BarraDeHerramientas (dos filas: vistas, botón de embudo que muestra los filtros —cerrados
+                    al entrar, §31— y alta; debajo los filtros) · BarraDeFiltros (§9; Estatus y Pronóstico como
+                    desplegables de varios, solo abiertas por omisión → §25, §27; `conservar` mantiene vista y
+                    agrupación al aplicar → §31) · DetalleDeEtapa (clic en la barra del embudo: qué
+                    oportunidades la suman y cómo pondera) ·
                     TarjetaOportunidad (ganada verde, perdida coral; solo las abiertas se arrastran)
                     oportunidad: ComposerDeActividad (nueva o edición; agendar por omisión, «marcar como hecha»
                     en el pie, tipos en botones con icono y el resto en «Otro…», fecha + inicio + fin en la zona
@@ -170,13 +176,23 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     —la misma librería que Prisma— y una prueba de paridad contra lib/domain/quote; sin VER_COSTO
                     no anticipa margen) · estadoDeEdicion (reductor puro: modo, generación, borrador) ·
                     AbrirCotizacion
-                    objetivos: PanelDeAvance · TiraDeTrimestres · TablaDeEquipo · FijarObjetivo
+                    objetivos: TablaDeObjetivos (la cuadrícula por vendedor y Q1–Q4: se guarda en un viaje, una
+                    entrada de bitácora por cuota que cambia → §34) · TiraDeTrimestres · TablaDeEquipo
                     contactos: EditarOrganizacion · EditarPersona · AccesoDePersona (propietario y con quién se
                     comparte una persona; lo ve solo quien la administra → §29)
-                    analisis: FiltrosDeAnalisis (cliente; navega reescribiendo la URL) · TablaDeAnalisis + Reporte
-                    (tabla de reporte con total, barras de proporción y conmutador por enlaces) ·
-                    PestanaVentas · PestanaForecast · PestanaActividad (servidor; reciben datos acotados y
-                    llaman al dominio; sin costo no hay columna de utilidad)
+                    analisis: FiltrosDeAnalisis (cliente; país, vendedor y año como pastillas Desplegable, una navegación
+                    por «Aplicar»; parte de la URL viva; producto y tipo dejaron de ser filtros → §36) · TablaDeAnalisis + Reporte (tabla de reporte con total, barras de proporción y
+                    conmutador por enlaces; las usan Forecast y Actividad) · PestanaVentas · PestanaForecast ·
+                    PestanaActividad (servidor; reciben datos acotados y llaman al dominio; sin costo no hay utilidad)
+                    · graficas/ (§35: tipos, formato —$328.8K, puro—, datos —de filas con Decimal a puntos con número
+                    y tooltip formateado; puro, con pruebas—, paleta, comun —useAgrupacion: la agrupación vive en la
+                    URL vía replaceState y useSearchParams—, GraficaDeBarras · GraficaHistorica · GraficaApilada ·
+                    GraficaHorizontal (Recharts, cliente) · TarjetasDeVentas (las cuatro tarjetas; Recharts entra con
+                    next/dynamic sin SSR) · datosDeForecast (§37: embudo, distribución, ciclo, estado por vendedor,
+                    antigüedad; estadoDeEtapa con la banda del 75 %) · GraficaDeEmbudo · GraficaDeLinea ·
+                    GraficaAgrupada (series como datos) · GraficaDeDispersion · TarjetasDeForecast (las cinco tarjetas; g4 y g5 en
+                    la URL) · datosDeActividad (§38: tipos como series, doce meses del año fiscal, sin dividir entre
+                    cero, «sin datos» no es cero) · TarjetasDeActividad (cuatro tarjetas sin conmutadores))
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
                     del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
@@ -220,7 +236,8 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   las banderas se calculan (`INV-11`) y no hay columna que consultar; se recorta **después** del
   alcance, así que sigue sin ampliar nada.
 - **Los objetivos se miden acumulados** (decisiones §17, regla nueva que no está en el spec): la
-  cuota del T1 al trimestre en curso contra lo ganado en ese mismo tramo. Un trimestre bueno paga
+  cuota del Q1 al trimestre en curso contra lo ganado en ese mismo tramo. Los trimestres se
+  nombran **Q** en la interfaz (§34). Un trimestre bueno paga
   la deuda del anterior. `computeCumulativeTrack` en `lib/domain/objectives.ts`.
 - **Una actividad agendada ya es el siguiente paso** (decisiones §19, regla nueva que no está en el
   spec): el `DEBE` de §12.4 —preguntar antes de cerrar sin seguimiento— solo se dispara cuando la
@@ -233,7 +250,7 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   hacer** va al calendario de Microsoft 365, y si Graph falla la actividad se guarda igual.
 - **Un producto puede no tener lista, y los hitos no rebasan el neto** (decisiones §22, reglas
   nuevas que no están en el spec): precio de lista y costo estándar **van juntos o no van**; sin
-  ellos el producto existe y se fija precio y costo en cada cotización, sin piso de SKU. La suma de
+  ellos el producto existe y se fija precio y costo en cada cotización. La suma de
   hitos **no supera el neto** al guardar, con las cifras; sin cotización con líneas no hay tope.
 - **Las cuentas se ven todas; las personas tienen propietario** (decisiones §18 y §29): toda
   cuenta se ve desde toda la operación, sin importar rol ni oficina. Cada persona es de quien la
@@ -259,7 +276,8 @@ textualmente; no se sustituyen por la paleta por omisión de ninguna librería.
   `tailwind.config.ts` con canales RGB y `<alpha-value>` (`--status-success-rgb`…). Un color
   definido como `var(--x)` a secas **no acepta** `/10`: Tailwind descarta la clase en silencio
   (pasó el 24-sep con las tarjetas cerradas). Al usar un color nuevo con opacidad, darle canal.
-- Verde en o sobre el piso de margen, coral debajo: es la señal más importante de la interfaz.
+- El margen se muestra como cifra, sin semáforo: el piso de margen salió del alcance (§33). Solo
+  la utilidad negativa va en coral, porque es una pérdida, no un umbral.
 - Los estados vacíos siempre proponen la acción siguiente. Los errores dicen qué falta con el dato
   concreto: «faltan $200,000 por asignar en hitos», no «datos inválidos».
 
@@ -280,8 +298,15 @@ objetivos**, con medición acumulada (decisiones §17). **Marcar ganada/perdida*
 pestañas, con filtros y agrupaciones en la URL; los bloques D y E de la propuesta quedaron fuera.
 Las **personas tienen propietario y se comparten** desde el 25-sep-2026 (§29); las cuentas se ven todas.
 Las actividades se **editan desde la bandeja y la semana** (§30, 29-sep); el alta sigue en la oportunidad.
-**Pendiente y visible:** reabrir (RN-18) y las autorizaciones de descuento, fuera de este alcance
-por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
+**Reabrir** existe desde el 29-sep-2026 (§32): quien pudo cerrarla la reabre, RN-18 enmendada.
+**Sin piso de margen** desde el mismo día (§33). **Los objetivos se capturan en cuadrícula** desde el
+30-sep-2026 (§34): una fila por vendedor, Q1 a Q4, dos vistas (objetivos y avance) e indicadores de
+dos líneas. **Análisis de ventas es un tablero de gráficas** desde el mismo día (§35): cuatro tarjetas con
+Recharts, «Agrupar por» inmediato y en la URL; sin filtros de producto ni tipo, e indicadores de dos
+líneas (§36). **Forecast en gráficas** desde el 30-sep (§37): embudo apilado, distribución, ciclo con
+mediana, estado por vendedor y dispersión edad × importe. **Actividad y MEDDIC en gráficas** el mismo día
+(§38), con las tablas originales como detalle. **Pendiente y visible:** las autorizaciones de
+descuento, fuera de este alcance por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
 
 ## Comandos

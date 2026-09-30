@@ -791,3 +791,47 @@ export async function marcarPerdida(
 
   return ok({ actualCloseDate });
 }
+
+/**
+ * Reabrir una cerrada · RN-18, enmendada en decisiones §32.
+ *
+ * El spec la reservaba a Administración; el negocio pidió el 29-sep-2026 que
+ * quien pudo cerrarla pueda reabrirla: su propietario o quien tenga alcance de
+ * oficina, además de quien tenga `REABRIR_OPORTUNIDAD`. Vuelve a ABIERTA en la
+ * etapa en la que se cerró —ganar o perder no la movió— sin cierre real ni
+ * motivo de pérdida. El folio no cambia (INV-12); cotización, hitos, MEDDIC y
+ * actividades se quedan como estaban. Deja rastro (INV-09).
+ */
+export async function reabrirOportunidad(
+  session: Session,
+  detalle: DetalleOportunidad,
+): Promise<ResultadoAccion> {
+  if (detalle.status === "ABIERTA") {
+    return falla("AUTORIZACION", "Esta oportunidad ya está abierta.");
+  }
+  const esSuya = detalle.owner.id === session.userId;
+  if (!esSuya && !can(session, "VER_OPORTUNIDADES_OFICINA") && !can(session, "REABRIR_OPORTUNIDAD")) {
+    return falla("AUTORIZACION", "Solo su propietario, Gerencia o Administración pueden reabrirla (RN-18).");
+  }
+
+  await auditedTransaction(async (tx, audit) => {
+    await tx.opportunity.update({
+      where: { id: detalle.id },
+      data: { status: "ABIERTA", actualCloseDate: null, lossReasonId: null, lossCompetitor: null },
+    });
+    await audit({
+      entity: "Opportunity",
+      entityId: detalle.id,
+      action: "REABRIR_OPORTUNIDAD",
+      byUserId: session.userId,
+      before: {
+        status: detalle.status,
+        actualCloseDate: detalle.actualCloseDate?.toISOString() ?? null,
+        lossReason: detalle.lossReason?.name ?? null,
+      },
+      after: { status: "ABIERTA", stage: detalle.stage.name },
+    });
+  });
+
+  return ok(null);
+}

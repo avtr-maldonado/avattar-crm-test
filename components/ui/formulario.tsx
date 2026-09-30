@@ -18,7 +18,7 @@ import {
  * A la derecha de cada campo, en versalitas tenues, va lo que el sistema
  * **hizo con lo que acabas de escribir**: `existente` cuando reconoció la
  * empresa, `nueva` cuando la va a crear, `sugerido` cuando el nombre lo puso
- * él, `T4 2026` cuando dedujo el trimestre de la fecha. No es decoración: es
+ * él, `Q4 2026` cuando dedujo el trimestre de la fecha. No es decoración: es
  * la única forma de que quien captura sepa, antes de enviar, si está creando
  * un duplicado o reusando lo que ya existe.
  */

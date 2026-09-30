@@ -39,7 +39,6 @@ export type LineaCalculada = {
   utilidad?: string;
   /** Solo con VER_MARGEN. */
   margen?: string;
-  bajoElPiso: boolean;
 };
 
 export type TotalesFormateados = {
@@ -97,7 +96,6 @@ export function TablaDeCotizacion({
   verCosto,
   verMargen,
   puedeEditar,
-  pisoDeLinea,
   enVivo,
   acciones,
 }: {
@@ -108,10 +106,8 @@ export function TablaDeCotizacion({
   verCosto: boolean;
   verMargen: boolean;
   puedeEditar: boolean;
-  /** Ya formateado: «10 %». */
-  pisoDeLinea: string;
-  /** Sin formato, para la vista previa: la tasa copiada en la cotización y el piso por línea. */
-  enVivo: { taxRate: string; pisoDeLinea: string };
+  /** Sin formato, para la vista previa: la tasa copiada en la cotización (RN-24). */
+  enVivo: { taxRate: string };
   acciones: {
     guardarLinea: Accion;
     guardarCotizacion: Accion;
@@ -182,7 +178,7 @@ export function TablaDeCotizacion({
             ? { costoUnitario: borrador[`linea.${l.id}.unitCost`] ?? l.costoUnitario }
             : {}),
         })),
-        { taxRate: enVivo.taxRate, pisoDeLinea: enVivo.pisoDeLinea, verCosto, verMargen },
+        { taxRate: enVivo.taxRate, verCosto, verMargen },
       )
     : null;
   const filas = lineas.map((l, i) => fusionar(l, vista?.lineas[i]));
@@ -191,7 +187,6 @@ export function TablaDeCotizacion({
   // Sin VER_COSTO la vista previa no puede recalcular el margen (INV-02): se
   // muestra el guardado, atenuado, y se dice que se recalcula al guardar.
   const margenPendiente = editando && !verCosto;
-  const bajoElPiso = filas.filter((l) => l.bajoElPiso);
 
   return (
     <section className="rounded-md border border-borde bg-superficie-tarjeta">
@@ -270,17 +265,15 @@ export function TablaDeCotizacion({
                     <td
                       className={clsx(
                         "tabular px-3 py-2 text-right font-semibold",
-                        // §13.1 · verde en o sobre el piso, coral debajo. Es la
-                        // señal más importante de la interfaz.
-                        l.bajoElPiso ? "text-coral" : "text-exito",
+                        // §33 · sin piso, el margen se lee como cifra; solo la
+                        // pérdida —margen negativo— va en coral.
+                        esNegativo(l.margen) ? "text-coral" : "text-texto-titulo",
                         margenPendiente && "opacity-60",
                       )}
                       title={
                         margenPendiente
                           ? "Se recalcula al guardar: sin ver el costo no se puede anticipar."
-                          : l.bajoElPiso
-                            ? `Bajo el piso por línea de ${pisoDeLinea}`
-                            : undefined
+                          : undefined
                       }
                     >
                       {l.margen}
@@ -340,8 +333,8 @@ export function TablaDeCotizacion({
                 + Agregar línea
               </button>
               <p className="text-xs text-texto-cuerpo">
-                La bitácora anota el total solo si cambió al guardar. Un precio bajo el piso del
-                producto detiene el guardado completo.
+                La bitácora anota el total solo si cambió al guardar. Un dato inválido detiene el
+                guardado completo.
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -368,8 +361,6 @@ export function TablaDeCotizacion({
         margenPendiente={margenPendiente}
       />
 
-      <AlertasDePiso lineas={bajoElPiso} verMargen={verMargen} pisoDeLinea={pisoDeLinea} />
-
       <AgregarLinea
         quoteId={quoteId}
         abierto={agregando}
@@ -388,7 +379,7 @@ export function TablaDeCotizacion({
 
 /**
  * Lo guardado con la vista previa encima. Sin costo (INV-02) la vista previa no
- * trae margen: se conservan el margen y el piso guardados.
+ * trae margen: se conserva el margen guardado.
  */
 function fusionar(guardada: LineaCalculada, viva: LineaEnVivo | undefined): LineaCalculada {
   if (!viva) return guardada;
@@ -397,7 +388,7 @@ function fusionar(guardada: LineaCalculada, viva: LineaEnVivo | undefined): Line
     precioNeto: viva.precioNeto,
     importe: viva.importe,
     ...(viva.utilidad !== undefined ? { utilidad: viva.utilidad } : {}),
-    ...(viva.margen !== undefined ? { margen: viva.margen, bajoElPiso: viva.bajoElPiso } : {}),
+    ...(viva.margen !== undefined ? { margen: viva.margen } : {}),
   };
 }
 
@@ -485,32 +476,9 @@ function ResumenDeTotales({
   );
 }
 
-/** La franja de alertas de política · RN-05. Señala, no bloquea. */
-function AlertasDePiso({
-  lineas,
-  verMargen,
-  pisoDeLinea,
-}: {
-  lineas: LineaCalculada[];
-  verMargen: boolean;
-  pisoDeLinea: string;
-}) {
-  if (lineas.length === 0) return null;
-  return (
-    <div role="status" className="flex flex-col gap-1 border-t border-borde bg-coral/[0.06] px-5 py-3">
-      {lineas.map((l) => (
-        <p key={l.id} className="flex items-center gap-2 text-sm text-texto-cuerpo">
-          <span aria-hidden className="size-1.5 shrink-0 rounded-pill bg-coral" />
-          Línea «{l.descripcion}»{verMargen ? ` con margen ${l.margen}` : ""}, bajo el piso por
-          línea de {pisoDeLinea}.
-        </p>
-      ))}
-      <p className="mt-1 text-xs text-texto-tenue">
-        Se señala, no bloquea: la solicitud de autorización llega con el módulo de
-        autorizaciones.
-      </p>
-    </div>
-  );
+/** «-12.5 %» o «−12.5 %»: el signo, con cualquiera de los dos guiones. */
+function esNegativo(margen: string | undefined): boolean {
+  return margen !== undefined && /^[-−]/.test(margen.trim());
 }
 
 function Total({
@@ -710,7 +678,7 @@ function AgregarLinea({
             etiqueta="Descuento %"
             htmlFor="discountPct"
             problema={problemaDe(resultado, "discountPct") ?? problemaDe(resultado, "discountRate")}
-            ayuda="RN-08 · no puede dejar el precio bajo el piso del SKU."
+            ayuda="Sobre el precio unitario; sin tope por SKU (§33)."
           >
             <Entrada id="discountPct" name="discountPct" inputMode="decimal" defaultValue="0" className="tabular" />
           </Campo>

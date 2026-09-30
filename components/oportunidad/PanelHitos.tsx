@@ -32,8 +32,8 @@ export type HitoDeLista = {
 
 /**
  * Solo para mostrar mientras se teclea. Lo que se guarda lo calcula el servidor
- * con `Decimal` (INV-03); aquí se usa `number` a sabiendas, como en el piso del
- * catálogo: `components/**` no alcanza `@prisma/client`.
+ * con `Decimal` (INV-03); aquí se usa `number` a sabiendas:
+ * `components/**` no alcanza `@prisma/client`.
  */
 const USD = new Intl.NumberFormat("en-US", {
   style: "currency",

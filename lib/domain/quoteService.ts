@@ -6,10 +6,10 @@ import { prisma } from "@/lib/db";
 import { money, type Money } from "@/lib/money";
 import type { CotizacionConLineas } from "@/lib/scope/cotizaciones";
 import type { DetalleOportunidad } from "@/lib/scope/opportunityDetail";
-import { calcularTotales, validarPisoDePrecio, type LineaParaCalcular } from "./quote";
+import { calcularTotales, type LineaParaCalcular } from "./quote";
 
 /**
- * Las escrituras de la cotización · `INV-06` (enmendado), `RN-08`, `RN-24`.
+ * Las escrituras de la cotización · `INV-06` (enmendado), `RN-24`.
  *
  * Las fórmulas viven en `quote.ts`, que es puro. Aquí está lo que toca la base:
  * abrir la cotización, guardar, editar y quitar líneas.
@@ -31,13 +31,10 @@ import { calcularTotales, validarPisoDePrecio, type LineaParaCalcular } from "./
  * ## Precio y costo: referencia, no imposición
  *
  * Para una línea de catálogo, el precio y el costo salen de la lista vigente
- * del producto **como valor inicial** y se pueden fijar distintos. El piso del
- * SKU (`RN-08`) sigue aplicando al precio que quede. El costo solo lo fija
+ * del producto **como valor inicial** y se pueden fijar distintos. El costo solo lo fija
  * quien puede verlo: sin `VER_COSTO` no se acepta, ni al agregar ni al editar,
  * porque probar costos hasta que el margen cuadre es deducirlo (§9.2).
  */
-
-type Umbrales = { lineMarginFloor: string };
 
 /** Una cerrada no se cotiza: su cifra es la que se ganó o se perdió. */
 function editable(cotizacion: CotizacionConLineas): ResultadoAccion<never> | null {
@@ -203,7 +200,7 @@ function validarCantidadYDescuento(quantity: Money, discountRate: Money): Result
   return null;
 }
 
-/** El precio de lista vigente de un producto, con su piso. `null` si no hay. */
+/** El precio de lista vigente de un producto. `null` si no hay. */
 async function precioVigenteDe(productId: string) {
   const hoy = new Date();
   return prisma.product.findFirst({
@@ -216,7 +213,7 @@ async function precioVigenteDe(productId: string) {
         where: { validFrom: { lte: hoy }, validTo: { gte: hoy } },
         orderBy: { validFrom: "desc" },
         take: 1,
-        select: { listPrice: true, minPrice: true, standardCost: true },
+        select: { listPrice: true, standardCost: true },
       },
     },
   });
@@ -226,7 +223,6 @@ export async function guardarLinea(
   session: Session,
   cotizacion: CotizacionConLineas,
   entrada: EntradaDeLinea,
-  umbrales: Umbrales,
 ): Promise<ResultadoAccion> {
   const bloqueada = editable(cotizacion);
   if (bloqueada) return bloqueada;
@@ -245,7 +241,6 @@ export async function guardarLinea(
   let unit: string;
   let unitPrice: Money;
   let unitCost: Money;
-  let minPrice: Money | null = null;
   let productId: string | null = null;
 
   if (entrada.productId) {
@@ -262,11 +257,9 @@ export async function guardarLinea(
     if (precio) {
       unitPrice = entrada.unitPrice ? money(entrada.unitPrice) : precio.listPrice;
       unitCost = entrada.unitCost ? money(entrada.unitCost) : precio.standardCost;
-      minPrice = precio.minPrice;
     } else {
       // Producto sin lista (decisiones §22): precio y costo se fijan aquí, como
-      // en el concepto libre de Q-07. Sin lista no hay piso de SKU (RN-08);
-      // RN-05 sigue señalando el margen de la línea.
+      // en el concepto libre de Q-07.
       if (!entrada.unitPrice) {
         return falla("VALIDACION", {
           campo: "unitPrice",
@@ -311,12 +304,6 @@ export async function guardarLinea(
   if (unitCost.lt(0)) {
     return falla("VALIDACION", { campo: "unitCost", mensaje: "El costo no puede ser negativo." });
   }
-
-  // RN-08 · el piso duro, con el mensaje que nombra las dos cifras.
-  const problema = validarPisoDePrecio({ descripcion, unitPrice, discountRate, minPrice });
-  if (problema) return falla("VALIDACION", { campo: "discountRate", mensaje: problema });
-
-  void umbrales; // RN-05 señala en la pantalla; aquí no bloquea (sin autorizaciones).
 
   // Sin anotación: la bitácora se escribe al guardar, y solo si el total
   // cambió (decisiones §26).
@@ -365,21 +352,19 @@ const CAMPOS_EDITABLES = ["quantity", "unitPrice", "discountRate", "unitCost"] a
  * - **Solo lo que cambió de valor cuenta.** Cada campo se compara con lo
  *   guardado; un valor igual no es un cambio. Si nada cambió, no se escribe
  *   nada —ni totales, ni espejo, ni bitácora— y se devuelve `cambios: 0`.
- * - **Todo o nada.** Un precio bajo el piso del SKU tumba el guardado entero:
- *   el usuario corrige y vuelve a guardar, en vez de quedar a medias.
+ * - **Todo o nada.** Un dato inválido tumba el guardado entero: el usuario
+ *   corrige y vuelve a guardar, en vez de quedar a medias.
  * - **Una entrada en la bitácora por guardado**, con cada línea y campo que
  *   cambió y el neto antes y después. La bitácora cuenta guardados, no teclas.
  *
  * Las líneas se releen de la base con todas sus columnas: las de
  * `cotizacion.lines` pueden venir sin `unitCost` (INV-02). Cambiar el precio no
- * vuelve la línea concepto libre: sigue apuntando a su producto, y el piso del
- * SKU sigue aplicando al precio que quede.
+ * vuelve la línea concepto libre: sigue apuntando a su producto.
  */
 export async function guardarCambiosDeCotizacion(
   session: Session,
   cotizacion: CotizacionConLineas,
   cambios: CambioPorLinea[],
-  umbrales: Umbrales,
 ): Promise<ResultadoAccion<{ cambios: number; total: { antes: string; despues: string } | null }>> {
   const bloqueada = editable(cotizacion);
   if (bloqueada) return bloqueada;
@@ -405,26 +390,6 @@ export async function guardarCambiosDeCotizacion(
     },
   });
   const porId = new Map(actuales.map((l) => [l.id, l]));
-
-  // El piso es del SKU: se traen de una vez los de los productos tocados.
-  const productos = [...new Set(actuales.flatMap((l) => (l.productId ? [l.productId] : [])))];
-  const pisos = new Map<string, Money | null>();
-  if (productos.length > 0) {
-    const hoy = new Date();
-    const conPrecio = await prisma.product.findMany({
-      where: { id: { in: productos } },
-      select: {
-        id: true,
-        prices: {
-          where: { validFrom: { lte: hoy }, validTo: { gte: hoy } },
-          orderBy: { validFrom: "desc" },
-          take: 1,
-          select: { minPrice: true },
-        },
-      },
-    });
-    for (const p of conPrecio) pisos.set(p.id, p.prices[0]?.minPrice ?? null);
-  }
 
   const pendientes: { id: string; data: LineaParaCalcular; auditadas: LineaAuditada[] }[] = [];
 
@@ -459,19 +424,8 @@ export async function guardarCambiosDeCotizacion(
       return falla("VALIDACION", { campo: "unitCost", mensaje: "El costo no puede ser negativo." });
     }
 
-    // RN-08 · el piso es del SKU, y se revisa contra el precio que quede.
-    const problema = validarPisoDePrecio({
-      descripcion: actual.description,
-      unitPrice: nueva.unitPrice,
-      discountRate: nueva.discountRate,
-      minPrice: actual.productId ? (pisos.get(actual.productId) ?? null) : null,
-    });
-    if (problema) return falla("VALIDACION", { campo: "unitPrice", mensaje: problema });
-
     pendientes.push({ id: actual.id, data: nueva, auditadas });
   }
-
-  void umbrales; // RN-05 señala en la pantalla; aquí no bloquea (sin autorizaciones).
 
   const todas = pendientes.flatMap((p) => p.auditadas);
 

@@ -2,7 +2,6 @@ import { requireSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { listProductos, listVigenciasDePrecio } from "@/lib/scope/productos";
 import { familiasDeProducto } from "@/lib/scope/configuracion";
-import { getCommercialPolicy } from "@/lib/policy";
 import { EditarProducto } from "@/components/productos/EditarProducto";
 import { crearProductoAccion, editarProductoAccion } from "./acciones";
 import { formatPercent, formatUSD, money, toClient } from "@/lib/money";
@@ -25,8 +24,7 @@ import { ControlSegmentado, Pastilla, StatTile } from "@/components/ui/primitiva
  * 47.2 % salen 9 500 clavados.
  *
  * Es la misma aritmética que hacía inútil la vista «sin costo» del esquema
- * archivado. Lo que el vendedor sí ve es `minPrice`, el piso duro de RN-08, que
- * es lo que de verdad necesita para saber hasta dónde puede bajar.
+ * archivado.
  *
  * ## La antigüedad del costo es el riesgo C-01 hecho visible
  *
@@ -52,15 +50,11 @@ export default async function ProductosPage({
   // Productos son catálogo: los edita quien edita catálogos, igual que en P-11.
   const puedeEditar = can(session, "EDITAR_CATALOGOS");
 
-  const [productos, vigencias, familias, politica] = await Promise.all([
+  const [productos, vigencias, familias] = await Promise.all([
     listProductos(session),
     listVigenciasDePrecio(session),
     puedeEditar ? familiasDeProducto() : Promise.resolve([]),
-    // La lista es única en USD; el piso de margen por línea se toma de México,
-    // como hace el seed. Ver `app/(app)/productos/acciones.ts`.
-    getCommercialPolicy("MX"),
   ]);
-  const pisoDeMargen = Number(politica.lineMarginFloor);
   const ahora = new Date();
 
   const obsoletos = verCosto
@@ -108,9 +102,9 @@ export default async function ProductosPage({
             />
           ) : (
             <StatTile denso
-              etiqueta="Piso de precio"
-              valor="por SKU"
-              subtexto="hasta ahí puedes descontar (RN-08)"
+              etiqueta="Con lista"
+              valor={String(productos.filter((p) => p.prices.length > 0).length)}
+              subtexto="con precio y costo vigentes"
             />
           )}
         </div>
@@ -137,7 +131,6 @@ export default async function ProductosPage({
           {puedeEditar && (
             <EditarProducto
               familias={familias}
-              pisoDeMargen={pisoDeMargen}
               puedeVerCosto={verCosto}
               accion={crearProductoAccion}
             />
@@ -154,7 +147,7 @@ export default async function ProductosPage({
               ahora={ahora}
               edicion={
                 puedeEditar
-                  ? { familias, pisoDeMargen, accion: editarProductoAccion }
+                  ? { familias, accion: editarProductoAccion }
                   : null
               }
             />
@@ -165,7 +158,7 @@ export default async function ProductosPage({
           <p className="mt-6 max-w-2xl text-xs text-texto-tenue">
             Tu rol no incluye ver el costo, así que esta pantalla tampoco muestra el
             margen: con el precio a la vista, el margen permitiría calcular el costo
-            exacto. El precio mínimo es el piso hasta el que puedes descontar.
+            exacto.
           </p>
         )}
       </div>
@@ -187,7 +180,6 @@ function TabCatalogo({
   /** Nulo cuando la sesión no edita catálogos: la columna no aparece. */
   edicion: {
     familias: { id: string; name: string }[];
-    pisoDeMargen: number;
     accion: typeof editarProductoAccion;
   } | null;
 }) {
@@ -201,7 +193,6 @@ function TabCatalogo({
             <Th>Familia</Th>
             <Th>Modelo de precio</Th>
             <Th alineacion="derecha">Precio de lista</Th>
-            <Th alineacion="derecha">Precio mínimo</Th>
             {verCosto && <Th alineacion="derecha">Costo estándar</Th>}
             {verCosto && <Th alineacion="derecha">Margen</Th>}
             {verCosto && <Th alineacion="derecha">Costo actualizado</Th>}
@@ -227,12 +218,6 @@ function TabCatalogo({
                 </td>
                 <td className="tabular px-3 py-2.5 text-right font-medium">
                   {precio ? formatUSD(precio.listPrice) : <SinPrecio />}
-                </td>
-                <td
-                  className="tabular px-3 py-2.5 text-right text-texto-cuerpo"
-                  title="RN-08 · piso duro. Un descuento que baje de aquí no se guarda."
-                >
-                  {precio ? formatUSD(precio.minPrice) : <SinPrecio />}
                 </td>
 
                 {verCosto && (
@@ -271,7 +256,6 @@ function TabCatalogo({
                           precio && "standardCost" in precio ? toClient(precio.standardCost) : null,
                       }}
                       familias={edicion.familias}
-                      pisoDeMargen={edicion.pisoDeMargen}
                       puedeVerCosto={verCosto}
                       accion={edicion.accion}
                     />
@@ -371,7 +355,6 @@ function TabListas({
               <Th>SKU</Th>
               <Th>Producto</Th>
               <Th alineacion="derecha">Precio de lista</Th>
-              <Th alineacion="derecha">Precio mínimo</Th>
               {verCosto && <Th alineacion="derecha">Costo estándar</Th>}
               <Th alineacion="derecha">Vigencia</Th>
               <Th>Estado</Th>
@@ -393,9 +376,6 @@ function TabListas({
                   </td>
                   <td className="tabular px-3 py-2.5 text-right font-medium">
                     {formatUSD(v.listPrice)}
-                  </td>
-                  <td className="tabular px-3 py-2.5 text-right text-texto-cuerpo">
-                    {formatUSD(v.minPrice)}
                   </td>
                   {verCosto && (
                     <td className="tabular px-3 py-2.5 text-right">

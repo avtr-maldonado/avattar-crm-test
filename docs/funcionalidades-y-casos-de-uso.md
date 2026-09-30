@@ -44,7 +44,7 @@ puede cambiar en la base sin desplegar. Los códigos que gobiernan lo anterior:
 | Los filtros viven en la URL (`INV-10`) | Una vista filtrada se pega en un correo y el botón de regresar funciona. La **oficina activa** es la excepción: es una cookie, porque es la mesa desde la que se trabaja, no un filtro (§16) |
 | Nada se borra en duro (`INV-15`) | Organizaciones, personas, oportunidades, actividades y usuarios se desactivan o se marcan borrados. Documentos e hitos sí se borran, a propósito (`Q-16`) |
 | Bitácora en la misma transacción (`INV-09`) | Crear y editar usuarios, y fijar objetivos, dejan quién, cuándo, antes y después. Si la bitácora falla, la operación falla |
-| Umbrales en la base (`INV-05`) | Piso de margen, mínimos MEDDIC, días para estancada, impuesto y probabilidad por etapa se leen de la configuración, nunca del código |
+| Umbrales en la base (`INV-05`) | Mínimos MEDDIC, días para estancada, impuesto y probabilidad por etapa se leen de la configuración, nunca del código |
 | Dinero en USD (`D-A`) | Todo importe es USD con cuatro decimales. No hay tipo de cambio |
 
 ---
@@ -115,12 +115,13 @@ no vuelve a la base. La vista, los filtros y el pipeline viven en la URL.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-07.1 Abrir el pipeline | Cualquier rol | Entra a Oportunidades | Abre en Kanban, en el pipeline de venta de la oficina activa. Arriba, el selector de vistas, un botón de embudo que muestra u oculta la fila de filtros (con un punto cuando hay filtros activos y están ocultos) y «Nueva oportunidad»; debajo, los filtros (F-09). Si la oficina no tiene pipeline, lo dice |
-| CU-07.2 Kanban | Cualquier rol | — | Una columna por etapa, **incluidas las vacías**, con conteo, probabilidad, total y ponderado; el total y el ponderado suman **solo las abiertas** (`RN-12`). Todas caben en el ancho sin scroll horizontal; las tarjetas se compactan según la columna. Cada tarjeta: nombre, cuenta y cierre, propietario, importe, margen (verde en o sobre el piso, coral debajo · §13.1), puntaje MEDDIC y el triángulo de riesgo si aplica. Con el filtro de estatus, las **ganadas** llevan borde verde y relleno verde tenue, y las **perdidas** borde coral y relleno coral tenue, más una pastilla, debajo de las abiertas, y no se arrastran |
+| CU-07.1 Abrir el pipeline | Cualquier rol | Entra a Oportunidades | Abre en Kanban, en el pipeline de venta de la oficina activa. Arriba, el selector de vistas, un botón de embudo que muestra u oculta la fila de filtros —**cerrada al entrar**, con un punto cuando hay filtros activos— y «Nueva oportunidad»; debajo, al abrirla, los filtros (F-09). Si la oficina no tiene pipeline, lo dice |
+| CU-07.2 Kanban | Cualquier rol | — | Una columna por etapa, **incluidas las vacías**, con conteo, probabilidad, total y ponderado; el total y el ponderado suman **solo las abiertas** (`RN-12`). Todas caben en el ancho sin scroll horizontal; las tarjetas se compactan según la columna. Cada tarjeta: nombre, cuenta y cierre, propietario, importe, margen (como cifra; solo la pérdida en coral, §33), puntaje MEDDIC y el triángulo de riesgo si aplica. Con el filtro de estatus, las **ganadas** llevan borde verde y relleno verde tenue, y las **perdidas** borde coral y relleno coral tenue, más una pastilla, debajo de las abiertas, y no se arrastran |
 | CU-07.3 Tabla | Cualquier rol | Pulsa «Tabla» | Las mismas oportunidades renglón a renglón, con la etapa como columna |
 | CU-07.4 Embudo | Cualquier rol | Pulsa «Embudo» | Una barra por etapa con el valor abierto contra la etapa mayor, y debajo la **tasa de paso** de los últimos 90 días: de las que entraron a la etapa anterior, cuántas llegaron a esta o más lejos (§17). A la derecha, la cola de riesgo ordenada por valor con la razón concreta |
+| CU-07.4b Qué suma la barra | Cualquier rol | Pulsa la barra de una etapa | Se abre el detalle: las oportunidades abiertas de esa etapa con folio, cuenta, propietario, importe y ponderado (importe × probabilidad de la etapa, `RN-01`), el total y la explicación de la tasa de paso. Cada folio lleva a la oportunidad |
 | CU-07.5 Embudo sin movimientos | Cualquier rol | Nadie entró a la etapa anterior en la ventana | La leyenda dice «no hay con qué medirlo», no «0 %» |
-| CU-07.6 Forecast | Cualquier rol | Pulsa «Forecast» y elige meses o trimestres fiscales | Un tablero de columnas como el kanban, pero la columna es **cuándo**: cada oportunidad mostrada va en la columna de su cierre estimado, con la misma tarjeta; los trimestres se nombran **Q1–Q4** del año fiscal. La cabecera de cada columna trae cuántas, el total abierto, el ponderado por etapa (`RN-01`) y una barra con la mezcla por categoría de pronóstico (el juicio del vendedor · `RN-15`); lo omitido cuenta en el total y no en la barra; las cerradas se ven pero no suman (`RN-12`) y van debajo de las abiertas |
+| CU-07.6 Forecast | Cualquier rol | Pulsa «Forecast» y elige meses o trimestres fiscales | Un tablero de columnas como el kanban, pero la columna es **cuándo**: cada oportunidad mostrada va en la columna de su cierre estimado, con la misma tarjeta; los trimestres se nombran **Q1–Q4** del año fiscal. La cabecera de cada columna trae cuántas, el total abierto, el ponderado por etapa (`RN-01`) y una barra con la mezcla por categoría de pronóstico (el juicio del vendedor · `RN-15`), cuyo desglose sale al pasar el cursor —la leyenda de colores de abajo se quitó el 29-sep-2026—; lo omitido cuenta en el total y no en la barra; las cerradas se ven pero no suman (`RN-12`) y van debajo de las abiertas |
 | CU-07.7 Forecast · mover la ventana | Cualquier rol | Pulsa «‹ Anteriores», «Hoy» o «Siguientes ›» | La ventana es de seis meses o cuatro trimestres y avanza de periodo en periodo, nunca hacia atrás del periodo en curso. Las flechas dicen cuántas oportunidades quedan fuera hacia cada lado, para que nada se pierda sin aviso |
 | CU-07.8 Forecast con cierres vencidos | Cualquier rol | Hay abiertas con cierre estimado en el pasado | Van en una columna «Vencidas» al principio, en coral: son fechas que hay que corregir, no dinero de un mes que ya pasó. Al mover la ventana hacia adelante, cuentan entre las que quedan atrás |
 | CU-07.9 Nada con los filtros | Cualquier rol | Los filtros dejan el tablero vacío | Estado vacío con «Limpiar filtros» y «Nueva oportunidad» |
@@ -154,11 +155,12 @@ quede invisible (`AC-23`). Salda la deuda de E0.
 | CU-09.9 Por pronóstico | Cualquier rol | Abre «Pronóstico» y marca Compromiso, Mejor caso, Pipeline y/o Omitida | Filtra por la categoría de pronóstico (`RN-15`), en la consulta. Vacío = todas |
 | CU-09.6 Limpiar | Cualquier rol | Pulsa «Limpiar» | Vuelve al pipeline sin recortes |
 | CU-09.7 URL manipulada | Vendedor | Pega `owner=<otro vendedor>` en la URL | Cero resultados. Ni los del otro ni los suyos (`AC-25`) |
+| CU-09.9 Sin perder la vista | Cualquier rol | Aplica o limpia un filtro estando en Tabla, Embudo o Forecast | La vista y la agrupación del forecast se conservan en la URL; antes cualquier filtro devolvía al kanban (29-sep-2026) |
 
 ### F-10 · Crear una oportunidad
 
 Desde el modal «Nueva oportunidad». A la derecha de cada campo, una anotación dice qué hizo el
-sistema con lo que se escribió: `existente`, `nueva`, `sugerido`, `T4 2026`. Es lo que evita el
+sistema con lo que se escribió: `existente`, `nueva`, `sugerido`, `Q4 2026`. Es lo que evita el
 error caro de esta pantalla: crear una cuenta duplicada sin darse cuenta.
 
 | Caso | Quién | Qué pasa | Resultado |
@@ -215,7 +217,7 @@ destildar (`INV-11`, `RN-13`).
 |---|---|---|---|
 | CU-14.1 Editar la propia | Propietario, o quien tenga alcance de oficina (`Q-13`) | Pulsa el **lápiz** en el título de «Datos de la oportunidad»; cambia nombre, importe estimado, cierre, categoría, persona principal u origen | Se guarda con las reglas de negocio: «Compromiso» exige el mínimo MEDDIC (`RN-29`); reasignar es de Gerencia. Lo que el dato quiere decir se explica en el propio campo |
 | CU-14.2 Reasignar | Gerente, Dirección, Administración | Cambia el propietario | Solo a un usuario activo que opere en el país de la oportunidad (`Q-14`). El anterior deja de verla si era vendedor |
-| CU-14.3 Cerrada | Cualquiera | Intenta editar una ganada o perdida | No se edita: solo Administración reabre (`RN-18`). Reabrir todavía no tiene pantalla |
+| CU-14.3 Cerrada | Cualquiera | Intenta editar una ganada o perdida | No se edita mientras está cerrada. «Reabrir» la devuelve a abierta (F-43, `RN-18` enmendada) |
 | CU-14.4 Corregir un dato sin abrir nada | Ídem que CU-14.1 | Pulsa el tipo de negocio, el pronóstico, el cierre estimado, el origen o el propietario en «Datos de la oportunidad» | El dato se vuelve control ahí mismo y guarda al elegir; Esc cancela. Rigen las mismas reglas que el panel completo: «Compromiso» exige puntaje MEDDIC y reasignar es de Gerencia. Si el servidor lo rechaza, el dato se queda como estaba y un aviso dice por qué (decisiones §19) |
 
 ### F-38 · Marcar ganada o perdida
@@ -231,8 +233,19 @@ son las de §25.
 | CU-38.2 Falta algo | Ídem | Intenta ganar sin cotización, sin hitos o con hitos que no cuadran | El panel no deja confirmar y dice qué falta con la cifra: «Faltan $200,000 por asignar en hitos» (`AC-18`). Se resuelve en las pestañas Cotización e Hitos |
 | CU-38.3 Perder | Ídem | Pulsa «Perdida», elige el motivo y, si el motivo lo pide, escribe el competidor | Se marca perdida con el cierre real de hoy. Sin motivo se rechaza (`AC-20`); un motivo que exige competidor lo pide (`RN-16`). No hace falta cotización |
 | CU-38.4 Lo que queda | — | Ganada o perdida | `GANADA` o `PERDIDA`, `actualCloseDate` de hoy y `MARCAR_GANADA` / `MARCAR_PERDIDA` en `AuditLog`, en la misma transacción (`INV-09`). La bitácora lo enseña como «Ganada · $1,000,000.00 · Desde Negociación» o «Perdida · Precio · Competidor: …» |
-| CU-38.5 Ya cerrada | Cualquiera | Intenta ganar o perder una cerrada | Se rechaza: reabrir es de Administración (`RN-18`, pendiente). Los botones no se ofrecen |
+| CU-38.5 Ya cerrada | Cualquiera | Intenta ganar o perder una cerrada | Se rechaza; en su lugar aparece «Reabrir» (F-43). Los botones de cierre no se ofrecen |
 | CU-38.6 Lo que ya no se exige | — | — | El puntaje MEDDIC mínimo para ganar (`RN-28`) y el contrato u orden de compra cargado (`RN-06`) **no se exigen** para ganar: decisión del negocio del 24-sep-2026, anotada en §25 con dónde volver a exigirlos |
+
+### F-43 · Reabrir una oportunidad
+
+Botón «Reabrir» en la cabecera de una ganada o perdida (decisiones §32, `RN-18` enmendada).
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-43.1 Reabrir | Propietario, Gerencia con alcance de oficina, Administración | Pulsa «Reabrir» y confirma | Vuelve a **abierta en la etapa donde se cerró**, con el mismo folio (`INV-12`). Se borran el cierre real y el motivo de pérdida; cotización, hitos, MEDDIC y actividades se quedan. Queda en la bitácora quién y desde qué estatus (`INV-09`) |
+| CU-43.2 Quien no la alcanza | Vendedor que no es propietario | Intenta reabrir | El botón no aparece y el servidor rechaza |
+| CU-43.3 Ya abierta | Cualquiera | — | No hay nada que reabrir: el botón solo existe en cerradas |
+
 
 ### F-15 · Agendar o registrar una actividad
 
@@ -269,12 +282,10 @@ costo y utilidad **solo llegan** a quien tiene `VER_COSTO`; el margen, a quien t
 |---|---|---|---|
 | CU-16.1 Abrir la cotización | Quien alcance la oportunidad | Pulsa «Abrir cotización» | Nace vacía con la tasa de impuesto del país **copiada** en ese momento (`RN-24`): un cambio de tasa no altera cotizaciones existentes. Abrirla otra vez devuelve la misma |
 | CU-16.2 Agregar una línea de catálogo | Ídem | En modo edición pulsa «+ Agregar línea» (con la cotización vacía, «Agregar la primera línea»); elige un producto; precio y costo de la lista vigente **llenan** los campos y se pueden corregir antes de guardar; pone cantidad y descuento | La línea sigue ligada a su producto. Se recalculan subtotal bruto, neto, impuesto, total, costo, utilidad y margen, y el neto y el margen se espejan en la oportunidad al momento |
-| CU-16.2b Producto sin lista | Ídem | Elige un producto marcado «sin lista» | Precio y costo llegan vacíos y **se fijan para esta oportunidad**; los dos son obligatorios, como en el concepto libre. No hay piso de SKU (`RN-08`); las alertas de margen (`RN-05`) siguen. Sin `VER_COSTO` no se puede capturar el costo, y la línea no entra (decisiones §22) |
+| CU-16.2b Producto sin lista | Ídem | Elige un producto marcado «sin lista» | Precio y costo llegan vacíos y **se fijan para esta oportunidad**; los dos son obligatorios, como en el concepto libre. Sin `VER_COSTO` no se puede capturar el costo, y la línea no entra (decisiones §22) |
 | CU-16.3 Agregar un concepto libre | Ídem | Escribe descripción, unidad, precio y **costo** | El costo es obligatorio (`Q-07`): sin él el margen de la línea sería falso |
 | CU-16.4 Editar líneas | Ídem | Pulsa «Editar»; cambia cantidad, precio unitario, descuento o costo en las celdas que haga falta; pulsa «Guardar cambios» | **Mientras teclea**, precio neto, importe, utilidad, margen y los totales se recalculan al momento con `decimal.js` —la misma aritmética que el servidor, probada en paridad—; nada se guarda hasta pulsar. Sin `VER_COSTO` el margen no se puede anticipar: se muestra el guardado, atenuado, «se recalcula al guardar». Al guardar se escriben de una vez **solo los campos que cambiaron de valor**, se recalculan los totales y se espeja el neto. Si nada cambió, avisa «Sin cambios» y no anota nada. Mientras se edita, agregar y quitar líneas se ocultan. Antes, editar cantidad o descuento fallaba en silencio y parecía que «no actualizaba» |
-| CU-16.5 Precio bajo el piso del SKU | Ídem | Deja el precio con descuento debajo del piso del producto (`RN-08`) | El servidor rechaza **el guardado completo** y lo avisa con las dos cifras; nada se escribe hasta corregir. El piso aplica al agregar y al editar |
 | CU-16.6 Costo sin permiso | Vendedor sin `VER_COSTO` | Intenta fijar o cambiar un costo | No se acepta (`INV-02`): probar costos hasta que el margen cuadre sería deducirlo. La columna ni siquiera se pinta |
-| CU-16.7 Línea bajo el piso de margen | Ídem | El margen de la línea queda bajo el piso de la política | La pantalla lo señala en la línea y en una franja. La solicitud de autorización que eso dispararía (P-10) no está construida |
 | CU-16.8 Quitar una línea | Ídem | En modo edición pulsa la ✕ | Se quita y se recalcula. Si era la última, la oportunidad vuelve a valer su **estimado** y su margen queda en blanco: una cotización vacía no dice nada |
 | CU-16.9 Lo que queda en la bitácora | — | Cada **guardado** cuya cotización quede con un total distinto del de la última anotación, suba o baje | **Una** entrada `EDITAR_COTIZACION` con el neto anotado antes y el de ahora, y la lista de celdas que cambiaron en ese guardado, en la misma transacción (`INV-09`). Agregar o quitar líneas no anota por sí solo: lo recoge el siguiente guardado. Un guardado que no mueve el total —solo el costo, o dos cambios que se compensan— se guarda sin anotar (decisiones §26). Se lee en la pestaña Bitácora (F-37) |
 | CU-16.10 Compuertas e hitos | — | Una etapa exige `COTIZACION_CONGELADA`; los hitos se cuadran | El requisito conserva su nombre en los datos pero exige **cotización con al menos una línea**; los hitos cuadran contra su neto (`RN-06`) |
@@ -415,7 +426,7 @@ la administra. Un panel con el propietario y las casillas de con quién se compa
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-28.1 Alta | Administración (`EDITAR_CATALOGOS`) | SKU, nombre, familia, unidad, modelo de precio; precio y costo **opcionales, pero juntos** | El SKU se fija al crear, como el folio: lo referencian líneas y reportes. Con precio y costo nace la primera vigencia; con los dos vacíos el producto queda **sin lista** y precio y costo se fijan en cada cotización (CU-16.2b). Uno sin el otro se rechaza: el piso `RN-08` se deriva de ambos (decisiones §22) |
+| CU-28.1 Alta | Administración (`EDITAR_CATALOGOS`) | SKU, nombre, familia, unidad, modelo de precio; precio y costo **opcionales, pero juntos** | El SKU se fija al crear, como el folio: lo referencian líneas y reportes. Con precio y costo nace la primera vigencia; con los dos vacíos el producto queda **sin lista** y precio y costo se fijan en cada cotización (CU-16.2b). Uno sin el otro se rechaza: una lista con uno solo no significa nada (decisiones §22) |
 | CU-28.1b Estrenar lista | Administración | Edita un producto sin lista y captura precio y costo | Nace su primera vigencia desde hoy. Dejar los dos vacíos al editar no toca la lista; quitar una lista existente no está previsto |
 | CU-28.2 Cambiar precio | Administración | Edita el precio | Nace una vigencia nueva; las anteriores se conservan |
 | CU-28.3 Dar de baja | Administración | Desactiva | Nada se borra (`INV-15`). Un producto inactivo no se ofrece al cotizar |
@@ -448,20 +459,22 @@ Acotadas a la oficina activa, igual que el contador del menú, para que los dos 
 
 ## 7. Objetivos · P-08
 
-**La medición es acumulada** (§17, regla nueva que no está en el spec): la cuota del T1 al
+**La medición es acumulada** (§17, regla nueva que no está en el spec): la cuota del Q1 al
 trimestre en curso contra lo ganado en ese tramo. Un trimestre bueno paga la deuda del anterior.
+Dos vistas en la URL (§34): **Objetivos**, la cuadrícula por vendedor y trimestre, y **Avance**, la
+medición. Los trimestres se nombran **Q1 a Q4**.
 
 ### F-31 · Ver el avance contra objetivos
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-31.1 Trimestral | Cualquier rol | Entra a Objetivos | Tira T1 a T4 con lo de cada trimestre; panel grande con lo **acumulado**: logrado, cuota acumulada, cumplimiento, y en palabras con cuánta deuda o adelanto se entra al trimestre («Entras al T3 debiendo $120,000»). Brecha y cobertura al lado |
-| CU-31.2 Anual | Cualquier rol | Pulsa «Año» | La cuota anual contra lo ganado en el año fiscal. Nada que arrastrar: el año es el periodo |
+| CU-31.1 Vista Objetivos | Cualquier rol | Entra a Objetivos (vista por omisión) | Cuatro indicadores de dos líneas con **el año**: cuota (suma de Q1 a Q4), logrado, cumplimiento y cobertura. Debajo, la cuadrícula por vendedor y trimestre con el total anual y el total compañía |
+| CU-31.2 Vista Avance | Cualquier rol | Pulsa «Avance» y un trimestre de la tira | Los mismos cuatro indicadores con lo **acumulado al Q** elegido; tira Q1 a Q4 con lo de cada trimestre solo. Nada que arrastrar en el año completo |
 | CU-31.3 Venta o utilidad | Quien tenga `VER_MARGEN` | Conmuta la métrica | La utilidad se mide con la utilidad de la cotización congelada de cada ganada (§10.2). Para un vendedor no revela nada que no tuviera: venta × margen, ambos ya visibles para él (§17) |
 | CU-31.4 Cambiar de año | Cualquier rol | Elige el año fiscal | Solo se ofrecen años con cuota, más el año en curso |
 | CU-31.5 Vendedor | Vendedor | — | Ve **solo su renglón** (§2.3): ni la cuota ni el avance de sus compañeros |
-| CU-31.6 Sin cuota fijada | Cualquier rol | La oficina no tiene objetivos ese año | Estado vacío que lo dice; para Administración, con el botón de fijar |
-| CU-31.7 Los trimestres no suman el anual | Cualquier rol | Existen ambos y no cuadran | Aviso: para el reporte de año manda la anual (`RN-32`) |
+| CU-31.6 Sin cuota fijada | Cualquier rol | La oficina no tiene objetivos ese año | En Objetivos, la cuadrícula vacía invita a agregar al primer vendedor; en Avance, estado vacío con el enlace a Objetivos |
+| CU-31.7 Una anual previa no suma los trimestres | Cualquier rol | Alguien conserva una cuota anual fijada antes de la cuadrícula | Aviso en Avance: para el año manda la anual (`RN-32`); volver a guardar sus trimestres la retira (§34) |
 
 ### F-32 · Tabla del equipo
 
@@ -469,12 +482,16 @@ trimestre en curso contra lo ganado en ese tramo. Un trimestre bueno paga la deu
 |---|---|---|---|
 | CU-32.1 Ver al equipo | Gerente, Dirección, Administración (`VER_OBJETIVOS_EQUIPO`) | — | Por persona: cuota acumulada, logrado, cumplimiento, arrastre y cobertura; cuántos van por debajo. El **total se suma de las filas visibles**, nunca de una consulta aparte (§10.3) |
 
-### F-33 · Fijar objetivos
+### F-33 · Fijar objetivos en la cuadrícula
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-33.1 Fijar una cuota | Administración (`EDITAR_CATALOGOS` · §17) | Persona, periodo (trimestre 1–4 o anual), cuota de venta y de utilidad | Reemplaza la del periodo si existía; queda en bitácora con la cifra anterior (`INV-09`). El formulario se queda abierto para cargar los cuatro trimestres seguidos |
-| CU-33.2 Utilidad mayor que la venta | Administración | — | Se rechaza: sería un margen arriba del 100 % |
+| CU-33.1 Capturar la hoja | Administración (`EDITAR_CATALOGOS` · §17) | Teclea Q1 a Q4 de cada vendedor en las celdas y pulsa «Guardar cambios» una sola vez | Solo viaja lo que cambió; **cada cuota que cambia** queda en bitácora con la cifra anterior (`INV-09`). Se captura una métrica a la vez (venta o utilidad, el conmutador de arriba); la otra se conserva. El total anual es la suma de los trimestres: la cuota anual ya no se captura aparte (§34) |
+| CU-33.2 Utilidad mayor que la venta | Administración | — | Se rechaza cuando ese trimestre tiene venta: sería un margen arriba del 100 %. Con venta en cero se acepta, para poder capturar la utilidad antes |
+| CU-33.5 Agregar vendedor | Administración | «+ Agregar vendedor», elige a alguien activo del país sin fila | Nace con los cuatro trimestres en cero; se guarda con los demás cambios |
+| CU-33.6 Eliminar vendedor | Administración | «Eliminar» en su fila y guardar | Borra sus cuotas del año, de venta y utilidad, trimestrales y anual; cada una queda en bitácora con las cifras que tenía |
+| CU-33.7 Guardar sin cambios | Administración | Nada cambió de valor | «Nada que guardar»: no se escribe nada |
+| CU-33.8 Descartar | Administración | «Descartar» | La cuadrícula vuelve a lo guardado |
 | CU-33.3 Persona de otro país | Administración | Elige a alguien que no opera en la oficina | Se rechaza: la oficina sumaría una cuota que nadie de ahí va a cubrir |
 | CU-33.4 Gerente intenta fijar | Gerente de país | — | No puede: fijaría la cuota contra la que a él lo miden. Conceder el permiso a Dirección es un cambio de matriz, no de código |
 
@@ -489,7 +506,7 @@ trimestre en curso contra lo ganado en ese tramo. Un trimestre bueno paga la deu
 | CU-34.1 Pipelines y etapas | Administración | Pestaña | Por pipeline: etapas con probabilidad, días para estancada, requisitos de entrada y modo (advertencia o bloqueante). **Solo lectura**: se edita en la base |
 | CU-34.2 Catálogos | Administración | Pestaña | Orígenes, roles de comité, motivos de pérdida, familias. Solo lectura |
 | CU-34.3 Roles y permisos | Administración | Pestaña | La matriz de §5.2 con `ADMINISTRAR_USUARIOS` agregado. Solo lectura |
-| CU-34.4 Política comercial | Dirección, Administración | Pestaña | Piso de margen, umbrales de descuento, mínimos y pesos MEDDIC, SLA, por país. Solo lectura |
+| CU-34.4 Política comercial | Dirección, Administración | Pestaña | Umbrales de descuento, mínimos y pesos MEDDIC, SLA, por país. Solo lectura |
 
 ### F-35 · Administrar usuarios
 
@@ -510,34 +527,57 @@ Pestaña Usuarios, solo con `ADMINISTRAR_USUARIOS`. Cada operación deja bitáco
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-36.1 Vendedor | Vendedor | Abre `/analisis` | **403**, no una pantalla vacía (`AC-02`) |
-| CU-36.2 Gerencia y dirección | Gerente, Dirección, Administración | Abre `/analisis` | Tres pestañas: Análisis de ventas, Forecast, Actividad y MEDDIC. Los reportes que requieren historia dicen «sin datos suficientes», nunca cero (`Q-06`, `C-02`) |
-| CU-36.3 Filtrar | Gerente, Dirección | Elige país, vendedor, año fiscal, producto o tipo de negocio | Recorta **dentro** del alcance (`AC-25`); todo queda en la URL (`INV-10`) y el enlace se puede compartir. Un gerente solo ve los países donde opera; la oficina activa no recorta aquí |
+| CU-36.2 Gerencia y dirección | Gerente, Dirección, Administración | Abre `/analisis` | Tres pestañas: Análisis de ventas, Forecast, Actividad y MEDDIC. Arriba de cada una, indicadores de dos líneas (nombre y valor; el detalle al pasar el cursor · §36). Los reportes que requieren historia dicen «sin datos suficientes», nunca cero (`Q-06`, `C-02`) |
+| CU-36.3 Filtrar | Gerente, Dirección | Las mismas pastillas que el pipeline: país y vendedor abren una lista de casillas con «Ninguno» y «Aplicar»; el año, una lista de uno. Cualquiera de los elegidos cuenta. Producto y tipo de negocio dejaron de ser filtros (§36): siguen como agrupaciones de las gráficas | Recorta **dentro** del alcance (`AC-25`); todo queda en la URL (`INV-10`) y el enlace se puede compartir. Un gerente solo ve los países donde opera; la oficina activa no recorta aquí |
 
-### F-39 · Análisis de ventas (reportes 1 a 3)
+### F-39 · Análisis de ventas (reportes 1 a 3, en gráficas · §35)
 
-| Caso | Quién | Qué pasa | Resultado |
-|---|---|---|---|
-| CU-39.1 Avance contra objetivo | Gerente, Dirección | Agrupa lo ganado del año por trimestre, cliente, producto o tipo | Ganado por `actualCloseDate`; cuota consolidada (suma de las cuotas del alcance, `RN-32`) y cumplimiento en el total y, por trimestre, en cada fila. Por producto cada venta se reparte entre las líneas de su cotización; sin cotización, fila «Sin cotización» |
-| CU-39.2 Filtro por producto o tipo | Gerente, Dirección | Filtra por producto o tipo de negocio | La cuota no se reparte a ese nivel: el cumplimiento no se pinta y la pantalla lo dice |
-| CU-39.3 Histórico | Gerente, Dirección | Agrupa por año o trimestre | Toda la historia; el filtro de año no aplica. Variación contra el periodo anterior con ventas |
-| CU-39.4 Rentabilidad | Dirección, Administración (`VER_COSTO`) | Agrupa por producto, tipo o cliente | Venta, costo, utilidad y margen de la cotización vigente; verde en o sobre el piso de la política, coral debajo (`INV-05`) |
-| CU-39.5 Rentabilidad sin permiso | Gerente sin `VER_COSTO` | Abre la pestaña | El costo no viaja (`INV-02`); el reporte 3 muestra un aviso, no ceros |
-
-### F-40 · Forecast (reportes 4 a 6)
+Debajo de los cuatro indicadores, cuatro tarjetas con gráficas interactivas (Recharts): dos por fila en
+escritorio, una columna en pantallas angostas. Cada punto lleva tooltip con las cifras exactas
+(«$328,835.00»); ejes y etiquetas van en corto («$328.8K»). «Agrupar por» cambia la gráfica al instante y
+queda en la URL. Las tablas se quedaron en Forecast y Actividad.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-40.1 Embudo | Gerente, Dirección | Ve las abiertas por trimestre de cierre estimado y, dentro, por cliente o vendedor | Importe, ponderado (`RN-01`) y peso de cada subgrupo en su trimestre |
-| CU-40.2 Filtros del embudo | Gerente, Dirección | Fija probabilidad mínima de etapa (25/50/75 %) o marca categorías de pronóstico | Recortan antes de agrupar; sin categoría marcada, todas. Viven en la URL |
-| CU-40.3 Ciclo de venta | Gerente, Dirección | Lee promedio y mediana de días del alta al cierre real | Sobre las ganadas del año; por vendedor y por trimestre de cierre. Sin ganadas, «sin datos suficientes» |
-| CU-40.4 Antigüedad | Gerente, Dirección | Ve estancadas, sin actividad y vencidas por vendedor, y las 20 abiertas de mayor importe | Mismas banderas que el tablero (`INV-11`, `RN-03`, `RN-10`); días en etapa contra el límite de la etapa; el folio lleva a la oportunidad |
+| CU-39.1 Avance contra objetivo | Gerente, Dirección | Agrupa lo ganado del año por trimestre, cliente, producto o tipo | Barras verticales de lo ganado por `actualCloseDate`, con el valor encima. Por trimestre, los cuatro en orden aunque estén en cero, el que corre y el que no ha empezado dicho en el tooltip; con cuota consolidada (`RN-32`), la cuota va como barra clara al lado y el tooltip trae cuota y cumplimiento. Por cliente, producto o tipo, de mayor a menor. El total no es una barra. Por producto cada venta se reparte entre las líneas de su cotización; sin cotización, barra «Sin cotización» atenuada |
+| CU-39.2 Cuota consolidada | Gerente, Dirección | — | Suma de las cuotas del alcance (`RN-32`), siempre comparable con lo ganado porque ya no hay filtros de producto ni tipo (§36). Sin cuota fijada, el indicador lo dice y la gráfica no inventa una |
+| CU-39.3 Histórico | Gerente, Dirección | Agrupa por año o trimestre | Toda la historia; el filtro de año no aplica. Lo ganado en barras y la utilidad como línea, sobre el mismo eje en dólares; la variación contra el periodo anterior con ventas es un porcentaje y va en el tooltip, con participación y negocios |
+| CU-39.4 Rentabilidad | Dirección, Administración (`VER_COSTO`) | Agrupa por producto, tipo o cliente | Barras horizontales apiladas costo + utilidad, con la venta al final, de mayor a menor venta; tooltip con venta, costo, utilidad, margen y negocios. Una pérdida muestra solo el costo y la utilidad negativa en coral (§33) |
+| CU-39.5 Margen | Dirección, Administración (`VER_COSTO`) | Misma agrupación que Rentabilidad | Barras de 0 a 100 % con el por ciento al final, de mayor a menor margen; un margen negativo se dibuja en cero y se lee en coral |
+| CU-39.6 Rentabilidad sin permiso | Gerente sin `VER_COSTO` | Abre la pestaña | El costo no viaja (`INV-02`): el histórico no lleva línea de utilidad y la tarjeta de rentabilidad y margen muestra un aviso, no ceros |
+| CU-39.7 Muchos registros | Cualquiera con acceso | Decenas de clientes o productos | Las barras verticales crecen a lo ancho con scroll; las horizontales crecen a lo alto con scroll a partir de trece filas. Sin registros, la tarjeta dice qué falta |
 
-### F-41 · Actividad y MEDDIC (reportes 8 y 9)
+### F-40 · Forecast (reportes 4 a 6, en gráficas · §37)
+
+Debajo de los cuatro indicadores, seis tarjetas en dos columnas (una en pantallas angostas): embudo por
+trimestre, distribución del pipeline, ciclo de venta, antigüedad y estancamiento, antigüedad contra
+importe, y la tabla de las de mayor importe. Tooltips con las cifras exactas; ejes en corto.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-41.1 Actividad por vendedor | Gerente, Dirección | Ve las hechas del año por persona y tipo, y sus abiertas sin siguiente paso | Solo lo **hecho** cuenta (decisiones §19); sin siguiente paso = sin actividad agendada o con la agendada vencida (`RN-10`). Además, hechas por mes |
-| CU-41.2 Salud MEDDIC | Gerente, Dirección | Ve el puntaje promedio por etapa, cuántas están bajo el mínimo y sin calificar | Mínimo de la política (`INV-05`); componentes parciales o confirmados sin evidencia (`RN-30`); lista de las que están en etapa de cierre por debajo del mínimo, con enlace |
+| CU-40.1 Embudo por trimestre | Gerente, Dirección | — | Una barra por trimestre de cierre estimado (`expectedCloseDate`): la altura es el importe abierto y el segmento verde de abajo el ponderado (importe × probabilidad de etapa, `RN-01`). Tooltip: oportunidades, importe, ponderado y peso en el pipeline |
+| CU-40.2 Filtros del embudo | Gerente, Dirección | Probabilidad mínima (≥ 25, 50 o 75 %) y categorías de pronóstico | Recortan antes de agregar; viven en la URL y mueven la gráfica, la distribución y los indicadores |
+| CU-40.3 Distribución del pipeline | Gerente, Dirección | «Agrupar por» cliente o vendedor | Barras horizontales del importe abierto, de mayor a menor, con importe y peso al final; cambia al instante y queda en la URL (`g4`) |
+| CU-40.4 Ciclo de venta | Gerente, Dirección | «Agrupar por» vendedor o trimestre | Por vendedor, barras de días promedio con la mediana como línea punteada; por trimestre, la evolución como línea con la misma mediana (`g5`). Sin ganadas en el año, «sin datos suficientes» |
+| CU-40.5 Antigüedad y estancamiento | Gerente, Dirección | — | Tres indicadores (sin actividad, cierre vencido, edad promedio) y barras **agrupadas** por vendedor: abiertas, estancadas, sin actividad y vencidas. Nunca apiladas: se traslapan |
+| CU-40.6 Antigüedad contra importe | Gerente, Dirección | — | Cada abierta como un punto edad × importe, coloreado por el estado de su etapa: en tiempo (menos del 75 % del límite), en riesgo (del 75 % al límite), fuera del límite; la edad promedio como línea. Tooltip con folio, oportunidad, cliente, etapa, edad, días en etapa, límite, importe, vendedor y estado |
+| CU-40.7 Las de mayor importe | Gerente, Dirección | — | Tabla de las 20 abiertas que más pesan, con «En etapa» teñido por la misma regla; el folio lleva a la oportunidad |
+
+### F-41 · Actividad y MEDDIC (reportes 8 y 9, en gráficas · §38)
+
+Debajo de los cuatro indicadores, cuatro tarjetas con gráficas en dos columnas (una en pantallas
+angostas), la tabla operativa de las que están en cierre sin llegar al mínimo, y un bloque «Detalle» con
+las dos tablas originales, de menor jerarquía. Los filtros globales mueven todo; no hay conmutadores.
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-41.1 Actividad por vendedor | Gerente, Dirección | — | Barras agrupadas: una serie por tipo de actividad que exista (los tipos son datos), una barra por vendedor. Solo cuenta lo **hecho** en el año fiscal (§19). Tooltip con cada tipo y el total |
+| CU-41.2 Actividad por mes | Gerente, Dirección | — | Los doce meses del año fiscal, desde el mes de arranque, con cero en claro donde no hubo nada. No se inventa actividad. Tooltip con las hechas del mes |
+| CU-41.3 Abiertas y sin siguiente paso | Gerente, Dirección | — | Barras agrupadas por vendedor: abiertas en azul y sin siguiente paso (`RN-10`) en coral, para que salte a la vista. Tooltip con ambas y el porcentaje; con cero abiertas, «—» |
+| CU-41.4 Salud MEDDIC por etapa | Gerente, Dirección | — | Barras horizontales de 0 a 100 con el promedio por etapa y «Mínimo: 70» (política comercial, `INV-05`) como línea: verde en o sobre el mínimo, coral debajo, gris y «Sin datos» donde nadie está calificado. Tooltip con abiertas, promedio, bajo el mínimo y sin calificar |
+| CU-41.5 En cierre sin llegar al mínimo | Gerente, Dirección | — | Tabla a lo ancho: folio con enlace, oportunidad y MEDDIC en coral. Vacía dice «Ninguna oportunidad en etapa de cierre está por debajo de 70» |
+| CU-41.6 Detalle | Gerente, Dirección | — | Las tablas originales (resumen por vendedor con hechas, tipos, abiertas y sin siguiente paso; salud MEDDIC por etapa) siguen debajo para la operación |
+| CU-41.7 Indicadores | Gerente, Dirección | — | Actividades hechas, sin siguiente paso (coral cuando hay), en cierre bajo el mínimo (verde en cero, coral con alguna) y componentes sin evidencia (`RN-30`) |
 
 ---
 
@@ -546,7 +586,6 @@ Pestaña Usuarios, solo con `ADMINISTRAR_USUARIOS`. Cada operación deja bitáco
 | Funcionalidad | Estado | Nota |
 |---|---|---|
 | Marcar ganada o perdida (`RN-07`, `INV-07`, `AC-19`) | Pendiente | La validación de dominio existe en parte (`componentesFaltantesParaGanar`); falta la acción y su pantalla |
-| Reabrir una oportunidad (`RN-18`) | Pendiente | Solo Administración; sin pantalla |
 | Autorizaciones de descuento · P-10 | Fuera de este alcance | Decisión del negocio. La compuerta «sin autorización pendiente» existe pero nunca se activa |
 | Reportes D y E de la propuesta de Análisis (cuentas y catálogo; gobierno) | Fuera de esta entrega | Decisión del negocio del 25-sep-2026; A, B y C están construidos (decisiones §28) |
 | Vistas guardadas (§9.5) | Pendiente | Los filtros ya viven en la URL, que es el prerrequisito |

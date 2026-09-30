@@ -23,53 +23,60 @@ describe("parseFiltrosDeAnalisis · el estado vive en la URL (INV-10)", () => {
     const f = parseFiltrosDeAnalisis(params(""), direccion, OPCIONES);
     expect(f.pestana).toBe("ventas");
     expect(f.anio).toBe(2026);
-    expect(f.pais).toBeNull();
-    expect(f.vendedor).toBeNull();
-    expect(f.producto).toBeNull();
-    expect(f.tipo).toBeNull();
+    expect(f.pais).toEqual([]);
+    expect(f.vendedor).toEqual([]);
+    // Producto y tipo de negocio dejaron de ser filtros (§36): ni por la URL.
+    expect(f).not.toHaveProperty("producto");
+    expect(f).not.toHaveProperty("tipo");
     expect(f.g1).toBe("trimestre");
     expect(f.g2).toBe("trimestre");
     expect(f.g3).toBe("producto");
     expect(f.g4).toBe("cliente");
+    // Reporte 5 · el ciclo de venta se ve por vendedor salvo que la URL diga trimestre (§37).
+    expect(f.g5).toBe("vendedor");
     expect(f.prob).toBeNull();
     expect(f.pron).toEqual([]);
   });
 
   it("lee cada parámetro cuando es válido", () => {
     const f = parseFiltrosDeAnalisis(
-      params("p=forecast&pais=CO&vendedor=u-1&anio=2025&producto=p-9&tipo=RENOVACION&g1=cliente&g2=anio&g3=tipo&g4=vendedor&prob=50&pron=COMPROMISO&pron=MEJOR_CASO"),
+      params("p=forecast&pais=CO&pais=CL&vendedor=u-1&vendedor=u-2&anio=2025&g1=cliente&g2=anio&g3=tipo&g4=vendedor&g5=trimestre&prob=50&pron=COMPROMISO&pron=MEJOR_CASO"),
       direccion,
       OPCIONES,
     );
     expect(f.pestana).toBe("forecast");
-    expect(f.pais).toBe("CO");
-    expect(f.vendedor).toBe("u-1");
+    expect(f.pais).toEqual(["CO", "CL"]);
+    expect(f.vendedor).toEqual(["u-1", "u-2"]);
     expect(f.anio).toBe(2025);
-    expect(f.producto).toBe("p-9");
-    expect(f.tipo).toBe("RENOVACION");
     expect(f.g1).toBe("cliente");
     expect(f.g2).toBe("anio");
     expect(f.g3).toBe("tipo");
     expect(f.g4).toBe("vendedor");
+    expect(f.g5).toBe("trimestre");
     expect(f.prob).toBe(50);
     expect(f.pron).toEqual(["COMPROMISO", "MEJOR_CASO"]);
   });
 
-  it("un país fuera del alcance de la sesión no filtra: nunca amplía (AC-25)", () => {
-    const f = parseFiltrosDeAnalisis(params("pais=CO"), gerente, OPCIONES);
-    expect(f.pais).toBeNull();
+  it("un país fuera del alcance de la sesión se descarta: nunca amplía (AC-25)", () => {
+    expect(parseFiltrosDeAnalisis(params("pais=CO"), gerente, OPCIONES).pais).toEqual([]);
+    expect(parseFiltrosDeAnalisis(params("pais=CO&pais=MX"), gerente, OPCIONES).pais).toEqual(["MX"]);
+  });
+
+  it("un valor repetido o vacío no cuenta dos veces ni cuenta en blanco", () => {
+    const f = parseFiltrosDeAnalisis(params("vendedor=u-1&vendedor=u-1&vendedor="), direccion, OPCIONES);
+    expect(f.vendedor).toEqual(["u-1"]);
   });
 
   it("lo inválido cae al valor por omisión, no revienta", () => {
     const f = parseFiltrosDeAnalisis(
-      params("p=otra&anio=abc&tipo=INVENTADO&g1=nada&prob=150&pron=X"),
+      params("p=otra&anio=abc&g1=nada&g5=mes&prob=150&pron=X"),
       direccion,
       OPCIONES,
     );
     expect(f.pestana).toBe("ventas");
     expect(f.anio).toBe(2026);
-    expect(f.tipo).toBeNull();
     expect(f.g1).toBe("trimestre");
+    expect(f.g5).toBe("vendedor");
     expect(f.prob).toBeNull();
     expect(f.pron).toEqual([]);
   });

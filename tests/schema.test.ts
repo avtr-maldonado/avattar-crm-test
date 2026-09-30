@@ -77,7 +77,7 @@ describe("schema.prisma · invariantes", () => {
     // razones equivocadas y se rompe al agregar cualquier campo.
     const importes: Record<string, string[]> = {
       Opportunity: ["estimatedAmount", "amount"],
-      PriceListEntry: ["listPrice", "minPrice", "standardCost"],
+      PriceListEntry: ["listPrice", "standardCost"],
       Quote: ["grossSubtotal", "netSubtotal", "taxAmount", "total", "totalCost", "grossProfit"],
       QuoteLine: ["quantity", "unitPrice", "unitCost"],
       Milestone: ["amount"],
@@ -101,7 +101,7 @@ describe("schema.prisma · invariantes", () => {
 
   it("INV-03 · los porcentajes son fracción, con escala suficiente", () => {
     // 7,4 permite 0.1500; un Decimal(5,2) obligaría a guardar 15.00.
-    for (const campo of ["marginFloor", "discountThresholdMgmt", "grossMargin", "discountRate"]) {
+    for (const campo of ["discountThresholdMgmt", "grossMargin", "discountRate"]) {
       const linea = schema.split("\n").find((l) => l.trim().startsWith(campo));
       expect(linea, `no se encontró el campo ${campo}`).toBeDefined();
       expect(linea, `${campo} debe ser Decimal(7,4)`).toMatch(/Decimal\(7,\s*4\)/);
@@ -161,8 +161,6 @@ describe("schema.prisma · invariantes", () => {
   it("INV-05 · los umbrales viven en CommercialPolicy, uno por país", () => {
     const politica = modelo("CommercialPolicy");
     for (const umbral of [
-      "marginFloor",
-      "lineMarginFloor",
       "discountThresholdMgmt",
       "discountThresholdDir",
       "approvalSlaHours",
@@ -178,9 +176,9 @@ describe("schema.prisma · invariantes", () => {
 });
 
 describe("schema.prisma · cobertura del modelo", () => {
-  it("están los 32 modelos que el spec §6.2 exige", () => {
+  it("están los 32 modelos que el spec §6.2 exige, más PersonShare (§29)", () => {
     const encontrados = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]);
-    expect(encontrados).toHaveLength(32);
+    expect(encontrados).toHaveLength(33);
     // Los que el esquema anterior no tenía y el spec sí pide.
     for (const nuevo of [
       "StageTransition",
@@ -189,6 +187,7 @@ describe("schema.prisma · cobertura del modelo", () => {
       "Permission",
       "RolePermission",
       "FolioCounter",
+      "PersonShare",
     ]) {
       expect(encontrados, `falta ${nuevo}`).toContain(nuevo);
     }

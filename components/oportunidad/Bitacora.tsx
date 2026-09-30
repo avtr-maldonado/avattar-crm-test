@@ -109,6 +109,7 @@ const ETIQUETA: Record<TipoDeEvento, string> = {
   ACTIVIDAD: "Actividad",
   GANADA: "Ganada",
   PERDIDA: "Perdida",
+  REAPERTURA: "Reabierta",
 };
 
 const TONO: Record<TipoDeEvento, "neutro" | "acento" | "exito" | "alerta" | "peligro"> = {
@@ -120,6 +121,7 @@ const TONO: Record<TipoDeEvento, "neutro" | "acento" | "exito" | "alerta" | "pel
   ACTIVIDAD: "exito",
   GANADA: "exito",
   PERDIDA: "peligro",
+  REAPERTURA: "acento",
 };
 
 const ICONO: Record<TipoDeEvento, NombreDeIcono> = {
@@ -131,4 +133,5 @@ const ICONO: Record<TipoDeEvento, NombreDeIcono> = {
   ACTIVIDAD: "palomita",
   GANADA: "palomita",
   PERDIDA: "oportunidades",
+  REAPERTURA: "oportunidades",
 };

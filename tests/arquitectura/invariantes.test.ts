@@ -45,10 +45,10 @@ describe("AC-31 · ningún umbral está escrito en el código (INV-05)", () => {
   });
 
   it("lib/domain tampoco esconde los umbrales como porcentaje entero", () => {
-    // Un `20` suelto es ambiguo, pero `marginFloor = 20` o `>= 15` en una
+    // Un `20` suelto es ambiguo, pero `discountThresholdMgmt = 20` o `>= 15` en una
     // comparación de política sí es el mismo defecto con otra ropa.
     const sospechoso =
-      /\b(marginFloor|lineMarginFloor|discountThreshold\w*|meddicMin\w*|staleAfterDays|taxRate|healthyCoverageMin)\s*=\s*\d/;
+      /\b(discountThreshold\w*|meddicMin\w*|staleAfterDays|taxRate|healthyCoverageMin)\s*=\s*\d/;
     const ofensores: string[] = [];
 
     for (const archivo of archivosTs("lib/domain")) {

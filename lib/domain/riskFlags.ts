@@ -8,7 +8,7 @@
  * olvida de destildarlo, y entonces el panel de riesgo deja de ser confiable.
  *
  * Función pura. Todo umbral entra por parámetro (INV-05): los días de
- * estancamiento vienen de la etapa y el piso de margen, de la política del país.
+ * estancamiento vienen de la etapa (`staleAfterDays`), dato del pipeline.
  */
 export type RiskFlag = "SIN_ACTIVIDAD" | "ESTANCADA";
 
@@ -29,7 +29,7 @@ export type RiskInputs = {
  *
  * §13: «Los errores dicen qué falta con el dato concreto.» Una lista que dice
  * "Estancada" tres veces no ayuda a decidir cuál atender primero; una que dice
- * «Estancada 26 días en Negociación» y «Margen 9 % bajo el piso de 20 %»
+ * «Estancada 26 días en Negociación» o «Sin actividad desde hace 40 días»
  * ordena sola el trabajo del día.
  *
  * Devuelve datos, no frases: el texto visible se arma en `lib/etiquetas.ts`,

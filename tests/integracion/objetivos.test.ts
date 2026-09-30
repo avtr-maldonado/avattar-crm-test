@@ -1,7 +1,7 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import type { Session } from "@/lib/auth/permissions";
-import { fijarObjetivo } from "@/lib/domain/objetivo";
+import { fijarObjetivo, guardarCuotasDelEquipo } from "@/lib/domain/objetivo";
 import { aniosConObjetivos, avanceDeObjetivos } from "@/lib/scope/objetivos";
 import { historiasDeEtapas } from "@/lib/scope/funnel";
 
@@ -268,3 +268,137 @@ describe("historiasDeEtapas · insumo del embudo", () => {
     expect(historias.some((h) => h.posicionMaxima >= 1)).toBe(true);
   });
 });
+
+describe("guardarCuotasDelEquipo · la cuadrícula por vendedor y trimestre (decisiones §34)", () => {
+  const idDe = async (correo: string) =>
+    (await prisma.user.findUniqueOrThrow({ where: { email: correo }, select: { id: true } })).id;
+
+  // Las pruebas de arriba dejan cuotas de 2099 a Paulina; la cuadrícula parte de cero.
+  beforeAll(async () => {
+    await prisma.objective.deleteMany({ where: { userId: await idDe("pe@avattar.com"), fiscalYear: ANIO_DE_PRUEBA } });
+  });
+
+  it("fija los cuatro trimestres de una métrica sin tocar la otra, y deja bitácora por cuota", async () => {
+    const admin = await sesionDe("as@avattar.com");
+    const pe = await idDe("pe@avattar.com");
+    const previo = await fijarObjetivo(admin, {
+      userId: pe, countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, periodType: "TRIMESTRAL", quarter: 1,
+      revenueQuota: "100000", grossProfitQuota: "40000",
+    });
+    expect(previo.ok).toBe(true);
+
+    const r = await guardarCuotasDelEquipo(admin, {
+      countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "VENTA",
+      filas: [{ userId: pe, cuotas: ["150000", "200000", "250000", "300000"] }], eliminar: [],
+    });
+    expect(r).toMatchObject({ ok: true, datos: { cambios: 4 } });
+
+    const filas = await prisma.objective.findMany({
+      where: { userId: pe, fiscalYear: ANIO_DE_PRUEBA, periodType: "TRIMESTRAL" },
+      orderBy: { quarter: "asc" },
+      select: { id: true, quarter: true, revenueQuota: true, grossProfitQuota: true },
+    });
+    expect(filas.map((f) => f.revenueQuota.toString())).toEqual(["150000", "200000", "250000", "300000"]);
+    // La utilidad del Q1 se respeta; los trimestres nuevos nacen con la otra métrica en cero.
+    expect(filas[0]!.grossProfitQuota.toString()).toBe("40000");
+    expect(filas[1]!.grossProfitQuota.toString()).toBe("0");
+    const rastro = await prisma.auditLog.count({
+      where: { entity: "Objective", entityId: { in: filas.map((f) => f.id) }, action: "FIJAR_OBJETIVO" },
+    });
+    expect(rastro).toBeGreaterThanOrEqual(4);
+  });
+
+  it("sin cambios de valor no escribe; una cifra negativa se rechaza", async () => {
+    const admin = await sesionDe("as@avattar.com");
+    const pe = await idDe("pe@avattar.com");
+    const igual = await guardarCuotasDelEquipo(admin, {
+      countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "VENTA",
+      filas: [{ userId: pe, cuotas: ["150000", "200000", "250000", "300000"] }], eliminar: [],
+    });
+    expect(igual).toMatchObject({ ok: true, datos: { cambios: 0 } });
+
+    const negativa = await guardarCuotasDelEquipo(admin, {
+      countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "VENTA",
+      filas: [{ userId: pe, cuotas: ["-1", "0", "0", "0"] }], eliminar: [],
+    });
+    expect(negativa).toMatchObject({ ok: false, motivo: "VALIDACION" });
+  });
+
+  it("la utilidad no supera a la venta del mismo trimestre cuando hay venta", async () => {
+    const admin = await sesionDe("as@avattar.com");
+    const pe = await idDe("pe@avattar.com");
+    const excede = await guardarCuotasDelEquipo(admin, {
+      countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "UTILIDAD",
+      filas: [{ userId: pe, cuotas: ["200000", "0", "0", "0"] }], eliminar: [],
+    });
+    expect(excede).toMatchObject({ ok: false, motivo: "VALIDACION" });
+
+    const cabe = await guardarCuotasDelEquipo(admin, {
+      countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "UTILIDAD",
+      filas: [{ userId: pe, cuotas: ["60000", "80000", "0", "0"] }], eliminar: [],
+    });
+    expect(cabe.ok).toBe(true);
+  });
+
+  it("al guardar los trimestres de alguien, su cuota anual previa se retira y queda en bitácora", async () => {
+    const admin = await sesionDe("as@avattar.com");
+    const pe = await idDe("pe@avattar.com");
+    const anual = await fijarObjetivo(admin, {
+      userId: pe, countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, periodType: "ANUAL", quarter: null,
+      revenueQuota: "999999", grossProfitQuota: "0",
+    });
+    expect(anual.ok).toBe(true);
+    const idAnual = anual.ok ? anual.datos.id : "";
+
+    const r = await guardarCuotasDelEquipo(admin, {
+      countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "VENTA",
+      filas: [{ userId: pe, cuotas: ["150000", "200000", "250000", "310000"] }], eliminar: [],
+    });
+    expect(r.ok).toBe(true);
+    expect(await prisma.objective.count({ where: { userId: pe, fiscalYear: ANIO_DE_PRUEBA, periodType: "ANUAL" } })).toBe(0);
+    const rastro = await prisma.auditLog.findFirst({
+      where: { entity: "Objective", entityId: idAnual, action: "FIJAR_OBJETIVO" },
+      orderBy: { at: "desc" },
+      select: { after: true },
+    });
+    expect(rastro?.after).toMatchObject({ eliminado: true });
+  });
+
+  it("quitar a alguien borra sus cuotas del año y lo anota", async () => {
+    const admin = await sesionDe("as@avattar.com");
+    const pe = await idDe("pe@avattar.com");
+    const antes = await prisma.objective.findMany({ where: { userId: pe, fiscalYear: ANIO_DE_PRUEBA }, select: { id: true } });
+    expect(antes.length).toBeGreaterThan(0);
+
+    const r = await guardarCuotasDelEquipo(admin, {
+      countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "VENTA", filas: [], eliminar: [pe],
+    });
+    expect(r.ok).toBe(true);
+    expect(await prisma.objective.count({ where: { userId: pe, fiscalYear: ANIO_DE_PRUEBA } })).toBe(0);
+    const rastro = await prisma.auditLog.findFirst({
+      where: { entity: "Objective", entityId: antes[0]!.id, action: "FIJAR_OBJETIVO" },
+      orderBy: { at: "desc" },
+      select: { after: true },
+    });
+    expect(rastro?.after).toMatchObject({ eliminado: true });
+  });
+
+  it("un gerente no puede; alguien que no existe o no opera en el país se rechaza", async () => {
+    const jorge = await sesionDe("jm@avattar.com");
+    const admin = await sesionDe("as@avattar.com");
+    const pe = await idDe("pe@avattar.com");
+    expect(
+      await guardarCuotasDelEquipo(jorge, {
+        countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "VENTA",
+        filas: [{ userId: pe, cuotas: ["1", "1", "1", "1"] }], eliminar: [],
+      }),
+    ).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+    expect(
+      await guardarCuotasDelEquipo(admin, {
+        countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "VENTA",
+        filas: [{ userId: "no-existe", cuotas: ["1", "1", "1", "1"] }], eliminar: [],
+      }),
+    ).toMatchObject({ ok: false, motivo: "VALIDACION" });
+  });
+});
+

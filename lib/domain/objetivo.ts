@@ -3,7 +3,9 @@ import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { money } from "@/lib/money";
+import { money, type Money } from "@/lib/money";
+
+const CERO = money(0);
 
 /**
  * Fijar la cuota de una persona · §10.1, P-08.
@@ -177,3 +179,185 @@ export async function fijarObjetivo(
 
   return ok({ id });
 }
+
+// ═══════════════════════════════════ La cuadrícula por vendedor y trimestre
+
+export type CuotasDelEquipo = {
+  countryCode: CountryCode;
+  fiscalYear: number;
+  /** Qué columna de la cuota se está capturando; la otra se respeta tal cual. */
+  metrica: "VENTA" | "UTILIDAD";
+  /** Cadenas, no números (INV-03). Cuatro por persona: Q1 a Q4. */
+  filas: { userId: string; cuotas: string[] }[];
+  /** A quién se le quitan todas las cuotas del año, ventas y utilidad. */
+  eliminar: string[];
+};
+
+/**
+ * Guardar la cuadrícula de objetivos · decisiones §34.
+ *
+ * El negocio pidió capturar como en su hoja: una fila por vendedor, Q1 a Q4 y
+ * el total anual. Se guarda **todo lo que cambió en un viaje**, pero la bitácora
+ * sigue siendo **una entrada por cuota** (INV-09): cada trimestre que cambia
+ * deja su antes y su después. Lo que no cambió de valor no se escribe.
+ *
+ * La métrica se captura de una en una (venta o utilidad); la otra columna del
+ * mismo trimestre se conserva. El dedazo que se sigue atajando: una utilidad
+ * mayor que la venta del trimestre, **solo cuando hay venta**, porque la
+ * utilidad puede capturarse antes que la venta y cero no es una venta.
+ *
+ * Quitar a alguien borra sus objetivos del año, trimestrales y anual, de las
+ * dos métricas: es sacarlo de la hoja. Cada objetivo borrado deja rastro. Y la
+ * fila ANUAL de quien recibe trimestres nuevos también se retira: el anual es
+ * la suma de los cuatro, no una cifra aparte.
+ */
+export async function guardarCuotasDelEquipo(
+  session: Session,
+  entrada: CuotasDelEquipo,
+): Promise<ResultadoAccion<{ cambios: number }>> {
+  if (!can(session, "EDITAR_CATALOGOS")) {
+    return falla("AUTORIZACION", { mensaje: SIN_PERMISO });
+  }
+
+  const eliminar = new Set(entrada.eliminar);
+  const filas = entrada.filas.filter((f) => !eliminar.has(f.userId));
+  const ids = [...new Set([...filas.map((f) => f.userId), ...eliminar])];
+  if (ids.length === 0) return ok({ cambios: 0 });
+
+  for (const f of filas) {
+    if (f.cuotas.length !== 4) {
+      return falla("VALIDACION", { campo: "cuotas", mensaje: "Cada persona lleva cuatro trimestres." });
+    }
+  }
+  const cuotas = filas.map((f) => ({ userId: f.userId, cuotas: f.cuotas.map((c) => money(c.trim() || "0")) }));
+  if (cuotas.some((f) => f.cuotas.some((c) => c.isNegative()))) {
+    return falla("VALIDACION", {
+      campo: "cuotas",
+      mensaje: "Una cuota no puede ser negativa. Para quitar la meta, ponla en cero.",
+    });
+  }
+
+  // AC-05 por la puerta de atrás, igual que al fijar una sola.
+  const usuarios = await prisma.user.findMany({
+    where: { id: { in: ids }, active: true, deletedAt: null, countryCodes: { has: entrada.countryCode } },
+    select: { id: true },
+  });
+  const validos = new Set(usuarios.map((u) => u.id));
+  if (ids.some((id) => !validos.has(id))) {
+    return falla("VALIDACION", {
+      campo: "userId",
+      mensaje: `Alguien de la lista no está activo o no opera en ${entrada.countryCode}.`,
+    });
+  }
+
+  const existentes = await prisma.objective.findMany({
+    where: { userId: { in: ids }, fiscalYear: entrada.fiscalYear },
+    select: { id: true, userId: true, periodType: true, quarter: true, revenueQuota: true, grossProfitQuota: true },
+  });
+  const trimestral = (userId: string, q: number) =>
+    existentes.find((o) => o.userId === userId && o.periodType === "TRIMESTRAL" && o.quarter === q);
+
+  // Qué queda en cada trimestre, ya con la otra métrica respetada, y la
+  // validación del dedazo antes de abrir la transacción.
+  const pendientes: { userId: string; q: number; venta: Money; utilidad: Money; antes: (typeof existentes)[number] | undefined }[] = [];
+  for (const f of cuotas) {
+    for (let q = 1; q <= 4; q++) {
+      const antes = trimestral(f.userId, q);
+      const nueva = f.cuotas[q - 1]!;
+      const venta = entrada.metrica === "VENTA" ? nueva : (antes?.revenueQuota ?? CERO);
+      const utilidad = entrada.metrica === "UTILIDAD" ? nueva : (antes?.grossProfitQuota ?? CERO);
+      if (!venta.isZero() && utilidad.gt(venta)) {
+        return falla("VALIDACION", {
+          campo: `q${q}`,
+          mensaje: `Q${q}: la utilidad no puede ser mayor que la venta; sería un margen arriba del 100 %.`,
+        });
+      }
+      const sinCambio = antes ? antes.revenueQuota.equals(venta) && antes.grossProfitQuota.equals(utilidad) : venta.isZero() && utilidad.isZero();
+      if (!sinCambio) pendientes.push({ userId: f.userId, q, venta, utilidad, antes });
+    }
+  }
+  // Se van: los objetivos de quien se elimina, y la fila ANUAL de quien recibe
+  // trimestres, porque desde §34 el anual es la suma y una anual aparte que no
+  // coincide solo confunde (RN-32 sigue valiendo para las que nadie vuelve a tocar).
+  const conTrimestresNuevos = new Set(pendientes.map((p) => p.userId));
+  const aBorrar = existentes
+    .filter((o) => eliminar.has(o.userId) || (o.periodType === "ANUAL" && conTrimestresNuevos.has(o.userId)))
+    .map((o) => ({
+      ...o,
+      motivo: eliminar.has(o.userId)
+        ? "Se quitó a la persona de la hoja del año."
+        : "La cuota anual se deriva de los trimestres (decisiones §34).",
+    }));
+  if (pendientes.length === 0 && aBorrar.length === 0) return ok({ cambios: 0 });
+
+  const cambios = await auditedTransaction(async (tx, audit) => {
+    // Cada cuota es independiente de las demás: van en paralelo dentro de la
+    // misma transacción, y cada una deja su propio renglón de bitácora.
+    await Promise.all(
+      pendientes.map(async (p) => {
+        const guardado = p.antes
+          ? await tx.objective.update({
+              where: { id: p.antes.id },
+              data: { countryCode: entrada.countryCode, revenueQuota: p.venta, grossProfitQuota: p.utilidad },
+              select: { id: true },
+            })
+          : await tx.objective.create({
+              data: {
+                userId: p.userId,
+                countryCode: entrada.countryCode,
+                fiscalYear: entrada.fiscalYear,
+                periodType: "TRIMESTRAL",
+                quarter: p.q,
+                revenueQuota: p.venta,
+                grossProfitQuota: p.utilidad,
+              },
+              select: { id: true },
+            });
+        await audit({
+          entity: "Objective",
+          entityId: guardado.id,
+          action: "FIJAR_OBJETIVO",
+          byUserId: session.userId,
+          before: p.antes
+            ? { revenueQuota: p.antes.revenueQuota.toString(), grossProfitQuota: p.antes.grossProfitQuota.toString() }
+            : {},
+          after: {
+            userId: p.userId,
+            countryCode: entrada.countryCode,
+            fiscalYear: entrada.fiscalYear,
+            periodType: "TRIMESTRAL",
+            quarter: p.q,
+            revenueQuota: p.venta.toString(),
+            grossProfitQuota: p.utilidad.toString(),
+          },
+        });
+      }),
+    );
+
+    if (aBorrar.length > 0) {
+      await tx.objective.deleteMany({ where: { id: { in: aBorrar.map((o) => o.id) } } });
+      await Promise.all(
+        aBorrar.map((o) =>
+          audit({
+            entity: "Objective",
+            entityId: o.id,
+            action: "FIJAR_OBJETIVO",
+            byUserId: session.userId,
+            before: {
+              userId: o.userId,
+              periodType: o.periodType,
+              quarter: o.quarter,
+              revenueQuota: o.revenueQuota.toString(),
+              grossProfitQuota: o.grossProfitQuota.toString(),
+            },
+            after: { eliminado: true, fiscalYear: entrada.fiscalYear, motivo: o.motivo },
+          }),
+        ),
+      );
+    }
+    return pendientes.length + aBorrar.length;
+  });
+
+  return ok({ cambios });
+}
+

@@ -3,9 +3,7 @@ import { money } from "@/lib/money";
 import {
   calcularLinea,
   calcularTotales,
-  lineasBajoElPiso,
   precioNeto,
-  validarPisoDePrecio,
 } from "./quote";
 
 /**
@@ -114,58 +112,3 @@ describe("calcularTotales · las cifras del prototipo", () => {
   });
 });
 
-describe("validarPisoDePrecio · RN-08 y AC-07", () => {
-  it("un descuento que baja del piso no pasa, y el error nombra el piso", () => {
-    // «Un descuento que deje el precio bajo `minPrice` no se guarda y el error
-    // dice el piso aplicable.»
-    const problema = validarPisoDePrecio({
-      descripcion: "Consultoría de arquitectura cloud",
-      unitPrice: money("18000"),
-      discountRate: money("0.50"),
-      minPrice: money("10555.56"),
-    });
-    expect(problema).not.toBeNull();
-    // El neto queda en 9 000: hay que decir contra qué se comparó.
-    expect(problema).toContain("10,555.56");
-    expect(problema).toContain("9,000.00");
-  });
-
-  it("justo en el piso sí pasa: el piso es el límite, no el borde prohibido", () => {
-    expect(
-      validarPisoDePrecio({
-        descripcion: "X",
-        unitPrice: money("10000"),
-        discountRate: money("0"),
-        minPrice: money("10000"),
-      }),
-    ).toBeNull();
-  });
-
-  it("sin piso capturado no hay nada que hacer cumplir", () => {
-    // Un concepto libre (Q-07) no viene de la lista de precio.
-    expect(
-      validarPisoDePrecio({
-        descripcion: "Concepto libre",
-        unitPrice: money("500"),
-        discountRate: money("0.90"),
-        minPrice: null,
-      }),
-    ).toBeNull();
-  });
-});
-
-describe("lineasBajoElPiso · RN-05", () => {
-  it("señala la línea bajo el piso aunque el total cumpla", () => {
-    // «Una línea bajo `lineMarginFloor` se señala aunque el total cumpla.» Es
-    // el caso del prototipo: el margen global es 22.9 %, sobre el piso de 20 %,
-    // y aun así la licencia con 6 % tiene que verse.
-    const bajas = lineasBajoElPiso(LINEAS, money("0.10"));
-    expect(bajas).toHaveLength(1);
-    expect(bajas[0]!.descripcion).toBe("Licencia Microsoft 365 E3 (12 m)");
-    expect(bajas[0]!.margen.times(100).toFixed(1)).toBe("6.0");
-  });
-
-  it("con el piso en cero no señala ninguna", () => {
-    expect(lineasBajoElPiso(LINEAS, money("0"))).toHaveLength(0);
-  });
-});

@@ -28,9 +28,8 @@ describe("seed §15 · totales del prototipo", () => {
   });
 
   it("las banderas calculadas dan 7 sobre 6 oportunidades, no las 5 declaradas", async () => {
-    // INV-11 obliga a calcularlas. Con marginFloor = 0.20 hay TRES bajo el
-    // piso —00388 (9 %), 00341 (11 %) y 00304 (19 %)— y el prototipo marcaba
-    // solo la primera.
+    // INV-11 obliga a calcularlas. Desde §27 y §33 son dos banderas —sin
+    // actividad y estancada— y el margen ya no cuenta como riesgo.
     const r = await resumenDeRiesgo("MX", AHORA);
     expect(r.banderas).toBe(7);
     expect(r.oportunidades).toBe(6);

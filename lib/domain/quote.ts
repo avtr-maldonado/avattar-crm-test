@@ -1,10 +1,10 @@
-import { formatUSD, money, type Money } from "@/lib/money";
+import { money, type Money } from "@/lib/money";
 
 /**
- * Las fórmulas de cotización · `RN-07`, `RN-08` y `RN-05`.
+ * Las fórmulas de cotización · `RN-07`.
  *
- * **Todo aquí es puro**: sin base, sin sesión, sin umbrales propios. Los pisos
- * entran por parámetro porque la prueba de `AC-31` verifica que ningún archivo
+ * **Todo aquí es puro**: sin base, sin sesión, sin umbrales propios. Lo que
+ * haga falta entra por parámetro porque la prueba de `AC-31` verifica que ningún archivo
  * de `lib/domain` importe `lib/policy` — y porque una función que lee su propio
  * umbral no se puede probar contra el escenario que Dirección aprobó.
  *
@@ -113,60 +113,3 @@ export function calcularTotales(
   };
 }
 
-/**
- * `RN-08` · el piso duro de la lista de precio.
- *
- * «Un descuento que deje el precio bajo `minPrice` no se guarda y el error dice
- * el piso aplicable.» Decir solo «descuento no permitido» obliga a adivinar
- * cuánto sí: el mensaje nombra las dos cifras.
- *
- * Devuelve `null` si la línea cumple. Un concepto libre (`Q-07`) no viene de la
- * lista y no tiene piso que hacer cumplir.
- */
-export function validarPisoDePrecio(linea: {
-  descripcion: string;
-  unitPrice: Money;
-  discountRate: Money;
-  minPrice: Money | null;
-}): string | null {
-  if (!linea.minPrice) return null;
-
-  const neto = precioNeto(linea.unitPrice, linea.discountRate);
-  // Justo en el piso pasa: es el límite, no el borde prohibido.
-  if (neto.gte(linea.minPrice)) return null;
-
-  return (
-    `«${linea.descripcion}» queda en ${formatUSD(neto)} y su piso es ` +
-    `${formatUSD(linea.minPrice)}. Baja el descuento o pide autorización.`
-  );
-}
-
-export type LineaBajoElPiso = { descripcion: string; margen: Money };
-
-/**
- * `RN-05` · las líneas cuyo margen queda bajo `lineMarginFloor`.
- *
- * «Una línea bajo el piso se señala **aunque el total cumpla**.» Es el caso del
- * escenario aprobado: el margen global da 22.9 %, sobre el piso de 20 %, y aun
- * así la licencia con 6 % tiene que verse. Un promedio sano puede esconder una
- * línea que se está vendiendo a pérdida.
- *
- * **Señala, no bloquea.** La otra mitad de RN-05 —«exige autorización»— vive en
- * `lib/domain/approval.ts`, que queda fuera de este alcance por decisión del
- * negocio del 9-sep-2026.
- */
-export function lineasBajoElPiso(
-  lineas: readonly (LineaParaCalcular & { descripcion: string })[],
-  lineMarginFloor: Money,
-): LineaBajoElPiso[] {
-  if (lineMarginFloor.lte(0)) return [];
-
-  const bajas: LineaBajoElPiso[] = [];
-  for (const linea of lineas) {
-    const { margen, importe } = calcularLinea(linea);
-    // Un renglón en cero no está bajo el piso: está sin capturar.
-    if (importe.isZero()) continue;
-    if (margen.lt(lineMarginFloor)) bajas.push({ descripcion: linea.descripcion, margen });
-  }
-  return bajas;
-}

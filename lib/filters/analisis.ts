@@ -1,4 +1,4 @@
-import type { BusinessType, CountryCode, ForecastCategory } from "@prisma/client";
+import type { CountryCode, ForecastCategory } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 
 /**
@@ -19,15 +19,16 @@ export type DimensionDeVenta = "trimestre" | "cliente" | "producto" | "tipo";
 export type AgrupacionHistorica = "anio" | "trimestre";
 export type DimensionDeRentabilidad = "producto" | "tipo" | "cliente";
 export type SegundaAgrupacionDeEmbudo = "cliente" | "vendedor";
+export type VistaDeCiclo = "vendedor" | "trimestre";
 
 export type FiltrosDeAnalisis = {
   pestana: PestanaDeAnalisis;
-  pais: CountryCode | null;
-  vendedor: string | null;
-  /** Año fiscal. */
+  /** Vacío = todos los del alcance. Solo los que la sesión opera (AC-25). */
+  pais: CountryCode[];
+  /** Vacío = todos. Uno o varios ids. */
+  vendedor: string[];
+  /** Año fiscal. Producto y tipo de negocio dejaron de ser filtros (decisiones §36). */
   anio: number;
-  producto: string | null;
-  tipo: BusinessType | null;
   /** Reporte 1 · avance contra objetivo. */
   g1: DimensionDeVenta;
   /** Reporte 2 · histórico de venta. */
@@ -36,6 +37,8 @@ export type FiltrosDeAnalisis = {
   g3: DimensionDeRentabilidad;
   /** Reporte 4 · embudo: la segunda agrupación, dentro del trimestre. */
   g4: SegundaAgrupacionDeEmbudo;
+  /** Reporte 5 · el ciclo de venta por vendedor (barras) o por trimestre (línea). */
+  g5: VistaDeCiclo;
   /** Reporte 4 · probabilidad mínima de etapa, en por ciento. */
   prob: number | null;
   /** Reporte 4 · categorías de pronóstico; vacío = todas. */
@@ -44,15 +47,32 @@ export type FiltrosDeAnalisis = {
 
 const PESTANAS = ["ventas", "forecast", "actividad"] as const;
 const PAISES = ["MX", "CO", "CL"] as const;
-const TIPOS = ["NUEVO", "EXPANSION", "RENOVACION"] as const;
 const CATEGORIAS = ["PIPELINE", "MEJOR_CASO", "COMPROMISO", "OMITIDA"] as const;
 const DIMENSIONES_DE_VENTA = ["trimestre", "cliente", "producto", "tipo"] as const;
 const AGRUPACIONES_HISTORICAS = ["anio", "trimestre"] as const;
 const DIMENSIONES_DE_RENTABILIDAD = ["producto", "tipo", "cliente"] as const;
 const SEGUNDAS_DE_EMBUDO = ["cliente", "vendedor"] as const;
+const VISTAS_DE_CICLO = ["vendedor", "trimestre"] as const;
 
 function unEnum<T extends string>(valor: string | null, permitidos: readonly T[]): T | null {
   return valor !== null && (permitidos as readonly string[]).includes(valor) ? (valor as T) : null;
+}
+
+/** Varios valores del mismo parámetro, sin repetidos ni blancos. */
+function varios(sp: URLSearchParams, clave: string): string[] {
+  const vistos = new Set<string>();
+  for (const v of sp.getAll(clave)) {
+    const limpio = v.trim();
+    if (limpio !== "") vistos.add(limpio);
+  }
+  return [...vistos];
+}
+
+function variosDeEnum<T extends string>(sp: URLSearchParams, clave: string, permitidos: readonly T[]): T[] {
+  return varios(sp, clave).flatMap((v) => {
+    const uno = unEnum(v, permitidos);
+    return uno === null ? [] : [uno];
+  });
 }
 
 function unEntero(valor: string | null, min: number, max: number): number | null {
@@ -66,19 +86,18 @@ export function parseFiltrosDeAnalisis(
   session: Session,
   opciones: { anioActual: number },
 ): FiltrosDeAnalisis {
-  const pais = unEnum(sp.get("pais"), PAISES);
+  const operados = new Set<string>(session.countryCodes);
   return {
     pestana: unEnum(sp.get("p"), PESTANAS) ?? "ventas",
-    // Solo un país donde la sesión opera: lo demás sería ampliar el alcance.
-    pais: pais !== null && session.countryCodes.includes(pais) ? pais : null,
-    vendedor: sp.get("vendedor")?.trim() || null,
+    // Solo países donde la sesión opera: lo demás sería ampliar el alcance.
+    pais: variosDeEnum(sp, "pais", PAISES).filter((c) => operados.has(c)),
+    vendedor: varios(sp, "vendedor"),
     anio: unEntero(sp.get("anio"), 2000, 2100) ?? opciones.anioActual,
-    producto: sp.get("producto")?.trim() || null,
-    tipo: unEnum(sp.get("tipo"), TIPOS),
     g1: unEnum(sp.get("g1"), DIMENSIONES_DE_VENTA) ?? "trimestre",
     g2: unEnum(sp.get("g2"), AGRUPACIONES_HISTORICAS) ?? "trimestre",
     g3: unEnum(sp.get("g3"), DIMENSIONES_DE_RENTABILIDAD) ?? "producto",
     g4: unEnum(sp.get("g4"), SEGUNDAS_DE_EMBUDO) ?? "cliente",
+    g5: unEnum(sp.get("g5"), VISTAS_DE_CICLO) ?? "vendedor",
     prob: unEntero(sp.get("prob"), 0, 100),
     pron: sp
       .getAll("pron")

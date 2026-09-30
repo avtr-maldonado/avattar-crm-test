@@ -56,8 +56,6 @@ export async function configuracionDePolitica() {
       fiscalYearStartMonth: true,
       commercialPolicy: {
         select: {
-          marginFloor: true,
-          lineMarginFloor: true,
           discountThresholdMgmt: true,
           discountThresholdDir: true,
           approvalSlaHours: true,

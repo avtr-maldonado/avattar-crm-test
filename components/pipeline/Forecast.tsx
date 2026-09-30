@@ -175,15 +175,12 @@ export function Forecast({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-texto-tenue">
-        <Leyenda color="bg-navy-700">{ETIQUETA_CATEGORIA.COMPROMISO}</Leyenda>
-        <Leyenda color="bg-acento">{ETIQUETA_CATEGORIA.MEJOR_CASO}</Leyenda>
-        <Leyenda color="bg-blue-200">{ETIQUETA_CATEGORIA.PIPELINE}</Leyenda>
-        <span>
-          La barra es la mezcla de cada columna por categoría (el juicio del vendedor); el
-          ponderado es la probabilidad de la etapa. «Omitida» cuenta en el total y no en la barra.
-        </span>
-      </div>
+      <p className="text-xs text-texto-tenue">
+        La barra de cada columna es la mezcla por categoría de pronóstico (el juicio del
+        vendedor): {ETIQUETA_CATEGORIA.COMPROMISO} en azul marino, {ETIQUETA_CATEGORIA.MEJOR_CASO}{" "}
+        en azul y {ETIQUETA_CATEGORIA.PIPELINE} en azul claro; el desglose sale al pasar el cursor.
+        El ponderado es la probabilidad de la etapa. «Omitida» cuenta en el total y no en la barra.
+      </p>
     </div>
   );
 }
@@ -230,11 +227,3 @@ function Paso({
   );
 }
 
-function Leyenda({ color, children }: { color: string; children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span aria-hidden className={clsx("inline-block size-2 rounded-xs", color)} />
-      {children}
-    </span>
-  );
-}

@@ -5,7 +5,7 @@ import { catalogosParaAlta } from "@/lib/scope/configuracion";
 import { historiasDeEtapas } from "@/lib/scope/funnel";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
 import { can } from "@/lib/auth/permissions";
-import { getCommercialPolicy, getCountry } from "@/lib/policy";
+import { getCountry } from "@/lib/policy";
 import { formatPercent, formatUSD, sum, toClient, type Money } from "@/lib/money";
 import { openTotal, ordenarPorEstatus, weightedAmount, weightedTotal, wonInPeriod } from "@/lib/domain/pipeline";
 import { explainRiskFlags } from "@/lib/domain/riskFlags";
@@ -153,7 +153,6 @@ export default async function PipelinePage({
 
   const [
     pipelines,
-    politica,
     pais,
     catalogos,
     propietarios,
@@ -162,7 +161,6 @@ export default async function PipelinePage({
     historias,
   ] = await Promise.all([
     listPipelines(session),
-    getCommercialPolicy(paisActivo),
     paisPromesa,
     catalogosParaAlta(),
     // Solo si de verdad puede asignar: consultar usuarios para deshabilitar un
@@ -272,16 +270,37 @@ export default async function PipelinePage({
   const ganadas = wonInPeriod(visibles, { from: anioFiscal.from ?? null, to: anioFiscal.to });
   const { fiscalYear } = trimestreDe(ahora, pais.fiscalYearStartMonth);
 
-  const tarjetas = mostradas.map((o) => aTarjeta(o, politica));
+  const tarjetas = mostradas.map((o) => aTarjeta(o));
   const columnas = columnasDelTablero(pipeline?.stages ?? [], mostradas, tarjetas);
   // La tabla muestra la etapa como columna; la tarjeta no la lleva porque en el
   // kanban ya la dice la columna donde está.
   const etapaDe = Object.fromEntries(mostradas.map((o) => [o.id, o.stage.name]));
 
   // El embudo mide sobre lo abierto: una etapa no «tiene» las que ya cerraron.
-  const etapasDelEmbudo = buildFunnel(pipeline?.stages ?? [], abiertas, historias).map((e) => ({
+  // Cada barra guarda de qué oportunidades sale, para el detalle al pulsarla.
+  const abiertasPorEtapa = new Map<string, typeof abiertas>();
+  for (const o of abiertas) {
+    const lista = abiertasPorEtapa.get(o.stage.id);
+    if (lista) lista.push(o);
+    else abiertasPorEtapa.set(o.stage.id, [o]);
+  }
+  const etapasDelEmbudo = buildFunnel(pipeline?.stages ?? [], abiertas, historias).map((e) => {
+    const enEtapa = abiertasPorEtapa.get(e.stageId) ?? [];
+    const probabilidad = enEtapa[0]?.stage.probability ?? null;
+    return {
     nombre: e.nombre,
     valor: formatUSD(e.valor),
+    ponderado: formatUSD(sum(enEtapa.map((o) => o.amount.times(o.stage.probability)))),
+    probabilidad: probabilidad === null ? "—" : formatPercent(probabilidad, 0),
+    oportunidades: enEtapa.map((o) => ({
+      id: o.id,
+      folio: o.folio,
+      nombre: o.name,
+      cuenta: o.organization.name,
+      propietario: o.owner.name,
+      importe: formatUSD(o.amount),
+      ponderado: formatUSD(o.amount.times(o.stage.probability)),
+    })),
     cuantas: e.cuantas,
     fraccionDeBarra: e.fraccionDeBarra,
     tasaDePaso: e.tasaDePaso,
@@ -289,7 +308,8 @@ export default async function PipelinePage({
     pasaron: e.tasaDePaso === null ? 0 : Math.round(e.tasaDePaso * e.base),
     vieneDe: e.vieneDe,
     esCierre: e.esCierre,
-  }));
+    };
+  });
 
   /**
    * La cola de riesgo, ordenada por valor · por valor y no por antigüedad:
@@ -313,6 +333,14 @@ export default async function PipelinePage({
       tono: tonoDeRiesgo(peor.flag),
     };
   });
+
+  // Lo que no es filtro y debe sobrevivir a aplicar o limpiar uno: la vista y
+  // la agrupación del forecast. Antes cada filtro devolvía al kanban.
+  const conservar = Object.fromEntries(
+    ["vista", "agrupar", "desde"]
+      .map((clave) => [clave, urlParams.get(clave)] as const)
+      .filter((par): par is readonly [string, string] => par[1] !== null),
+  );
 
   const hrefVista = (v: string) => {
     const p = new URLSearchParams(urlParams);
@@ -377,6 +405,7 @@ export default async function PipelinePage({
           filtros={
               <BarraDeFiltros
                 ruta="/oportunidades"
+                conservar={conservar}
                 visibles={filtros.visibles}
                 activos={{
                   org: filtros.org,
@@ -452,7 +481,7 @@ type Oportunidad = Awaited<ReturnType<typeof listOpportunities>>[number] & {
 };
 
 /** El renglón de la tabla y la tarjeta del kanban son el mismo objeto. */
-function aTarjeta(o: Oportunidad, politica: { marginFloor: Money }): DatosTarjeta {
+function aTarjeta(o: Oportunidad): DatosTarjeta {
   return {
     id: o.id,
     folio: o.folio,
@@ -460,7 +489,8 @@ function aTarjeta(o: Oportunidad, politica: { marginFloor: Money }): DatosTarjet
     organizacion: o.organization.name,
     importe: formatUSD(o.amount),
     margen: o.grossMargin ? formatPercent(toClient(o.grossMargin)) : null,
-    margenBajoElPiso: o.grossMargin ? o.grossMargin.lt(politica.marginFloor) : false,
+    // §33 · sin piso: solo la pérdida se pinta en coral.
+    margenNegativo: o.grossMargin ? o.grossMargin.isNegative() : false,
     meddicScore: o.meddicScore,
     cierre: FORMATO_FECHA.format(o.expectedCloseDate),
     propietario: { nombre: o.owner.name, iniciales: o.owner.initials },

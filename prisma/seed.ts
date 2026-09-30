@@ -234,28 +234,13 @@ async function main() {
       },
     });
 
-    // RN-08 · el piso duro se deriva del piso de margen por línea: el precio
-    // más bajo que todavía deja ese margen. No es un número inventado.
-    //
-    // Pero se topa contra el precio de lista, porque un piso POR ENCIMA del
-    // techo no significa nada. Pasa de verdad con LIC-M365-E3: reventa de
-    // licencias Microsoft a 8 400 sobre un costo de 7 900 son 6 % de margen,
-    // por debajo del piso de 10 % antes de cualquier descuento. En ese caso el
-    // mínimo ES el precio de lista: no hay margen para descontar.
-    //
-    // Que exista ese caso es un hallazgo de negocio, no un ajuste técnico: ver
-    // docs/decisiones-pendientes.md §9.
-    const pisoPorMargen =
-      Number(p.standardCost) / (1 - Number(POLITICA_BASE.lineMarginFloor));
-    const minPrice = Math.min(pisoPorMargen, Number(p.listPrice)).toFixed(4);
     const validFrom = new Date("2026-01-01T00:00:00Z");
     await prisma.priceListEntry.upsert({
       where: { productId_validFrom: { productId: producto.id, validFrom } },
-      update: { listPrice: p.listPrice, minPrice, standardCost: p.standardCost },
+      update: { listPrice: p.listPrice, standardCost: p.standardCost },
       create: {
         productId: producto.id,
         listPrice: p.listPrice,
-        minPrice,
         standardCost: p.standardCost,
         validFrom,
         validTo: new Date("2026-12-31T00:00:00Z"),
