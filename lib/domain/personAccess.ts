@@ -23,8 +23,10 @@ export function administraPersona(session: Session, persona: PersonaAdministrabl
     case "DIRECCION":
     case "ADMINISTRADOR":
       return true;
-    case "GERENTE_PAIS":
-      return persona.owner.countryCodes.some((c) => session.countryCodes.includes(c));
+    case "GERENTE_PAIS": {
+      const operados = new Set<string>(session.countryCodes);
+      return persona.owner.countryCodes.some((c) => operados.has(c));
+    }
     case "VENDEDOR":
     case "PREVENTA":
       return false;

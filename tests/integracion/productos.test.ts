@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { getCommercialPolicy } from "@/lib/policy";
 import { listProductos, listVigenciasDePrecio } from "@/lib/scope/productos";
 import { money } from "@/lib/money";
-import { PRODUCTOS } from "@/prisma/seed/datos";
-
-/** Los ocho SKU que §15 declara. Lo demás es trabajo real encima del escenario. */
-const SKU_SEMBRADOS: ReadonlySet<string> = new Set<string>(PRODUCTOS.map((p) => p.sku));
 
 /**
  * P-06 contra los datos reales.
@@ -46,8 +41,6 @@ describe("P-06 · INV-02, el costo no sale sin permiso", () => {
     expect(serializado).not.toContain("standardCost");
     expect(serializado).not.toContain("costUpdatedAt");
     expect(serializado).not.toContain("costSource");
-    // Lo que sí ve: el piso duro hasta el que puede descontar (RN-08).
-    expect(serializado).toContain("minPrice");
   });
 
   it("la de un gerente sí las trae", async () => {
@@ -93,93 +86,7 @@ describe("P-06 · el costo se recupera del margen · hallazgo §9.2", () => {
   });
 });
 
-describe("P-06 · coherencia del precio mínimo · RN-08", () => {
-  it("ningún precio mínimo supera al de lista", async () => {
-    // Un piso por encima del techo no significa nada: el producto no se podría
-    // vender ni a precio de lista. Pasaba con LIC-M365-E3 antes de topar la
-    // derivación.
-    const jorge = await sesionDe("jm@avattar.com");
-    const vigencias = await listVigenciasDePrecio(jorge);
 
-    for (const v of vigencias) {
-      expect(
-        Number(v.minPrice) <= Number(v.listPrice),
-        `${v.product.sku}: mínimo ${v.minPrice} sobre lista ${v.listPrice}`,
-      ).toBe(true);
-    }
-  });
-
-  it("ningún precio mínimo queda por debajo del costo", async () => {
-    // Vender bajo costo no es un descuento: es una pérdida.
-    const jorge = await sesionDe("jm@avattar.com");
-    const vigencias = await listVigenciasDePrecio(jorge);
-
-    for (const v of vigencias) {
-      if (!("standardCost" in v)) continue;
-      expect(
-        Number(v.minPrice) >= Number(v.standardCost),
-        `${v.product.sku}: mínimo bajo el costo`,
-      ).toBe(true);
-    }
-  });
-});
-
-describe("P-06 · el hallazgo del piso por línea · §9.1", () => {
-  it("LIC-M365-E3 no alcanza el piso por línea ni a precio de lista", async () => {
-    // No es un error de captura: la reventa de licencias es un negocio de paso
-    // con margen delgado. Pero significa que ese SKU nace violando la política,
-    // y toda cotización que lo incluya va a alertar sin que nadie pueda
-    // resolverlo bajando el precio.
-    const [jorge, politica] = await Promise.all([
-      sesionDe("jm@avattar.com"),
-      getCommercialPolicy("MX"),
-    ]);
-    const productos = await listProductos(jorge);
-    const licencia = productos.find((p) => p.sku === "LIC-M365-E3")!;
-    const precio = licencia.prices[0];
-
-    expect("standardCost" in precio).toBe(true);
-    const lista = money(precio.listPrice.toString());
-    const costo = money((precio as { standardCost: unknown }).standardCost!.toString());
-    const margen = lista.minus(costo).div(lista);
-
-    expect(margen.lt(politica.lineMarginFloor)).toBe(true);
-    // Y por eso su mínimo quedó igual al de lista: no hay margen para descontar.
-    expect(precio.minPrice.toString()).toBe(precio.listPrice.toString());
-  });
-
-  it("es el único SKU DEL ESCENARIO en esa situación", async () => {
-    /**
-     * Acotado a los ocho SKU de §15, no a todo el catálogo.
-     *
-     * La igualdad valía mientras nadie pudiera dar de alta productos. Dejó de
-     * valer el día que P-06 tiene formulario: un SKU nuevo con margen delgado
-     * es una decisión comercial, no una regresión del escenario aprobado.
-     *
-     * El canario sigue vivo para lo que importa: si una de las ocho de §15
-     * cambia de lado, esto falla. Y si aparecen varios productos reales bajo el
-     * piso, la conversación de §9.1 —¿es un caso o es una política?— hay que
-     * tenerla igual, solo que mirando el catálogo, no esta prueba.
-     */
-    const [jorge, politica] = await Promise.all([
-      sesionDe("jm@avattar.com"),
-      getCommercialPolicy("MX"),
-    ]);
-
-    const bajoElPiso = (await listProductos(jorge))
-      .filter((p) => SKU_SEMBRADOS.has(p.sku))
-      .filter((p) => {
-        const precio = p.prices[0];
-        if (!precio || !("standardCost" in precio)) return false;
-        const lista = money(precio.listPrice.toString());
-        const costo = money(precio.standardCost.toString());
-        return lista.minus(costo).div(lista).lt(politica.lineMarginFloor);
-      })
-      .map((p) => p.sku);
-
-    expect(bajoElPiso).toEqual(["LIC-M365-E3"]);
-  });
-});
 
 describe("P-06 · antigüedad del costo · C-01", () => {
   it("tres SKU pasan de 60 días sin actualizar", async () => {

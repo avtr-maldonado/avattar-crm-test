@@ -113,7 +113,6 @@ async function unaOportunidadConBorrador() {
   return { opportunityId: creada.datos.id, quoteId: borrador.datos.id };
 }
 
-const UMBRALES = { lineMarginFloor: "0.10" };
 
 describe("abrirCotizacion · RN-24 y AC-11", () => {
   it("abre la cotización y copia la tasa de impuesto del país", async () => {
@@ -168,7 +167,6 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
       jorge,
       cotizacion!,
       { productId: productoId, quantity: "10", discountRate: "0" },
-      UMBRALES,
     );
     expect(r.ok).toBe(true);
 
@@ -192,7 +190,6 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
       jorge,
       cotizacion!,
       { productId: productoId, quantity: "10", discountRate: "0" },
-      UMBRALES,
     );
 
     const q = await prisma.quote.findUniqueOrThrow({
@@ -211,20 +208,6 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
     expect(q.total.toString()).toBe(q.netSubtotal.plus(q.taxAmount).toString());
   });
 
-  it("AC-07 · un descuento bajo el piso no se guarda y el error nombra el piso", async () => {
-    const { quoteId } = await unaOportunidadConBorrador();
-    const cotizacion = await getCotizacion(jorge, quoteId);
-    const r = await guardarLinea(
-      jorge,
-      cotizacion!,
-      { productId: productoId, quantity: "5", discountRate: "0.95" },
-      UMBRALES,
-    );
-
-    expect(r).toMatchObject({ motivo: "VALIDACION" });
-    if (!r.ok) expect(r.problemas[0]?.mensaje).toMatch(/piso/i);
-    expect(await prisma.quoteLine.count({ where: { quoteId } })).toBe(0);
-  });
 
   it("un concepto libre exige costo, porque no viene de la lista · Q-07", async () => {
     const { quoteId } = await unaOportunidadConBorrador();
@@ -234,7 +217,6 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
       jorge,
       cotizacion!,
       { description: "Bolsa de horas", unit: "hora", quantity: "40", unitPrice: "1200", discountRate: "0" },
-      UMBRALES,
     );
     expect(sinCosto).toMatchObject({ motivo: "VALIDACION" });
 
@@ -249,7 +231,6 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
         unitCost: "700",
         discountRate: "0",
       },
-      UMBRALES,
     );
     expect(conCosto.ok).toBe(true);
   });
@@ -263,7 +244,6 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
       paulina,
       cotizacion!,
       { description: "Libre", unit: "hora", quantity: "1", unitPrice: "100", unitCost: "50", discountRate: "0" },
-      UMBRALES,
     );
     expect(r).toMatchObject({ motivo: "AUTORIZACION" });
   });
@@ -275,7 +255,6 @@ describe("guardarLinea · el costo lo pone el servidor", () => {
       jorge,
       cotizacion!,
       { productId: productoId, quantity: "3", discountRate: "0" },
-      UMBRALES,
     );
 
     cotizacion = await getCotizacion(jorge, quoteId);
@@ -300,7 +279,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       session,
       cotizacion!,
       { productId: productoId, quantity: "4", discountRate: "0" },
-      UMBRALES,
     );
     const linea = await prisma.quoteLine.findFirstOrThrow({ where: { quoteId }, select: { id: true } });
     return { opportunityId, quoteId, lineId: linea.id };
@@ -310,7 +288,7 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
     return prisma.priceListEntry.findFirstOrThrow({
       where: { productId: productoId },
       orderBy: { validFrom: "desc" },
-      select: { listPrice: true, minPrice: true, standardCost: true },
+      select: { listPrice: true, standardCost: true },
     });
   }
 
@@ -336,7 +314,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       jorge,
       cotizacion!,
       [{ lineId, campos: { quantity: "4", discountRate: "0" } }],
-      UMBRALES,
     );
     expect(r).toMatchObject({ ok: true, datos: { cambios: 0 } });
     if (r.ok) expect(r.datos.total).not.toBeNull();
@@ -355,7 +332,7 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
     // la bitácora de ruido y la volvería inútil para lo que existe.
     const { quoteId, lineId } = await conUnaLinea();
     let cotizacion = await getCotizacion(jorge, quoteId);
-    await guardarCambiosDeCotizacion(jorge, cotizacion!, [], UMBRALES); // anota el total
+    await guardarCambiosDeCotizacion(jorge, cotizacion!, []); // anota el total
     const antes = await entradasDeBitacora(quoteId);
 
     cotizacion = await getCotizacion(jorge, quoteId);
@@ -363,7 +340,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       jorge,
       cotizacion!,
       [{ lineId, campos: { quantity: "4", discountRate: "0" } }],
-      UMBRALES,
     );
 
     expect(r).toMatchObject({ ok: true, datos: { cambios: 0, total: null } });
@@ -373,7 +349,7 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
   it("un cambio que no mueve el total —solo el costo— se guarda, pero no se anota (§26)", async () => {
     const { quoteId, lineId } = await conUnaLinea();
     let cotizacion = await getCotizacion(jorge, quoteId);
-    await guardarCambiosDeCotizacion(jorge, cotizacion!, [], UMBRALES); // anota el total
+    await guardarCambiosDeCotizacion(jorge, cotizacion!, []); // anota el total
     const antes = await entradasDeBitacora(quoteId);
 
     cotizacion = await getCotizacion(jorge, quoteId);
@@ -381,7 +357,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       jorge,
       cotizacion!,
       [{ lineId, campos: { unitCost: "1" } }],
-      UMBRALES,
     );
     expect(r).toMatchObject({ ok: true, datos: { cambios: 1, total: null } });
     const linea = await prisma.quoteLine.findUniqueOrThrow({ where: { id: lineId }, select: { unitCost: true } });
@@ -401,7 +376,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       jorge,
       cotizacion!,
       [{ lineId, campos: { quantity: "8" } }],
-      UMBRALES,
     );
     expect(r).toMatchObject({ ok: true, datos: { cambios: 1 } });
 
@@ -427,7 +401,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       jorge,
       cotizacion!,
       { description: "Bolsa de horas", unit: "hora", quantity: "10", unitPrice: "1000", unitCost: "600", discountRate: "0" },
-      UMBRALES,
     );
     const segunda = await prisma.quoteLine.findFirstOrThrow({
       where: { quoteId, description: "Bolsa de horas" },
@@ -435,7 +408,7 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
     });
     // Primero se anota el total vigente; el guardado de abajo se compara con él.
     cotizacion = await getCotizacion(jorge, quoteId);
-    await guardarCambiosDeCotizacion(jorge, cotizacion!, [], UMBRALES);
+    await guardarCambiosDeCotizacion(jorge, cotizacion!, []);
     const antes = await entradasDeBitacora(quoteId);
     const netoAntes = (await prisma.quote.findUniqueOrThrow({ where: { id: quoteId }, select: { netSubtotal: true } })).netSubtotal;
 
@@ -447,7 +420,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
         { lineId, campos: { quantity: "6", discountRate: "0.1000" } },
         { lineId: segunda.id, campos: { quantity: "12", unitPrice: "1000" } },
       ],
-      UMBRALES,
     );
     expect(r).toMatchObject({ ok: true, datos: { cambios: 3 } });
     expect(await entradasDeBitacora(quoteId)).toBe(antes + 1);
@@ -463,16 +435,15 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
     expect(despues.lineas.find((l) => l.campo === "discountRate")).toMatchObject({ de: "0", a: "10" });
   });
 
-  it("el precio unitario se puede cambiar, pero no por debajo del piso del SKU · RN-08", async () => {
+  it("el precio unitario se puede cambiar y sigue siendo la línea del producto", async () => {
     const { quoteId, lineId } = await conUnaLinea();
     const precio = await precioVigente();
 
-    let cotizacion = await getCotizacion(jorge, quoteId);
+    const cotizacion = await getCotizacion(jorge, quoteId);
     const sube = await guardarCambiosDeCotizacion(
       jorge,
       cotizacion!,
       [{ lineId, campos: { unitPrice: precio.listPrice.plus(100).toString() } }],
-      UMBRALES,
     );
     expect(sube.ok).toBe(true);
     const l = await prisma.quoteLine.findUniqueOrThrow({
@@ -483,20 +454,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
     // Sigue siendo la línea de ese producto: cambiar el precio no la vuelve concepto libre.
     expect(l.productId).toBe(productoId);
 
-    // Todo o nada: el precio bajo el piso tumba el guardado entero, también la cantidad.
-    cotizacion = await getCotizacion(jorge, quoteId);
-    const baja = await guardarCambiosDeCotizacion(
-      jorge,
-      cotizacion!,
-      [{ lineId, campos: { unitPrice: precio.minPrice.minus(1).toString(), quantity: "9" } }],
-      UMBRALES,
-    );
-    expect(baja).toMatchObject({ ok: false, motivo: "VALIDACION" });
-    const intacta = await prisma.quoteLine.findUniqueOrThrow({
-      where: { id: lineId },
-      select: { quantity: true },
-    });
-    expect(intacta.quantity.toString()).toBe(l.quantity.toString());
   });
 
   it("el costo se fija con VER_COSTO; sin el permiso no se acepta · INV-02", async () => {
@@ -507,7 +464,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       jorge,
       cotizacion!,
       [{ lineId, campos: { unitCost: "123" } }],
-      UMBRALES,
     );
     expect(r.ok).toBe(true);
     const l = await prisma.quoteLine.findUniqueOrThrow({
@@ -523,7 +479,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
       paulina,
       cotizacion!,
       [{ lineId, campos: { unitCost: "1" } }],
-      UMBRALES,
     );
     expect(negado).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
   });
@@ -543,7 +498,6 @@ describe("una sola cotización, editable, con bitácora · INV-06 enmendado (dec
         unitPrice: precio.listPrice.plus(50).toString(),
         unitCost: precio.standardCost.plus(5).toString(),
       },
-      UMBRALES,
     );
     expect(r.ok).toBe(true);
 
@@ -584,7 +538,6 @@ describe("INV-02 · AC-03 sobre datos reales", () => {
       jorge,
       cotizacion!,
       { productId: productoId, quantity: "2", discountRate: "0" },
-      UMBRALES,
     );
 
     const conCosto = JSON.stringify(await getCotizacion(jorge, quoteId));
@@ -608,21 +561,19 @@ describe("producto sin lista · precio y costo por oportunidad", () => {
       jorge,
       cotizacion!,
       { productId: sinListaId, quantity: "1", discountRate: "0" },
-      UMBRALES,
     );
     expect(r).toMatchObject({ ok: false, motivo: "VALIDACION" });
     if (!r.ok) expect(r.problemas[0]?.campo).toBe("unitPrice");
   });
 
-  it("con precio y costo capturados la línea nace con ellos y sin piso de SKU", async () => {
+  it("con precio y costo capturados la línea nace con ellos", async () => {
     const { quoteId } = await unaOportunidadConBorrador();
     const cotizacion = await getCotizacion(jorge, quoteId);
-    // 50 % de descuento: con lista habría piso RN-08; sin lista no hay contra qué.
+    // 50 % de descuento sobre el precio capturado: sin lista no hay tope por SKU.
     const r = await guardarLinea(
       jorge,
       cotizacion!,
       { productId: sinListaId, quantity: "2", discountRate: "0.5", unitPrice: "1000", unitCost: "400" },
-      UMBRALES,
     );
     expect(r.ok).toBe(true);
 

@@ -3,7 +3,6 @@ import { requireSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
-import { listProductos } from "@/lib/scope/productos";
 import {
   abiertasDelAnalisis,
   actividadesHechasDelAnio,
@@ -12,7 +11,7 @@ import {
 } from "@/lib/scope/analisis";
 import { hrefDeAnalisis, parseFiltrosDeAnalisis, type PestanaDeAnalisis } from "@/lib/filters/analisis";
 import { rangoDeAnioFiscal, trimestreDe } from "@/lib/filters";
-import { ETIQUETA_TIPO_DE_NEGOCIO, iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
+import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import type { CountryCode } from "@/lib/dto";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { ControlSegmentado } from "@/components/ui/primitivas";
@@ -60,8 +59,6 @@ const PESTANAS: readonly { valor: PestanaDeAnalisis; etiqueta: string }[] = [
 ];
 
 /** Lo que no es filtro y aun así vive en la URL: se conserva al cambiar un filtro. */
-const PARAMETROS_QUE_SE_CONSERVAN = ["p", "g1", "g2", "g3", "g4", "prob", "pron"];
-
 export default async function AnalisisPage({
   searchParams,
 }: {
@@ -81,9 +78,9 @@ export default async function AnalisisPage({
   // El calendario fiscal es del país filtrado o, sin filtro, del primero del
   // alcance. Hace falta antes de leer los filtros, porque el año por omisión
   // es el fiscal en curso y ese depende del país.
-  const paisPedido = sp.get("pais");
+  const paisesPedidos = new Set(sp.getAll("pais"));
   const paisDeCalendario: CountryCode =
-    session.countryCodes.find((c) => c === paisPedido) ?? session.countryCodes[0]!;
+    session.countryCodes.find((c) => paisesPedidos.has(c)) ?? session.countryCodes[0]!;
   const [calendario, politica] = await Promise.all([
     getCountry(paisDeCalendario),
     getCommercialPolicy(paisDeCalendario),
@@ -95,8 +92,6 @@ export default async function AnalisisPage({
   const recorte = {
     pais: filtros.pais,
     vendedor: filtros.vendedor,
-    producto: filtros.producto,
-    tipo: filtros.tipo,
   };
   const anioFiscal = { fiscalYear: filtros.anio, fiscalYearStartMonth };
   const verCosto = can(session, "VER_COSTO");
@@ -109,7 +104,7 @@ export default async function AnalisisPage({
           ganadas(session, recorte, null),
           objetivosDelAnalisis(session, {
             fiscalYear: filtros.anio,
-            paises: filtros.pais ? [filtros.pais] : session.countryCodes,
+            paises: filtros.pais.length > 0 ? filtros.pais : session.countryCodes,
             fiscalYearStartMonth,
             vendedor: filtros.vendedor,
           }),
@@ -139,25 +134,33 @@ export default async function AnalisisPage({
     }
   };
 
-  const [vendedores, productos, datos] = await Promise.all([
-    // El catálogo de vendedores se acota al país filtrado; con un solo país en
-    // el alcance, a ese. Dirección sin filtro ve a todos.
-    destinatariosValidos(filtros.pais ?? (session.countryCodes.length === 1 ? session.countryCodes[0] : null)),
-    listProductos(session),
+  const [vendedores, datos] = await Promise.all([
+    // El catálogo de vendedores se acota al país filtrado cuando es uno; con un
+    // solo país en el alcance, a ese. Dirección sin filtro ve a todos.
+    destinatariosValidos(
+      filtros.pais.length === 1
+        ? filtros.pais[0]
+        : session.countryCodes.length === 1
+          ? session.countryCodes[0]
+          : null,
+    ),
     cargarPestana(),
   ]);
 
   const hrefDe = (cambios: Record<string, string | readonly string[] | null>) => hrefDeAnalisis(sp, cambios);
 
-  const conservar = Object.fromEntries(
-    PARAMETROS_QUE_SE_CONSERVAN.map((k) => [k, sp.getAll(k)] as const).filter(([, v]) => v.length > 0),
-  );
-
-  const vendedorFiltrado = filtros.vendedor ? vendedores.find((v) => v.id === filtros.vendedor)?.name : null;
+  const vendedoresElegidos = new Set(filtros.vendedor);
+  const vendedoresFiltrados = vendedores.flatMap((v) => (vendedoresElegidos.has(v.id) ? [v.name] : []));
   const subtitulo = [
-    filtros.pais ? NOMBRE_PAIS[filtros.pais] : "Todos los países del alcance",
+    filtros.pais.length === 0
+      ? "Todos los países del alcance"
+      : filtros.pais.map((c) => NOMBRE_PAIS[c]).join(", "),
     `año fiscal ${filtros.anio}`,
-    vendedorFiltrado ?? null,
+    vendedoresFiltrados.length === 0
+      ? null
+      : vendedoresFiltrados.length <= 2
+        ? vendedoresFiltrados.join(" y ")
+        : `${vendedoresFiltrados.length} vendedores`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -185,8 +188,6 @@ export default async function AnalisisPage({
               pais: filtros.pais,
               vendedor: filtros.vendedor,
               anio: filtros.anio,
-              producto: filtros.producto,
-              tipo: filtros.tipo,
             }}
             catalogos={{
               paises: session.countryCodes.map((c) => ({ valor: c, etiqueta: NOMBRE_PAIS[c] })),
@@ -195,10 +196,7 @@ export default async function AnalisisPage({
               anios: [...new Set([enCurso.fiscalYear, enCurso.fiscalYear - 1, enCurso.fiscalYear - 2, filtros.anio])].sort(
                 (a, b) => b - a,
               ),
-              productos: productos.map((p) => ({ valor: p.id, etiqueta: `${p.sku} · ${p.name}` })),
-              tipos: Object.entries(ETIQUETA_TIPO_DE_NEGOCIO).map(([valor, etiqueta]) => ({ valor, etiqueta })),
             }}
-            conservar={conservar}
           />
         </div>
 
@@ -209,11 +207,9 @@ export default async function AnalisisPage({
               historico={datos.historico}
               cuotas={datos.cuotas}
               filtros={filtros}
-              hrefDe={hrefDe}
               fiscalYearStartMonth={fiscalYearStartMonth}
               trimestreEnCurso={enCurso}
               verCosto={verCosto}
-              pisoDeMargen={politica.marginFloor}
             />
           ) : datos.pestana === "forecast" ? (
             <PestanaForecast
@@ -231,6 +227,7 @@ export default async function AnalisisPage({
               ahora={ahora}
               minimoCierre={politica.meddicMinToClosing}
               anio={filtros.anio}
+              fiscalYearStartMonth={fiscalYearStartMonth}
             />
           )}
         </div>

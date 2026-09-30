@@ -117,7 +117,7 @@ export function iniciales(nombre: string): string {
 
 /**
  * El trimestre fiscal de una fecha `AAAA-MM-DD`, para anotar el campo de cierre
- * estimado: «T4 2026».
+ * estimado: «Q4 2026». La nomenclatura es Q, no T (decisiones §34).
  *
  * `Q-02` · se asumió que el año fiscal de Avattar es el calendario. Si resulta
  * que no, este es el único lugar que hay que tocar para las anotaciones —los
@@ -126,7 +126,7 @@ export function iniciales(nombre: string): string {
 export function etiquetaDeTrimestre(iso: string): string | null {
   const [anio, mes] = iso.split("-").map(Number);
   if (!anio || !mes) return null;
-  return `T${Math.floor((mes - 1) / 3) + 1} ${anio}`;
+  return `Q${Math.floor((mes - 1) / 3) + 1} ${anio}`;
 }
 
 /**
@@ -141,7 +141,7 @@ export function etiquetaDeTrimestre(iso: string): string | null {
  * evidencia como datos: así ese módulo se prueba sin presentación y el español
  * de la interfaz queda en un solo lugar (INV-14).
  *
- * `margen` y `piso` llegan ya formateados desde el servidor, porque un
+ * Las cifras llegan ya formateadas desde el servidor, porque un
  * `Decimal` no cruza a un componente cliente (INV-03).
  */
 export type EvidenciaVisible =
@@ -165,7 +165,7 @@ export function fraseDeRiesgo(
 /**
  * El tono de la bandera · §13.1: «si algo es coral, requiere atención».
  *
- * Coral para lo que cuesta dinero o clientes —margen bajo el piso, un negocio
+ * Coral para lo que cuesta dinero o clientes —un negocio
  * sin siguiente paso—; lima para lo que todavía es un problema de proceso. La
  * cola de riesgo se ordena por valor, así que el color es lo que separa «esto
  * se está cayendo» de «esto va lento».

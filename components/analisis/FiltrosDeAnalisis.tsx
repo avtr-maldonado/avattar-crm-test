@@ -1,129 +1,127 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import clsx from "clsx";
-import { Seleccion } from "@/components/ui/formulario";
-
-export type OpcionDeAnalisis = { valor: string; etiqueta: string };
+import { Desplegable, ListaDeUno, ListaDeVarios } from "@/components/ui/Desplegable";
+import { resumenDeUno, resumenDeVarios, type OpcionDeFiltro } from "@/components/ui/resumenDeFiltro";
 
 export type FiltrosActivosDeAnalisis = {
-  pais: string | null;
-  vendedor: string | null;
+  pais: string[];
+  vendedor: string[];
   anio: number;
-  producto: string | null;
-  tipo: string | null;
 };
 
+type Clave = "pais" | "vendedor" | "anio";
+
 /**
- * La barra de filtros de Análisis · país, vendedor, año, producto y tipo.
+ * La barra de filtros de Análisis · país, vendedor y año. Producto y tipo de
+ * negocio dejaron de ser filtros (decisiones §36); siguen como agrupaciones.
  *
- * Cinco desplegables nativos que reescriben la URL (INV-10): cambiar uno
- * navega, y lo demás de la URL —la pestaña y las agrupaciones de cada
- * reporte— se conserva tal cual. Con un solo país no se ofrece «País»: no hay
- * nada que elegir.
+ * Las mismas pastillas que la barra del pipeline (`Desplegable`): cada una
+ * dice lo que tiene aplicado, los de varios —país y vendedor— abren una lista de casillas con «Ninguno» y «Aplicar», y aplicar navega una
+ * sola vez reescribiendo la URL (INV-10). Nada elegido significa «todos». La
+ * pestaña y las agrupaciones de cada reporte se conservan tal cual, leídas de
+ * la URL viva.
  */
 export function FiltrosDeAnalisis({
   activos,
   catalogos,
-  conservar,
 }: {
   activos: FiltrosActivosDeAnalisis;
   catalogos: {
-    paises: OpcionDeAnalisis[];
-    vendedores: OpcionDeAnalisis[];
+    paises: OpcionDeFiltro[];
+    vendedores: OpcionDeFiltro[];
     anios: number[];
-    productos: OpcionDeAnalisis[];
-    tipos: OpcionDeAnalisis[];
   };
-  /** Los demás parámetros de la URL, que no son filtros y se conservan. */
-  conservar: Record<string, string[]>;
 }) {
   const router = useRouter();
   const [navegando, iniciar] = useTransition();
+  const [abierto, setAbierto] = useState<Clave | null>(null);
 
   function navegar(cambio: Partial<FiltrosActivosDeAnalisis>) {
     const f = { ...activos, ...cambio };
-    const p = new URLSearchParams();
-    for (const [clave, valores] of Object.entries(conservar)) for (const v of valores) p.append(clave, v);
-    if (f.pais) p.set("pais", f.pais);
-    if (f.vendedor) p.set("vendedor", f.vendedor);
+    // Se parte de la URL viva, no de la que se renderizó: las gráficas cambian
+    // su agrupación con replaceState y eso no vuelve al servidor.
+    const p = new URLSearchParams(window.location.search);
+    for (const clave of ["pais", "vendedor", "anio"]) p.delete(clave);
+    for (const c of f.pais) p.append("pais", c);
+    for (const v of f.vendedor) p.append("vendedor", v);
     p.set("anio", String(f.anio));
-    if (f.producto) p.set("producto", f.producto);
-    if (f.tipo) p.set("tipo", f.tipo);
+    setAbierto(null);
     iniciar(() => router.push(`/analisis?${p.toString()}`));
   }
 
+  const hayFiltros = activos.pais.length + activos.vendedor.length > 0;
   const atenuado = navegando ? "opacity-60" : undefined;
+  const anios = catalogos.anios.map((a) => ({ valor: String(a), etiqueta: String(a) }));
 
   return (
-    <div className={clsx("flex flex-wrap items-end gap-3", atenuado)}>
+    <div className="flex flex-wrap items-center gap-2">
       {catalogos.paises.length > 1 && (
-        <Filtro etiqueta="País" htmlFor="f-pais">
-          <Seleccion id="f-pais" value={activos.pais ?? ""} onChange={(e) => navegar({ pais: e.target.value || null, vendedor: null })}>
-            <option value="">Todos</option>
-            {catalogos.paises.map((o) => (
-              <option key={o.valor} value={o.valor}>
-                {o.etiqueta}
-              </option>
-            ))}
-          </Seleccion>
-        </Filtro>
+        <Desplegable
+          className={atenuado}
+          etiqueta="País"
+          resumen={resumenDeVarios(catalogos.paises, activos.pais)}
+          activo={activos.pais.length > 0}
+          abierto={abierto === "pais"}
+          alAlternar={(v) => setAbierto(v ? "pais" : null)}
+          ancho="w-56"
+        >
+          <ListaDeVarios
+            opciones={catalogos.paises}
+            elegidosAlAbrir={activos.pais}
+            vacio="No operas en ningún país."
+            alAplicar={(v) => navegar({ pais: v })}
+          />
+        </Desplegable>
       )}
 
-      <Filtro etiqueta="Vendedor" htmlFor="f-vendedor">
-        <Seleccion id="f-vendedor" value={activos.vendedor ?? ""} onChange={(e) => navegar({ vendedor: e.target.value || null })}>
-          <option value="">Todos</option>
-          {catalogos.vendedores.map((o) => (
-            <option key={o.valor} value={o.valor}>
-              {o.etiqueta}
-            </option>
-          ))}
-        </Seleccion>
-      </Filtro>
+      <Desplegable
+        className={atenuado}
+        etiqueta="Vendedor"
+        resumen={resumenDeVarios(catalogos.vendedores, activos.vendedor)}
+        activo={activos.vendedor.length > 0}
+        abierto={abierto === "vendedor"}
+        alAlternar={(v) => setAbierto(v ? "vendedor" : null)}
+      >
+        <ListaDeVarios
+          opciones={catalogos.vendedores}
+          elegidosAlAbrir={activos.vendedor}
+          buscable
+          vacio="No hay nadie activo en este alcance."
+          alAplicar={(v) => navegar({ vendedor: v })}
+        />
+      </Desplegable>
 
-      <Filtro etiqueta="Año fiscal" htmlFor="f-anio">
-        <Seleccion id="f-anio" value={String(activos.anio)} onChange={(e) => navegar({ anio: Number(e.target.value) })}>
-          {catalogos.anios.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </Seleccion>
-      </Filtro>
+      <Desplegable
+        className={atenuado}
+        etiqueta="Año fiscal"
+        resumen={resumenDeUno(anios, String(activos.anio))}
+        activo={false}
+        abierto={abierto === "anio"}
+        alAlternar={(v) => setAbierto(v ? "anio" : null)}
+        ancho="w-44"
+      >
+        <ListaDeUno
+          opciones={anios}
+          elegido={String(activos.anio)}
+          alElegir={(v) => navegar({ anio: v ? Number(v) : activos.anio })}
+        />
+      </Desplegable>
 
-      <Filtro etiqueta="Producto" htmlFor="f-producto">
-        <Seleccion id="f-producto" value={activos.producto ?? ""} onChange={(e) => navegar({ producto: e.target.value || null })}>
-          <option value="">Todos</option>
-          {catalogos.productos.map((o) => (
-            <option key={o.valor} value={o.valor}>
-              {o.etiqueta}
-            </option>
-          ))}
-        </Seleccion>
-      </Filtro>
-
-      <Filtro etiqueta="Tipo de negocio" htmlFor="f-tipo">
-        <Seleccion id="f-tipo" value={activos.tipo ?? ""} onChange={(e) => navegar({ tipo: e.target.value || null })}>
-          <option value="">Todos</option>
-          {catalogos.tipos.map((o) => (
-            <option key={o.valor} value={o.valor}>
-              {o.etiqueta}
-            </option>
-          ))}
-        </Seleccion>
-      </Filtro>
-    </div>
-  );
-}
-
-function Filtro({ etiqueta, htmlFor, children }: { etiqueta: string; htmlFor: string; children: React.ReactNode }) {
-  return (
-    <div className="flex min-w-40 flex-col gap-1">
-      <label htmlFor={htmlFor} className="text-eyebrow font-semibold uppercase tracking-[var(--ls-eyebrow)] text-texto-tenue">
-        {etiqueta}
-      </label>
-      {children}
+      {hayFiltros && (
+        <button
+          type="button"
+          onClick={() => navegar({ pais: [], vendedor: [] })}
+          className={clsx(
+            "rounded-pill px-2.5 py-1.5 text-xs font-medium text-texto-tenue underline-offset-2 transition-colors duration-rapido hover:text-texto-cuerpo hover:underline",
+            atenuado,
+          )}
+        >
+          Limpiar filtros
+        </button>
+      )}
     </div>
   );
 }

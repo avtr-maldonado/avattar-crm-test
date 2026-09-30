@@ -36,7 +36,7 @@ async function sesionPorRol(role: Role): Promise<Session> {
   };
 }
 
-const SIN_RECORTE = { pais: null, vendedor: null, producto: null, tipo: null };
+const SIN_RECORTE = { pais: [], vendedor: [] };
 
 let direccion: Session;
 let vendedor: Session;
@@ -74,8 +74,8 @@ describe("ganadas · la cotización viaja con costo solo con VER_COSTO (INV-02)"
   it("un país fuera del alcance no amplía nada: devuelve vacío (AC-25)", async () => {
     const fuera = (["MX", "CO", "CL"] as const).find((c) => !vendedor.countryCodes.includes(c));
     if (!fuera) return; // un vendedor con los tres países no tiene «fuera»
-    expect(await ganadas(vendedor, { ...SIN_RECORTE, pais: fuera }, null)).toEqual([]);
-    expect(await abiertasDelAnalisis(vendedor, { ...SIN_RECORTE, pais: fuera })).toEqual([]);
+    expect(await ganadas(vendedor, { ...SIN_RECORTE, pais: [fuera] }, null)).toEqual([]);
+    expect(await abiertasDelAnalisis(vendedor, { ...SIN_RECORTE, pais: [fuera] })).toEqual([]);
   });
 
   it("el vendedor solo ve lo suyo (RN-31)", async () => {
@@ -104,7 +104,7 @@ describe("actividadesHechasDelAnio · solo lo hecho, dentro del año", () => {
     const { fiscalYearStartMonth } = await getCountry(pais);
     const { fiscalYear } = trimestreDe(new Date(), fiscalYearStartMonth);
     const rango = rangoDeAnioFiscal(fiscalYear, fiscalYearStartMonth);
-    const hechas = await actividadesHechasDelAnio(direccion, { pais: null, vendedor: null }, { fiscalYear, fiscalYearStartMonth });
+    const hechas = await actividadesHechasDelAnio(direccion, { pais: [], vendedor: [] }, { fiscalYear, fiscalYearStartMonth });
     for (const a of hechas) {
       expect(a.completedAt >= rango.from && a.completedAt <= rango.to).toBe(true);
       expect(typeof a.tipo).toBe("string");

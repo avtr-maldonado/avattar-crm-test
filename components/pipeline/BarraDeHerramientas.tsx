@@ -25,7 +25,9 @@ export function BarraDeHerramientas({
   alta: ReactNode;
   hayFiltrosActivos: boolean;
 }) {
-  const [mostrarFiltros, setMostrarFiltros] = useState(true);
+  // Cerrados al entrar (29-sep-2026): el tablero es lo que se viene a ver; los
+  // filtros se abren cuando hacen falta. Si hay alguno activo, el punto lo dice.
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
 
   return (
     <div className="space-y-3">

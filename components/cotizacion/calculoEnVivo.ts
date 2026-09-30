@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import type { TotalesFormateados } from "./TablaDeCotizacion";
 
 /**
- * La vista previa de la cotización mientras se edita · `RN-07`, `RN-05`.
+ * La vista previa de la cotización mientras se edita · `RN-07`.
  *
  * ## Por qué hay aritmética de dinero en el cliente
  *
@@ -12,15 +12,14 @@ import type { TotalesFormateados } from "./TablaDeCotizacion";
  * los totales tienen que moverse. Este módulo repite las fórmulas de RN-07 con
  * `decimal.js` —la misma librería que Prisma empaqueta— para que la vista previa
  * diga, al centavo, lo que el servidor va a guardar. **No usa `number`**: la
- * señal más importante de la interfaz es verde o coral según el piso (§13.1), y
- * un flotante en el borde la pintaría del color equivocado.
+ * cifra que se enseña es la que se va a guardar, sin redondeos de flotante.
  *
  * `lib/money` no puede correr aquí porque importa `@prisma/client`; por eso los
  * formateadores se repiten. La prueba de paridad (`calculoEnVivo.test.ts`)
  * compara este módulo contra el dominio, cadena por cadena.
  *
- * Sin `VER_COSTO` no llega el costo (INV-02) y no se calculan utilidad, margen
- * ni piso: se dejan `undefined` y la tabla dice que se recalculan al guardar.
+ * Sin `VER_COSTO` no llega el costo (INV-02) y no se calculan utilidad ni
+ * margen: se dejan `undefined` y la tabla dice que se recalculan al guardar.
  */
 
 export type LineaEnVivoEntrada = {
@@ -36,8 +35,6 @@ export type LineaEnVivoEntrada = {
 export type ParametrosEnVivo = {
   /** Fracción: «0.16». La copiada en la cotización (RN-24). */
   taxRate: string;
-  /** Fracción: «0.10». El piso de margen por línea (RN-05). */
-  pisoDeLinea: string;
   verCosto: boolean;
   verMargen: boolean;
 };
@@ -48,7 +45,6 @@ export type LineaEnVivo = {
   importe: string;
   utilidad?: string;
   margen?: string;
-  bajoElPiso: boolean;
 };
 
 const CERO = new Decimal(0);
@@ -95,8 +91,6 @@ export function calcularEnVivo(
   parametros: ParametrosEnVivo,
 ): { lineas: LineaEnVivo[]; totales: TotalesFormateados } {
   const { verCosto, verMargen } = parametros;
-  const piso = leer(parametros.pisoDeLinea);
-  const hayPiso = piso.gt(0);
 
   let grossSubtotal = CERO;
   let netSubtotal = CERO;
@@ -124,8 +118,6 @@ export function calcularEnVivo(
       importe: usd(importe),
       ...(verCosto ? { utilidad: usd(utilidad) } : {}),
       ...(verCosto && verMargen ? { margen: porciento(margen) } : {}),
-      // RN-05 · un renglón en cero no está bajo el piso: está sin capturar.
-      bajoElPiso: verCosto && hayPiso && !importe.isZero() && margen.lt(piso),
     };
   });
 

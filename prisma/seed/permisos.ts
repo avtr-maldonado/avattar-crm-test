@@ -85,7 +85,7 @@ export const PERMISOS_POR_ROL: Record<string, DefinicionPermiso> = {
   },
   EDITAR_POLITICA_COMERCIAL: {
     nombre: "Editar política comercial",
-    descripcion: "Pisos de margen, umbrales de descuento, mínimos MEDDIC y SLA (INV-05).",
+    descripcion: "Umbrales de descuento, mínimos MEDDIC y SLA (INV-05).",
     roles: { VENDEDOR: no, GERENTE_PAIS: no, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no },
   },
   // Agregado el 14-sep-2026 con el módulo de usuarios (decisiones-pendientes §15).

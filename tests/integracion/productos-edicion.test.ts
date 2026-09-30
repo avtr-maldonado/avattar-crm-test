@@ -1,10 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db";
 import type { Session } from "@/lib/auth/permissions";
-import { getCommercialPolicy } from "@/lib/policy";
-import { money } from "@/lib/money";
 import { getProducto } from "@/lib/scope/productos";
-import { crearProducto, editarProducto, pisoDePrecio } from "@/lib/domain/product";
+import { crearProducto, editarProducto } from "@/lib/domain/product";
 
 async function sesionDe(correo: string): Promise<Session> {
   const u = await prisma.user.findUniqueOrThrow({
@@ -31,7 +29,6 @@ async function sesionDe(correo: string): Promise<Session> {
 let admin: Session;
 let paulina: Session;
 let familyId: string;
-let piso: string;
 const creados: string[] = [];
 
 beforeAll(async () => {
@@ -41,7 +38,6 @@ beforeAll(async () => {
   ]);
   const familia = await prisma.productFamily.findFirstOrThrow({ select: { id: true } });
   familyId = familia.id;
-  piso = (await getCommercialPolicy("MX")).lineMarginFloor.toString();
 });
 
 afterAll(async () => {
@@ -59,27 +55,12 @@ const BASE = {
   standardCost: "600.0000",
 };
 
-describe("pisoDePrecio · RN-08 e INV-05, con Decimal", () => {
-  it("costo / (1 − piso), exacto", () => {
-    // 600 / (1 − 0.10) = 666.6666…, redondeado a 4 decimales.
-    expect(pisoDePrecio(money("600"), money("1000"), money("0.10")).toFixed(4)).toBe("666.6667");
-  });
-
-  it("se topa al precio de lista cuando el margen a lista no alcanza el piso", () => {
-    // El caso de LIC-M365-E3 en §9.1: 7 900 / 0.90 = 8 777.78 > 8 400. Un piso
-    // por encima del techo no significa nada.
-    expect(pisoDePrecio(money("7900"), money("8400"), money("0.10")).toFixed(4)).toBe(
-      "8400.0000",
-    );
-  });
-});
 
 describe("crearProducto", () => {
   it("crea el SKU y abre su primera vigencia con el piso derivado", async () => {
     const r = await crearProducto(
       admin,
       { ...BASE, sku: `TST-${Date.now()}`, familyId },
-      { lineMarginFloor: piso },
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -90,14 +71,11 @@ describe("crearProducto", () => {
       select: {
         costUpdatedAt: true,
         costSource: true,
-        prices: { select: { listPrice: true, minPrice: true, standardCost: true } },
+        prices: { select: { listPrice: true, standardCost: true } },
       },
     });
     expect(p.prices).toHaveLength(1);
     expect(p.prices[0]!.listPrice.toString()).toBe("1000");
-    expect(p.prices[0]!.minPrice.toString()).toBe(
-      pisoDePrecio(money("600"), money("1000"), money(piso)).toFixed(4).replace(/\.?0+$/, ""),
-    );
     // C-01 · el costo acaba de capturarse: la fecha es hoy.
     expect(p.costUpdatedAt).not.toBeNull();
     expect(p.costSource).toBe("CARGA_MASIVA");
@@ -105,10 +83,10 @@ describe("crearProducto", () => {
 
   it("el SKU tiene que ser único", async () => {
     const sku = `TST-DUP-${Date.now()}`;
-    const a = await crearProducto(admin, { ...BASE, sku, familyId }, { lineMarginFloor: piso });
+    const a = await crearProducto(admin, { ...BASE, sku, familyId });
     if (a.ok) creados.push(a.datos.id);
 
-    const b = await crearProducto(admin, { ...BASE, sku, familyId }, { lineMarginFloor: piso });
+    const b = await crearProducto(admin, { ...BASE, sku, familyId });
     expect(b).toMatchObject({ motivo: "VALIDACION" });
     if (!b.ok) expect(b.problemas[0]?.campo).toBe("sku");
   });
@@ -117,7 +95,6 @@ describe("crearProducto", () => {
     const r = await crearProducto(
       paulina,
       { ...BASE, sku: `TST-NO-${Date.now()}`, familyId },
-      { lineMarginFloor: piso },
     );
     expect(r).toMatchObject({ motivo: "AUTORIZACION" });
   });
@@ -127,7 +104,6 @@ describe("crearProducto", () => {
     const r = await crearProducto(
       admin,
       { ...BASE, sku: `TST-NEG-${Date.now()}`, familyId, listPrice: "500", standardCost: "600" },
-      { lineMarginFloor: piso },
     );
     expect(r).toMatchObject({ motivo: "VALIDACION" });
   });
@@ -138,7 +114,6 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
     const r = await crearProducto(
       admin,
       { ...BASE, sku: `TST-ED-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, familyId },
-      { lineMarginFloor: piso },
     );
     if (!r.ok) throw new Error("no se pudo preparar el producto");
     creados.push(r.datos.id);
@@ -148,7 +123,7 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
   it("cambiar el nombre no toca la vigencia", async () => {
     const id = await unProducto();
     const producto = await getProducto(admin, id);
-    const r = await editarProducto(admin, producto!, { name: "Renombrado" }, { lineMarginFloor: piso });
+    const r = await editarProducto(admin, producto!, { name: "Renombrado" });
     expect(r.ok).toBe(true);
 
     const vigencias = await prisma.priceListEntry.count({ where: { productId: id } });
@@ -167,7 +142,7 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
     const id = await unProducto();
     await envejecerVigencia(id);
     const producto = await getProducto(admin, id);
-    const r = await editarProducto(admin, producto!, { listPrice: "1200" }, { lineMarginFloor: piso });
+    const r = await editarProducto(admin, producto!, { listPrice: "1200" });
     expect(r.ok).toBe(true);
 
     const vigencias = await prisma.priceListEntry.findMany({
@@ -190,7 +165,7 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
     // (productId, validFrom). El producto recién creado ya abrió la de hoy.
     const id = await unProducto();
     const producto = await getProducto(admin, id);
-    const r = await editarProducto(admin, producto!, { listPrice: "1100" }, { lineMarginFloor: piso });
+    const r = await editarProducto(admin, producto!, { listPrice: "1100" });
     expect(r.ok).toBe(true);
 
     const vigencias = await prisma.priceListEntry.findMany({
@@ -204,7 +179,7 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
   it("el precio vigente hoy es el nuevo", async () => {
     const id = await unProducto();
     const producto = await getProducto(admin, id);
-    await editarProducto(admin, producto!, { listPrice: "1500" }, { lineMarginFloor: piso });
+    await editarProducto(admin, producto!, { listPrice: "1500" });
 
     const despues = await getProducto(admin, id);
     expect(despues!.prices[0]?.listPrice.toString()).toBe("1500");
@@ -219,7 +194,7 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
     });
 
     const producto = await getProducto(admin, id);
-    await editarProducto(admin, producto!, { standardCost: "650" }, { lineMarginFloor: piso });
+    await editarProducto(admin, producto!, { standardCost: "650" });
 
     const p = await prisma.product.findUniqueOrThrow({
       where: { id },
@@ -237,7 +212,6 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
       admin,
       producto!,
       { name: "Otro" } as Parameters<typeof editarProducto>[2] & { sku?: string },
-      { lineMarginFloor: piso },
     );
     const p = await prisma.product.findUniqueOrThrow({ where: { id }, select: { sku: true } });
     expect(p.sku).toBe(antes);
@@ -246,7 +220,7 @@ describe("editarProducto · RN-26, el precio se versiona", () => {
   it("desactivar no borra: el SKU sigue en la base", async () => {
     const id = await unProducto();
     const producto = await getProducto(admin, id);
-    const r = await editarProducto(admin, producto!, { active: false }, { lineMarginFloor: piso });
+    const r = await editarProducto(admin, producto!, { active: false });
     expect(r.ok).toBe(true);
 
     const p = await prisma.product.findUniqueOrThrow({ where: { id }, select: { active: true } });
@@ -261,7 +235,6 @@ describe("productos sin lista · precio por oportunidad", () => {
     const r = await crearProducto(
       admin,
       { ...SIN_LISTA, sku: `TST-SL-${Date.now()}`, familyId },
-      { lineMarginFloor: piso },
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -277,11 +250,10 @@ describe("productos sin lista · precio por oportunidad", () => {
   });
 
   it("precio sin costo, o costo sin precio, no pasa: van juntos", async () => {
-    // El piso RN-08 se deriva de los dos; con uno solo no hay lista que valga.
+    // Precio y costo van juntos; con uno solo no hay lista que valga (§22).
     const a = await crearProducto(
       admin,
       { ...SIN_LISTA, sku: `TST-SL-A-${Date.now()}`, familyId, listPrice: "1000" },
-      { lineMarginFloor: piso },
     );
     expect(a).toMatchObject({ ok: false, motivo: "VALIDACION" });
     if (!a.ok) expect(a.problemas[0]?.campo).toBe("standardCost");
@@ -289,7 +261,6 @@ describe("productos sin lista · precio por oportunidad", () => {
     const b = await crearProducto(
       admin,
       { ...SIN_LISTA, sku: `TST-SL-B-${Date.now()}`, familyId, standardCost: "600" },
-      { lineMarginFloor: piso },
     );
     expect(b).toMatchObject({ ok: false, motivo: "VALIDACION" });
     if (!b.ok) expect(b.problemas[0]?.campo).toBe("listPrice");
@@ -299,13 +270,12 @@ describe("productos sin lista · precio por oportunidad", () => {
     const r = await crearProducto(
       admin,
       { ...SIN_LISTA, sku: `TST-SL-N-${Date.now()}`, familyId },
-      { lineMarginFloor: piso },
     );
     if (!r.ok) throw new Error("no se pudo crear");
     creados.push(r.datos.id);
 
     const producto = await getProducto(admin, r.datos.id);
-    const e = await editarProducto(admin, producto!, { name: "Servicio a medida" }, { lineMarginFloor: piso });
+    const e = await editarProducto(admin, producto!, { name: "Servicio a medida" });
     expect(e.ok).toBe(true);
     const p = await prisma.product.findUniqueOrThrow({
       where: { id: r.datos.id },
@@ -319,7 +289,6 @@ describe("productos sin lista · precio por oportunidad", () => {
     const r = await crearProducto(
       admin,
       { ...SIN_LISTA, sku: `TST-SL-V-${Date.now()}`, familyId },
-      { lineMarginFloor: piso },
     );
     if (!r.ok) throw new Error("no se pudo crear");
     creados.push(r.datos.id);
@@ -329,7 +298,6 @@ describe("productos sin lista · precio por oportunidad", () => {
       admin,
       producto!,
       { listPrice: "1000", standardCost: "600" },
-      { lineMarginFloor: piso },
     );
     expect(e.ok).toBe(true);
 
@@ -337,14 +305,11 @@ describe("productos sin lista · precio por oportunidad", () => {
       where: { id: r.datos.id },
       select: {
         costUpdatedAt: true,
-        prices: { select: { listPrice: true, minPrice: true, validFrom: true } },
+        prices: { select: { listPrice: true, validFrom: true } },
       },
     });
     expect(p.prices).toHaveLength(1);
     expect(p.prices[0]!.listPrice.toString()).toBe("1000");
-    expect(p.prices[0]!.minPrice.toString()).toBe(
-      pisoDePrecio(money("600"), money("1000"), money(piso)).toFixed(4).replace(/\.?0+$/, ""),
-    );
     expect(p.costUpdatedAt).not.toBeNull();
   });
 });

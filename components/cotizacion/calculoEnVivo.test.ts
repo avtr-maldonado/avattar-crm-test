@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularLinea, calcularTotales, lineasBajoElPiso } from "@/lib/domain/quote";
+import { calcularLinea, calcularTotales } from "@/lib/domain/quote";
 import { formatPercent, formatUSD, money, toClient } from "@/lib/money";
 import { calcularEnVivo } from "./calculoEnVivo";
 
@@ -27,7 +27,7 @@ const DOMINIO = LINEAS.map((l) => ({
   unitCost: money(l.costoUnitario),
 }));
 
-const PARAMETROS = { taxRate: "0.16", pisoDeLinea: "0.10", verCosto: true, verMargen: true };
+const PARAMETROS = { taxRate: "0.16", verCosto: true, verMargen: true };
 
 describe("calcularEnVivo · paridad con lib/domain/quote", () => {
   it("cada línea coincide con calcularLinea, ya formateada", () => {
@@ -55,18 +55,6 @@ describe("calcularEnVivo · paridad con lib/domain/quote", () => {
     expect(vivo.totales.grossMargin).toBe(formatPercent(toClient(t.grossMargin)));
   });
 
-  it("señala bajo el piso las mismas líneas que lineasBajoElPiso · RN-05", () => {
-    const vivo = calcularEnVivo(LINEAS, PARAMETROS);
-    const bajas = new Set(
-      lineasBajoElPiso(
-        DOMINIO.map((l, i) => ({ ...l, descripcion: LINEAS[i]!.id })),
-        money("0.10"),
-      ).map((b) => b.descripcion),
-    );
-    // La bolsa de horas: 960 neto contra 900 de costo, 6.3 %: bajo el piso.
-    expect(bajas.has("b")).toBe(true);
-    for (const l of vivo.lineas) expect(l.bajoElPiso).toBe(bajas.has(l.id));
-  });
 
   it("una celda en blanco o ilegible cuenta como cero, no tumba la tabla · RN-07", () => {
     const vivo = calcularEnVivo(
@@ -75,7 +63,6 @@ describe("calcularEnVivo · paridad con lib/domain/quote", () => {
     );
     expect(vivo.lineas[0]!.importe).toBe(formatUSD(money(0)));
     expect(vivo.lineas[0]!.margen).toBe(formatPercent("0"));
-    expect(vivo.lineas[0]!.bajoElPiso).toBe(false);
     expect(vivo.totales.total).toBe(formatUSD(money(0)));
   });
 
@@ -92,11 +79,10 @@ describe("calcularEnVivo · paridad con lib/domain/quote", () => {
     // señal más importante de la interfaz (§13.1).
     const vivo = calcularEnVivo(
       [{ id: "a", cantidad: "20", precioUnitario: "18000", descuentoPct: "10" }],
-      { taxRate: "0.16", pisoDeLinea: "0.10", verCosto: false, verMargen: true },
+      { taxRate: "0.16", verCosto: false, verMargen: true },
     );
     expect(vivo.lineas[0]!.utilidad).toBeUndefined();
     expect(vivo.lineas[0]!.margen).toBeUndefined();
-    expect(vivo.lineas[0]!.bajoElPiso).toBe(false);
     expect(vivo.totales.totalCost).toBeUndefined();
     expect(vivo.totales.grossMargin).toBeUndefined();
     // Lo que sí se puede: precio, importe y los totales sin costo.

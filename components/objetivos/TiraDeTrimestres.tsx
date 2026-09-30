@@ -4,7 +4,7 @@ import { clsx } from "clsx";
 /**
  * Los cuatro trimestres, uno al lado del otro · §10.3.
  *
- * «Con `TRIMESTRAL`, además una tira de T1 a T4 para saltar entre trimestres,
+ * «Con `TRIMESTRAL`, además una tira de Q1 a Q4 para saltar entre trimestres,
  * con el actual marcado.» Cumple eso y una cosa más: como la medición es
  * acumulada, hace falta poder ver **de dónde viene la deuda**. La tira responde
  * esa pregunta de un vistazo, porque cada trimestre muestra lo suyo, no el
@@ -44,7 +44,7 @@ export function TiraDeTrimestres({ trimestres }: { trimestres: TrimestreVisible[
               )}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <p className="text-xs font-semibold text-texto-titulo">T{t.quarter}</p>
+                <p className="text-xs font-semibold text-texto-titulo">Q{t.quarter}</p>
                 {t.enCurso && <p className="text-xs text-texto-tenue">en curso</p>}
               </div>
 

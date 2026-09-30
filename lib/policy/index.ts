@@ -5,8 +5,8 @@ import { prisma } from "@/lib/db";
 /**
  * Los umbrales del sistema · INV-05.
  *
- * Ningún umbral está escrito en el código. Piso de margen, umbrales de
- * descuento, mínimos MEDDIC, SLA de autorización y cobertura sana se leen de
+ * Ningún umbral está escrito en el código. Umbrales de descuento, mínimos
+ * MEDDIC, SLA de autorización y cobertura sana se leen de
  * `CommercialPolicy`; la tasa de impuesto y el mes de inicio del año fiscal, de
  * `Country`. Las probabilidades y los días para estancada viven en `Stage`.
  *
@@ -42,7 +42,7 @@ export const getCommercialPolicy = cache(
 
 /**
  * Lee país y política juntos. Es la combinación que necesita el cotizador:
- * la tasa de impuesto sale del país y los pisos de margen, de la política.
+ * la tasa de impuesto sale del país y los umbrales, de la política.
  */
 export const getPolicyContext = cache(
   async (code: CountryCode): Promise<{ country: Country; policy: CommercialPolicy }> => {

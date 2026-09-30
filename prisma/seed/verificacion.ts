@@ -61,10 +61,9 @@ export type ResumenRiesgo = {
 /**
  * Las banderas de riesgo, **calculadas** (INV-11).
  *
- * Aquí es donde el seed se separa de la cifra que el prototipo declaraba: con
- * `marginFloor = 0.20`, tres oportunidades caen bajo el piso, no una. El
- * prototipo marcaba solo OPP-2026-00388 (9 %) y pasaba por alto OPP-2026-00341
- * (11 %) y OPP-2026-00304 (19 %).
+ * Desde §27 y §33 las banderas son dos —sin actividad y estancada— y el margen
+ * no cuenta como riesgo; la cifra del prototipo, que incluía margen bajo, quedó
+ * atrás.
  */
 export async function resumenDeRiesgo(
   pais: CountryCode,

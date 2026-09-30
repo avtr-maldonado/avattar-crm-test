@@ -579,16 +579,6 @@ async function TabPolitica() {
           ) : (
             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
               <Umbral
-                etiqueta="Piso de margen"
-                valor={formatPercent(toClient(pais.commercialPolicy.marginFloor))}
-                nota="RN-05 · verde en o sobre, coral debajo"
-              />
-              <Umbral
-                etiqueta="Piso por línea"
-                valor={formatPercent(toClient(pais.commercialPolicy.lineMarginFloor))}
-                nota="se señala aunque el total cumpla"
-              />
-              <Umbral
                 etiqueta="Autoriza Gerencia"
                 valor={formatPercent(toClient(pais.commercialPolicy.discountThresholdMgmt))}
                 nota="RN-04 · descuento sobre este umbral"

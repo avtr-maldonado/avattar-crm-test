@@ -37,7 +37,7 @@ function primeraEtapaDe(pipeline: PipelineElegible | undefined): string {
  *
  * ## Las anotaciones a la derecha de cada campo
  *
- * `existente` · `nueva` · `sugerido` · `T4 2026`. Cada una dice **qué hizo el
+ * `existente` · `nueva` · `sugerido` · `Q4 2026`. Cada una dice **qué hizo el
  * sistema con lo que se acaba de escribir**, y es lo que evita el error caro de
  * esta pantalla: crear una organización duplicada sin darse cuenta. Los
  * duplicados de organización no se limpian nunca.

@@ -68,7 +68,7 @@ export function TablaOportunidades({
                 {o.margen ? (
                   <span
                     className={
-                      o.margenBajoElPiso ? "font-semibold text-coral" : "text-exito"
+                      o.margenNegativo ? "font-semibold text-coral" : "text-texto-cuerpo"
                     }
                   >
                     {o.margen}

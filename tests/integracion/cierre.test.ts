@@ -4,7 +4,7 @@ import type { Session } from "@/lib/auth/permissions";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
 import { getCotizacion } from "@/lib/scope/cotizaciones";
-import { crearOportunidad, marcarGanada, marcarPerdida } from "@/lib/domain/opportunity";
+import { crearOportunidad, marcarGanada, marcarPerdida, reabrirOportunidad } from "@/lib/domain/opportunity";
 import { abrirCotizacion, guardarLinea } from "@/lib/domain/quoteService";
 import { guardarHito } from "@/lib/domain/milestoneService";
 
@@ -117,7 +117,6 @@ async function conCotizacion(id: string) {
     jorge,
     cotizacion!,
     { productId: producto.id, quantity: "1", discountRate: "0", unitPrice: "1000000" },
-    { lineMarginFloor: "0.10" },
   );
   if (!linea.ok) throw new Error(`no se pudo agregar la línea: ${JSON.stringify(linea)}`);
 }
@@ -255,3 +254,43 @@ describe("marcarPerdida · AC-20", () => {
     expect(JSON.stringify(rastro!.after)).toContain(motivoConCompetidor.name);
   });
 });
+
+describe("reabrirOportunidad · RN-18 enmendada (decisiones §32)", () => {
+  it("una perdida vuelve a abrirse en su etapa, sin cierre real ni motivo, con el mismo folio y en la bitácora", async () => {
+    const id = await unaOportunidad();
+    let detalle = await getOpportunityDetail(jorge, id);
+    const { folio, stage } = detalle!;
+    const perdida = await marcarPerdida(jorge, detalle!, { lossReasonId: motivoSimple.id });
+    expect(perdida.ok).toBe(true);
+
+    detalle = await getOpportunityDetail(jorge, id);
+    const r = await reabrirOportunidad(jorge, detalle!);
+    expect(r.ok).toBe(true);
+
+    detalle = await getOpportunityDetail(jorge, id);
+    expect(detalle!.status).toBe("ABIERTA");
+    expect(detalle!.actualCloseDate).toBeNull();
+    expect(detalle!.lossReason).toBeNull();
+    expect(detalle!.stage.name).toBe(stage.name);
+    // INV-12 · el folio no cambia ni al reabrir.
+    expect(detalle!.folio).toBe(folio);
+
+    const rastro = await prisma.auditLog.findFirst({
+      where: { entity: "Opportunity", entityId: id, action: "REABRIR_OPORTUNIDAD" },
+      select: { before: true, byUserId: true },
+    });
+    expect(rastro).toMatchObject({ before: { status: "PERDIDA" }, byUserId: jorge.userId });
+  });
+
+  it("una abierta no se reabre, y quien no la alcanza tampoco", async () => {
+    const id = await unaOportunidad();
+    const abierta = await getOpportunityDetail(jorge, id);
+    expect(await reabrirOportunidad(jorge, abierta!)).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+
+    await marcarPerdida(jorge, abierta!, { lossReasonId: motivoSimple.id });
+    const cerrada = await getOpportunityDetail(jorge, id);
+    // Paulina no es propietaria ni tiene alcance de oficina.
+    expect(await reabrirOportunidad(paulina, cerrada!)).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+  });
+});
+

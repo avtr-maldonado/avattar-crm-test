@@ -1,4 +1,4 @@
-import type { BusinessType, CountryCode, Prisma } from "@prisma/client";
+import type { CountryCode, Prisma } from "@prisma/client";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { money } from "@/lib/money";
@@ -24,20 +24,16 @@ import { avanceDeObjetivos, type RenglonDeObjetivo } from "./objetivos";
  * La evidencia MEDDIC no se serializa: solo si existe (`conEvidencia`).
  */
 
+/** Listas vacías no recortan; con valores, «cualquiera de estos». */
 export type RecorteDeAnalisis = {
-  pais: CountryCode | null;
-  vendedor: string | null;
-  producto: string | null;
-  tipo: BusinessType | null;
+  pais: CountryCode[];
+  vendedor: string[];
 };
 
 function recorte(r: RecorteDeAnalisis): Prisma.OpportunityWhereInput {
   return {
-    ...(r.pais ? { countryCode: r.pais } : {}),
-    ...(r.vendedor ? { ownerId: r.vendedor } : {}),
-    ...(r.tipo ? { businessType: r.tipo } : {}),
-    // Por producto: cualquier cotización de la oportunidad con una línea de ese SKU.
-    ...(r.producto ? { quotes: { some: { lines: { some: { productId: r.producto } } } } } : {}),
+    ...(r.pais.length > 0 ? { countryCode: { in: r.pais } } : {}),
+    ...(r.vendedor.length > 0 ? { ownerId: { in: r.vendedor } } : {}),
   };
 }
 
@@ -177,7 +173,7 @@ export async function abiertasDelAnalisis(
 /** Las actividades hechas en el año fiscal, dentro del alcance y, si se pide, de una oficina o un vendedor. */
 export async function actividadesHechasDelAnio(
   session: Session,
-  r: { pais: CountryCode | null; vendedor: string | null },
+  r: { pais: CountryCode[]; vendedor: string[] },
   anio: { fiscalYear: number; fiscalYearStartMonth: number },
 ): Promise<ActividadHecha[]> {
   const rango = rangoDeAnioFiscal(anio.fiscalYear, anio.fiscalYearStartMonth);
@@ -185,8 +181,9 @@ export async function actividadesHechasDelAnio(
     where: withActivityScope(session, {
       AND: [
         { completedAt: { gte: rango.from, lte: rango.to } },
-        ...(r.pais ? [actividadEnOficina(r.pais)] : []),
-        ...(r.vendedor ? [{ userId: r.vendedor }] : []),
+        // Varias oficinas: la de cualquiera de esos países, o sin oportunidad.
+        ...(r.pais.length > 0 ? [{ OR: r.pais.map((pais) => actividadEnOficina(pais)) }] : []),
+        ...(r.vendedor.length > 0 ? [{ userId: { in: r.vendedor } }] : []),
       ],
     }),
     select: {
@@ -211,7 +208,7 @@ export async function objetivosDelAnalisis(
     fiscalYear: number;
     paises: CountryCode[];
     fiscalYearStartMonth: number;
-    vendedor: string | null;
+    vendedor: string[];
   },
 ): Promise<RenglonDeObjetivo[]> {
   const porPais = await Promise.all(
@@ -224,5 +221,7 @@ export async function objetivosDelAnalisis(
     ),
   );
   const filas = porPais.flat();
-  return opciones.vendedor ? filas.filter((f) => f.usuario.id === opciones.vendedor) : filas;
+  if (opciones.vendedor.length === 0) return filas;
+  const elegidos = new Set(opciones.vendedor);
+  return filas.filter((f) => elegidos.has(f.usuario.id));
 }

@@ -9,8 +9,6 @@ import { getCommercialPolicy, getCountry } from "./index";
 describe("lib/policy · INV-05", () => {
   it.skip("lee los umbrales de la base, no de constantes", async () => {
     const politica = await getCommercialPolicy("MX");
-    expect(politica.marginFloor.toString()).toBe("0.2");
-    expect(politica.lineMarginFloor.toString()).toBe("0.1");
     expect(politica.discountThresholdMgmt.toString()).toBe("0.15");
     expect(politica.discountThresholdDir.toString()).toBe("0.3");
     expect(politica.meddicMinToClosing).toBe(70);

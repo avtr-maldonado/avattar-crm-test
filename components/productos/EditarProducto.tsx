@@ -41,35 +41,12 @@ export type ProductoDelFormulario = {
 };
 
 /**
- * Vista previa del piso, en el navegador.
- *
- * Es **solo para mostrar mientras se teclea**. El valor que se guarda lo calcula
- * el servidor con `Decimal` (INV-03); aquí no se puede importar Prisma
- * (`components/**` no alcanza `@prisma/client`), así que se usa `number` a
- * sabiendas de que puede desviarse en el último decimal. Si el usuario ve
- * 666.67 y se guarda 666.6667, nadie sale perjudicado.
- */
-function pisoAproximado(costo: string, lista: string, pisoMargen: number): string | null {
-  const c = Number(costo.replace(/,/g, ""));
-  const l = Number(lista.replace(/,/g, ""));
-  if (!Number.isFinite(c) || !Number.isFinite(l) || l <= 0) return null;
-  const porMargen = c / (1 - pisoMargen);
-  return Math.min(porMargen, l).toLocaleString("es-MX", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  });
-}
-
-/**
  * Alta y edición de un producto · P-06.
  *
  * ## Lo que el formulario dice antes de guardar
  *
- * El piso de precio se muestra calculado en vivo debajo de costo y lista: es la
- * cifra que RN-08 va a hacer cumplir en cada cotización, y verla mientras se
- * captura evita descubrirla cuando un vendedor no puede dar el descuento que
- * prometió.
+ * Precio y costo van juntos o no van (§22): el pie lo dice mientras se captura,
+ * para que nadie descubra al guardar que le faltó uno.
  *
  * Y al editar, si se toca precio o costo, se avisa que eso **abre una vigencia
  * nueva** (RN-26): no se corrige la anterior, se cierra. Quien edita tiene que
@@ -78,15 +55,12 @@ function pisoAproximado(costo: string, lista: string, pisoMargen: number): strin
 export function EditarProducto({
   producto,
   familias,
-  pisoDeMargen,
   puedeVerCosto,
   accion,
 }: {
   /** Sin producto, el formulario da de alta. */
   producto?: ProductoDelFormulario;
   familias: { id: string; name: string }[];
-  /** Fracción, como viene de `CommercialPolicy`: 0.10 = 10 %. */
-  pisoDeMargen: number;
   puedeVerCosto: boolean;
   accion: (previo: ResultadoDeProducto | null, form: FormData) => Promise<ResultadoDeProducto>;
 }) {
@@ -110,7 +84,6 @@ export function EditarProducto({
   );
 
   const idFormulario = `producto-${producto?.id ?? "nuevo"}`;
-  const piso = pisoAproximado(costo, lista, pisoDeMargen);
   // Los dos vacíos = sin lista (§22): precio y costo se fijan en cada cotización.
   const sinLista = lista.trim() === "" && costo.trim() === "";
   const teniaLista = producto !== undefined && producto.listPrice !== "";
@@ -141,8 +114,8 @@ export function EditarProducto({
                   ? "Cambiar precio o costo abre una vigencia nueva desde hoy. La anterior queda como histórico (RN-26)."
                   : "Con precio y costo el producto estrena lista desde hoy (RN-26)."
                 : sinLista
-                  ? "Sin precio ni costo el producto queda sin lista: se fijan en cada cotización, y no hay piso de descuento por SKU."
-                  : "El piso de descuento se deriva del costo y del piso de margen por línea; no se captura."}
+                  ? "Sin precio ni costo el producto queda sin lista: se fijan en cada cotización."
+                  : "Con precio y costo, el producto cotiza con su lista vigente."}
             </p>
             <div className="flex items-center gap-2">
               <Boton variante="fantasma" type="button" onClick={() => setAbierto(false)}>
@@ -267,25 +240,6 @@ export function EditarProducto({
                   />
                 </Campo>
 
-                {/* Solo lectura: RN-08 lo deriva, INV-05 prohíbe capturarlo. */}
-                <Campo
-                  etiqueta="Piso de descuento"
-                  htmlFor={`${idFormulario}-piso`}
-                  anotacion={sinLista ? "sin lista" : "derivado"}
-                  ayuda={
-                    sinLista
-                      ? "Sin lista no hay piso por SKU; RN-05 sigue señalando el margen."
-                      : `Costo ÷ (1 − ${Math.round(pisoDeMargen * 100)} %), topado a lista.`
-                  }
-                >
-                  <Entrada
-                    id={`${idFormulario}-piso`}
-                    readOnly
-                    tabIndex={-1}
-                    value={piso ?? "—"}
-                    className="[font-variant-numeric:tabular-nums] bg-superficie-pagina text-texto-tenue"
-                  />
-                </Campo>
               </div>
             </div>
           ) : (

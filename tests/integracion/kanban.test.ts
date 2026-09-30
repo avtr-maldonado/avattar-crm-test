@@ -5,7 +5,6 @@ import { prisma } from "@/lib/db";
 import { OPORTUNIDADES } from "@/prisma/seed/datos";
 import { listOpportunities } from "@/lib/scope";
 import { listPipelines, pipelinePorOmision } from "@/lib/scope/pipelines";
-import { getCommercialPolicy } from "@/lib/policy";
 import { formatUSD, sum, toClient } from "@/lib/money";
 import { openTotal, weightedAmount } from "@/lib/domain/pipeline";
 import { computeRiskFlags } from "@/lib/domain/riskFlags";
@@ -152,24 +151,6 @@ describe("tablero kanban · alcance por rol · AC-01", () => {
 });
 
 describe("tablero kanban · señales visuales", () => {
-  it("el margen bajo el piso se marca en las tres que corresponden", async () => {
-    const jorge = await sesionDe("jm@avattar.com");
-    const [oportunidades, politica] = await Promise.all([
-      listOpportunities(jorge),
-      getCommercialPolicy("MX"),
-    ]);
-
-    const bajoElPiso = oportunidades
-      .filter((o) => o.grossMargin?.lt(politica.marginFloor))
-      .map((o) => o.folio)
-      .sort();
-
-    expect(bajoElPiso).toEqual([
-      "OPP-2026-00304",
-      "OPP-2026-00341",
-      "OPP-2026-00388",
-    ]);
-  });
 
   it("las banderas de la tarjeta salen del cálculo, no de un campo (INV-11)", async () => {
     const jorge = await sesionDe("jm@avattar.com");

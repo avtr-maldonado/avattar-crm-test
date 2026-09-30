@@ -35,7 +35,7 @@ const CERO = new Prisma.Decimal(0);
 
 export type RenglonDeObjetivo = {
   usuario: { id: string; name: string; initials: string };
-  /** Índice 0..3 = T1..T4. Cero donde no hay objetivo fijado. */
+  /** Índice 0..3 = Q1..Q4. Cero donde no hay objetivo fijado. */
   cuotaVenta: Money[];
   cuotaUtilidad: Money[];
   logradoVenta: Money[];

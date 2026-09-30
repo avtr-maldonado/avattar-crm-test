@@ -83,8 +83,6 @@ describe("P-11 · INV-05, todo umbral aparece aquí", () => {
       "discountThresholdDir",
       "discountThresholdMgmt",
       "healthyCoverageMin",
-      "lineMarginFloor",
-      "marginFloor",
       "meddicMinToClosing",
       "meddicMinToCommit",
       "meddicMinToWin",
@@ -103,12 +101,11 @@ describe("P-11 · INV-05, todo umbral aparece aquí", () => {
     const mx = (await configuracionDePolitica()).find((p) => p.code === "MX")!;
     const pol = mx.commercialPolicy!;
 
-    expect(pol.marginFloor.toString()).toBe("0.2");
     expect(pol.discountThresholdMgmt.toString()).toBe("0.15");
     expect(pol.discountThresholdDir.toString()).toBe("0.3");
     expect(mx.taxRate.toString()).toBe("0.16");
     // Un 20 en vez de 0.2 significaría 2000 % al formatearlo.
-    expect(Number(pol.marginFloor)).toBeLessThan(1);
+    expect(Number(pol.discountThresholdMgmt)).toBeLessThan(1);
   });
 });
 
@@ -174,9 +171,10 @@ describe("P-11 · catálogos", () => {
 });
 
 describe("P-11 · matriz de permisos · §5.2", () => {
-  it("los once permisos están, con su valor por rol", async () => {
+  it("los doce permisos están, con su valor por rol", async () => {
     const permisos = await configuracionDePermisos();
-    expect(permisos).toHaveLength(11);
+    // Once del spec §5.2 más VER_OBJETIVOS_EQUIPO, que llegó con P-08.
+    expect(permisos).toHaveLength(12);
     for (const p of permisos) {
       expect(Object.keys(p.porRol)).toHaveLength(5);
     }

@@ -13,15 +13,13 @@ import {
   type CambiosDeLinea,
 } from "@/lib/domain/quoteService";
 import { formatUSD } from "@/lib/money";
-import { getCommercialPolicy, getCountry } from "@/lib/policy";
+import { getCountry } from "@/lib/policy";
 import { getCotizacion } from "@/lib/scope/cotizaciones";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
 
 /**
- * Las mutaciones de la pestaña Cotización · E2, decisiones §21.
- *
- * El piso de margen por línea se lee aquí y se pasa al dominio: `lib/domain` no
- * importa `lib/policy` (AC-31).
+ * Las mutaciones de la pestaña Cotización · E2, decisiones §21. Sin umbrales
+ * que pasar al dominio desde §33: el piso de margen salió del alcance.
  */
 const NO_ALCANZA = "No encontramos esa cotización, o no está a tu alcance.";
 
@@ -32,14 +30,7 @@ export type ResultadoDeCotizacion = ResultadoAccion<
 async function cargarCotizacion(quoteId: string) {
   const session = await requireSession();
   const cotizacion = await getCotizacion(session, quoteId);
-  if (!cotizacion) return { session, cotizacion: null, umbrales: null };
-
-  const politica = await getCommercialPolicy(cotizacion.opportunity.countryCode);
-  return {
-    session,
-    cotizacion,
-    umbrales: { lineMarginFloor: politica.lineMarginFloor.toString() },
-  };
+  return { session, cotizacion };
 }
 
 function revalidar(opportunityId: string) {
@@ -111,8 +102,8 @@ export async function guardarLineaAccion(
   if (!datos.success) return deZod(datos.error);
   const d = datos.data;
 
-  const { session, cotizacion, umbrales } = await cargarCotizacion(d.quoteId);
-  if (!cotizacion || !umbrales) return falla("AUTORIZACION", NO_ALCANZA);
+  const { session, cotizacion } = await cargarCotizacion(d.quoteId);
+  if (!cotizacion) return falla("AUTORIZACION", NO_ALCANZA);
 
   const r = await guardarLinea(
     session,
@@ -127,7 +118,6 @@ export async function guardarLineaAccion(
       quantity: d.quantity,
       discountRate: aFraccion(d.discountPct),
     },
-    umbrales,
   );
   if (!r.ok) return r;
 
@@ -166,10 +156,10 @@ export async function guardarCotizacionAccion(
   }
   const cambios: CambioPorLinea[] = [...porLinea].map(([lineId, campos]) => ({ lineId, campos }));
 
-  const { session, cotizacion, umbrales } = await cargarCotizacion(quoteId);
-  if (!cotizacion || !umbrales) return falla("AUTORIZACION", NO_ALCANZA);
+  const { session, cotizacion } = await cargarCotizacion(quoteId);
+  if (!cotizacion) return falla("AUTORIZACION", NO_ALCANZA);
 
-  const r = await guardarCambiosDeCotizacion(session, cotizacion, cambios, umbrales);
+  const r = await guardarCambiosDeCotizacion(session, cotizacion, cambios);
   if (!r.ok) return r;
 
   if (r.datos.cambios > 0 || r.datos.total) revalidar(cotizacion.opportunity.id);

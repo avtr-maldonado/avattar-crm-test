@@ -150,7 +150,7 @@ export function Boton({
  * Pastilla de estado, tipo o bandera.
  *
  * `peligro` está reservado a lo que requiere atención —una bandera de riesgo,
- * un margen bajo el piso—, nunca a destacar algo por bonito.
+ * una utilidad negativa—, nunca a destacar algo por bonito.
  */
 export function Pastilla({
   children,
@@ -199,57 +199,83 @@ export function Avatar({ iniciales, titulo }: { iniciales: string; titulo?: stri
 /**
  * Conmutador de vistas. El estado vive en la URL (INV-10), así que cada opción
  * es un enlace: la vista es compartible y el botón de regresar funciona.
+ *
+ * Con `alElegir` en vez de `hrefDe`, las opciones son botones: para cuando el
+ * cliente ya tiene todo lo necesario y cambia al instante (las gráficas de
+ * Análisis, que escriben la URL con `replaceState`).
  */
+type OpcionSegmentada<T extends string> = {
+  valor: T;
+  etiqueta: string;
+  /** Cuántos hay detrás de la opción. Un cero no se pinta: sería ruido. */
+  contador?: number;
+  deshabilitada?: boolean;
+};
+
+type ComoElegir<T extends string> =
+  | { hrefDe: (valor: T) => string; alElegir?: never }
+  | { alElegir: (valor: T) => void; hrefDe?: never };
+
+const OPCION_SEGMENTADA = "rounded-xs px-3 py-1 text-sm transition-colors duration-rapido ease-estandar";
+const OPCION_ACTIVA = "bg-superficie-pagina font-semibold text-texto-titulo shadow-xs";
+const OPCION_INACTIVA = "text-texto-tenue hover:text-texto-cuerpo";
+
 export function ControlSegmentado<T extends string>({
   opciones,
   activa,
   hrefDe,
+  alElegir,
 }: {
-  opciones: readonly {
-    valor: T;
-    etiqueta: string;
-    /** Cuántos hay detrás de la opción. Un cero no se pinta: sería ruido. */
-    contador?: number;
-    deshabilitada?: boolean;
-  }[];
+  opciones: readonly OpcionSegmentada<T>[];
   activa: T;
-  hrefDe: (valor: T) => string;
-}) {
+} & ComoElegir<T>) {
   return (
     <div
       role="group"
       className="inline-flex rounded-sm border border-borde bg-superficie-sutil p-0.5"
     >
-      {opciones.map((o) =>
-        o.deshabilitada ? (
-          <span
-            key={o.valor}
-            title="Disponible en un incremento posterior"
-            className="cursor-not-allowed rounded-xs px-3 py-1 text-sm text-texto-tenue opacity-50"
-          >
-            {o.etiqueta}
-          </span>
-        ) : (
+      {opciones.map((o) => {
+        const contador =
+          o.contador !== undefined && o.contador > 0 ? (
+            <span className="tabular ml-1.5 text-xs font-normal text-texto-tenue">{o.contador}</span>
+          ) : null;
+        if (o.deshabilitada) {
+          return (
+            <span
+              key={o.valor}
+              title="Disponible en un incremento posterior"
+              className="cursor-not-allowed rounded-xs px-3 py-1 text-sm text-texto-tenue opacity-50"
+            >
+              {o.etiqueta}
+            </span>
+          );
+        }
+        if (alElegir) {
+          return (
+            <button
+              key={o.valor}
+              type="button"
+              aria-pressed={o.valor === activa}
+              onClick={() => alElegir(o.valor)}
+              className={clsx(OPCION_SEGMENTADA, o.valor === activa ? OPCION_ACTIVA : OPCION_INACTIVA)}
+            >
+              {o.etiqueta}
+              {contador}
+            </button>
+          );
+        }
+        return (
           <Link
             key={o.valor}
             href={hrefDe(o.valor)}
             aria-current={o.valor === activa ? "page" : undefined}
-            className={clsx(
-              "rounded-xs px-3 py-1 text-sm transition-colors duration-rapido ease-estandar",
-              o.valor === activa
-                ? "bg-superficie-pagina font-semibold text-texto-titulo shadow-xs"
-                : "text-texto-tenue hover:text-texto-cuerpo",
-            )}
+            className={clsx(OPCION_SEGMENTADA, o.valor === activa ? OPCION_ACTIVA : OPCION_INACTIVA)}
           >
             {o.etiqueta}
-            {o.contador !== undefined && o.contador > 0 && (
-              <span className="tabular ml-1.5 text-xs font-normal text-texto-tenue">
-                {o.contador}
-              </span>
-            )}
+            {contador}
           </Link>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }

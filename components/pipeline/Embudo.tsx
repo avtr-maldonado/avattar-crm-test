@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { clsx } from "clsx";
 import { EstadoVacio } from "@/components/ui/primitivas";
+import { DetalleDeEtapa, type OportunidadDeEtapa } from "./DetalleDeEtapa";
 
 /**
  * Vista de embudo de P-01.
@@ -30,6 +31,12 @@ export type EtapaVisible = {
   nombre: string;
   /** Ya formateado: «$1,061,000.00». */
   valor: string;
+  /** Importe × probabilidad de la etapa, sumado y formateado (RN-01). */
+  ponderado: string;
+  /** «35 %». */
+  probabilidad: string;
+  /** Lo que suma la barra, para el detalle al pulsarla. */
+  oportunidades: OportunidadDeEtapa[];
   cuantas: number;
   /** 0 a 1, contra la etapa de mayor valor. */
   fraccionDeBarra: number;
@@ -87,18 +94,31 @@ export function Embudo({
                   </p>
                 </div>
 
-                <div className="mt-1.5 h-4 overflow-hidden rounded-xs bg-superficie-sutil">
-                  <div
-                    className={clsx(
-                      "h-full rounded-xs transition-[width] duration-base ease-estandar",
-                      // Verde solo donde el pipeline marca el cierre: es el dato
-                      // del pipeline, no un umbral de probabilidad (INV-05) ni
-                      // un `switch` por nombre de etapa (INV-13).
-                      e.esCierre ? "bg-exito" : "bg-acento",
-                    )}
-                    style={{ width: `${Math.max(e.fraccionDeBarra * 100, e.cuantas > 0 ? 1.5 : 0)}%` }}
-                  />
-                </div>
+                {/* La barra se pulsa: abre qué oportunidades la suman y cómo pondera. */}
+                <DetalleDeEtapa
+                  etapa={{
+                    nombre: e.nombre,
+                    valor: e.valor,
+                    ponderado: e.ponderado,
+                    probabilidad: e.probabilidad,
+                    cuantas: e.cuantas,
+                    leyendaDePaso: leyendaDePaso(e),
+                    oportunidades: e.oportunidades,
+                  }}
+                >
+                  <div className="mt-1.5 h-4 overflow-hidden rounded-xs bg-superficie-sutil transition-colors duration-rapido hover:bg-superficie-tinte">
+                    <div
+                      className={clsx(
+                        "h-full rounded-xs transition-[width] duration-base ease-estandar",
+                        // Verde solo donde el pipeline marca el cierre: es el dato
+                        // del pipeline, no un umbral de probabilidad (INV-05) ni
+                        // un `switch` por nombre de etapa (INV-13).
+                        e.esCierre ? "bg-exito" : "bg-acento",
+                      )}
+                      style={{ width: `${Math.max(e.fraccionDeBarra * 100, e.cuantas > 0 ? 1.5 : 0)}%` }}
+                    />
+                  </div>
+                </DetalleDeEtapa>
 
                 <p className="mt-1 text-xs text-texto-tenue">{leyendaDePaso(e)}</p>
               </li>
@@ -140,13 +160,12 @@ function ColaDeRiesgo({ riesgos }: { riesgos: RiesgoVisible[] }) {
     <section className="rounded-md border border-borde bg-superficie-tarjeta px-5 py-4">
       <h2 className="text-sm font-semibold text-texto-titulo">Cola de riesgo</h2>
       <p className="mt-0.5 text-xs text-texto-tenue">
-        Ordenada por valor: sin actividad futura, estancada o margen bajo el piso.
+        Ordenada por valor: sin actividad futura o estancada.
       </p>
 
       {riesgos.length === 0 ? (
         <p className="mt-5 rounded-sm border border-dashed border-borde px-4 py-6 text-center text-sm text-texto-tenue">
-          Nada con bandera activa. Todo lo abierto tiene próximo paso, se movió a tiempo y cotiza
-          sobre el piso de margen.
+          Nada con bandera activa. Todo lo abierto tiene próximo paso y se movió a tiempo.
         </p>
       ) : (
         <ul className="mt-4 divide-y divide-borde">

@@ -19,7 +19,7 @@ export type EtapaElegible = {
  *
  * La referencia usa verde. Aquí no puede: §13.1 dice que los colores de estado
  * **no deben** usarse como color decorativo, y en este sistema el verde ya
- * significa una cosa concreta —margen en o sobre el piso—, que es «la señal más
+ * significa una cosa concreta —ganada, cuota cumplida—, que es «la señal más
  * importante de toda la interfaz». Un verde aquí competiría con ella. Los
  * galones van en el azul de marca, que es el que §13.1 dice que domina.
  *

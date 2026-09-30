@@ -1669,3 +1669,294 @@ una ruta que nunca existió. El negocio pidió quitarlo y poner edición. Así q
 Dónde vive: `app/(app)/actividades/page.tsx` (`EditorDeActividad`, `contextosPorPais`),
 `lib/scope/agenda.ts`. Sin regla de negocio nueva.
 
+## 31. Pipeline: filtros cerrados al entrar, la vista sobrevive al filtro, detalle por etapa del embudo (29 de septiembre de 2026)
+
+Cuatro ajustes de la pantalla de oportunidades pedidos por el negocio, sin regla nueva:
+
+- **Los filtros entran cerrados.** `BarraDeHerramientas` arranca con la fila oculta; el botón
+  de embudo la abre, y el punto de acento sigue avisando cuando hay un filtro activo escondido.
+  Es estado de pantalla, no de URL (§27): los filtros aplicados siguen viviendo en la URL.
+- **Aplicar o limpiar un filtro conserva la vista.** `BarraDeFiltros` reescribía la URL desde
+  cero con los filtros y perdía `vista`, `agrupar` y `desde`: cada filtro devolvía al kanban.
+  Ahora recibe `conservar` con esos tres parámetros y los reescribe primero. Sigue partiendo de
+  cero para los filtros, por la misma razón de antes: lo que dejó de aplicar no se queda pegado.
+- **La barra del embudo se pulsa.** Abre `DetalleDeEtapa`: las oportunidades abiertas de la
+  etapa con importe, la probabilidad de la etapa y el ponderado (importe × probabilidad, RN-01),
+  el total y la explicación de la tasa de paso. Todo llega formateado desde la pantalla; la
+  probabilidad que se muestra es la de la etapa según sus oportunidades (INV-05: dato, no
+  literal).
+- **El forecast pierde la leyenda de colores** (Compromiso, Mejor caso, Pipeline): eran tres
+  marcas sin acción. La frase de abajo nombra los colores y el desglose sale al pasar el cursor
+  sobre la barra de cada columna, que ya lo tenía.
+
+Dónde vive: `components/pipeline/{BarraDeHerramientas,BarraDeFiltros,Embudo,DetalleDeEtapa,Forecast}.tsx`,
+`app/(app)/oportunidades/page.tsx` (`conservar`, `abiertasPorEtapa`).
+
+## 32. Reabrir una ganada o perdida: quien pudo cerrarla la reabre (29 de septiembre de 2026)
+
+RN-18 reservaba la reapertura a Administración. El negocio pidió un botón para «reabrir y
+seguir con el proceso»; que solo Administración pudiera dejaría al vendedor que se equivocó
+de botón esperando un ticket. Así queda, **RN-18 enmendada**:
+
+- Reabren su propietario, quien tenga alcance de oficina (`VER_OPORTUNIDADES_OFICINA`) y quien
+  tenga `REABRIR_OPORTUNIDAD` (Administración). Es el espejo de quién puede cerrarla.
+- Vuelve a `ABIERTA` en la etapa donde se cerró —ganar o perder no la movía de columna (§25)—,
+  sin `actualCloseDate`, sin motivo ni competidor de pérdida. **El folio no cambia** (INV-12).
+  Cotización, hitos, MEDDIC, documentos y actividades se quedan como estaban.
+- Escribe `REABRIR_OPORTUNIDAD` en `AuditLog` con el estatus y el cierre que tenía, en la misma
+  transacción (INV-09); la bitácora lo muestra como «Reabierta · estaba perdida · Sigue en X».
+- Una ganada que se reabre deja de contar en lo ganado del periodo (P-08, P-09) en el acto: los
+  reportes leen `status` y `actualCloseDate`, no una copia.
+
+**Pendiente de confirmar:** si el negocio prefiere que solo Gerencia reabra ganadas (una ganada
+reabierta mueve la cuota), es quitar `esSuya` en `reabrirOportunidad`.
+
+Dónde vive: `reabrirOportunidad` en `lib/domain/opportunity.ts`, `reabrirOportunidadAccion`,
+`components/oportunidad/ReabrirOportunidad.tsx`, `lib/domain/bitacora.ts` (`REAPERTURA`).
+Pruebas: `tests/integracion/cierre.test.ts` (2).
+
+## 33. El piso de margen sale del sistema (29 de septiembre de 2026)
+
+**Decisión del negocio:** «eliminar por completo el valor Piso de Margen y todas las reglas de
+negocio que lo impliquen; se dejará fuera de este alcance ese término». Lo que se quitó:
+
+- **Política comercial:** `margin_floor` y `line_margin_floor` (migración
+  `20260929120000_sin_piso_de_margen`, aplicada como la de §29: `prisma db execute` y fila manual
+  en el historial de Supabase). Administración ya no los muestra.
+- **RN-05** (línea bajo el piso se señala): sin `lineasBajoElPiso`, sin franja de alertas, sin
+  `bajoElPiso` en la vista previa.
+- **RN-08** (precio mínimo por SKU derivado del piso): `price_list_entries.min_price` se borra;
+  `pisoDePrecio` y `validarPisoDePrecio` desaparecen; las cotizaciones aceptan cualquier precio
+  o descuento no negativo. Productos ya no muestra «Precio mínimo» ni «Piso de descuento».
+- **La señal de color.** «Verde en o sobre el piso, coral debajo» era el principio de diseño más
+  citado del spec (§13.1). Sin piso no hay contra qué comparar: el margen se muestra como cifra en
+  tarjetas, tabla, cotización, detalle y rentabilidad, y **solo la utilidad negativa** se pinta en
+  coral, porque es una pérdida, no un umbral (INV-05 sigue: cero no es un literal de política).
+- El seed, las pruebas y los comentarios que lo nombraban.
+
+**Lo que no cambia:** los umbrales de descuento (RN-04, para autorizaciones, fuera de alcance),
+los mínimos MEDDIC, la cobertura sana y los días para estancada siguen en `CommercialPolicy`.
+INV-05 sigue valiendo para ellos.
+
+**Costo de volver:** las dos columnas de política, `min_price`, `pisoDePrecio`, `lineasBajoElPiso`
+y el semáforo de color están en el historial del 29-sep; la derivación de RN-08 (`costo ÷ (1 −
+piso)`, topado a lista) está documentada en §9.1.
+
+Dónde vive: `prisma/schema.prisma`, `lib/domain/{product,quote,quoteService}.ts`,
+`components/cotizacion/{calculoEnVivo,TablaDeCotizacion}.tsx`, `components/productos/EditarProducto.tsx`,
+`app/(app)/{productos,oportunidades,admin,analisis}/**`, `components/pipeline/{TarjetaOportunidad,TablaOportunidades}.tsx`,
+`components/analisis/PestanaVentas.tsx`. Spec desactualizado en RN-05, RN-08, §9.1 y §13.1.
+
+## 34. Los objetivos se capturan en cuadrícula, y los trimestres se llaman Q (30 de septiembre de 2026)
+
+**Decisión del negocio:** la pantalla de objetivos debe ser su hoja: **una fila por vendedor, Q1 a
+Q4, total anual y «Total compañía»**, con «+ Agregar vendedor» y «Eliminar» por fila. Y los
+trimestres se nombran **Q**, no T, en toda la interfaz.
+
+**Lo que cambia respecto a §17 y a F-33:**
+
+- **La captura.** El formulario de una persona y un periodo a la vez (`FijarObjetivo`) desaparece.
+  `guardarCuotasDelEquipo` recibe la cuadrícula entera y la guarda **en un viaje**, pero la bitácora
+  sigue siendo **una entrada por cuota que cambió**, con su antes y su después (INV-09). Lo que no
+  cambió de valor no se escribe; «Guardar» sin cambios devuelve cero cambios y no toca la base.
+- **Una métrica a la vez.** Se captura venta o utilidad (el conmutador de arriba); la otra columna
+  del mismo trimestre se conserva tal cual. La utilidad no puede superar a la venta del trimestre
+  **cuando hay venta**: antes se exigía siempre, y eso impedía capturar la utilidad antes que la
+  venta. Cero no es una venta contra la que comparar.
+- **La cuota anual ya no se captura.** El total anual **es** la suma de los cuatro trimestres. Al
+  guardar los trimestres de alguien, su fila `ANUAL` previa, si la tenía, se retira con bitácora:
+  con la cuadrícula como fuente, una anual que no coincide con sus trimestres solo confunde. RN-32
+  («si coexisten, el anual manda») sigue valiendo para filas anuales que nadie haya vuelto a tocar,
+  y la vista de avance lo avisa.
+- **Eliminar a alguien** borra sus objetivos del año, trimestrales y anual, de las dos métricas.
+  `Objective` no tiene `deletedAt` (INV-15 no lo lista): cada objetivo borrado deja un renglón de
+  bitácora con las cifras que tenía y `eliminado: true`.
+- **Dos vistas en la URL** (`vista=objetivos|avance`, INV-10). **Objetivos** es la cuadrícula;
+  **Avance** es la tira de trimestres y la tabla del equipo (cumplimiento, arrastre, cobertura).
+  Arriba, en las dos, **cuatro indicadores de dos líneas**: cuota, logrado, cumplimiento y
+  cobertura; en Objetivos miden el año, en Avance el acumulado al trimestre elegido. Se suman de las
+  filas visibles (§10.3): para un vendedor son los suyos. El panel con la frase «Entras al T3
+  debiendo…» desaparece; el arrastre sigue, con cifra y signo, en la tabla del equipo.
+- **Quién.** Solo `EDITAR_CATALOGOS` (Administración) teclea, como antes (§17). Los demás ven la
+  cuadrícula en solo lectura; el vendedor, únicamente su fila (§2.3).
+- **Q en vez de T.** Tira, tabla del equipo, subtítulo, la anotación «Q4 2026» del cierre estimado
+  en la ficha de la oportunidad (`etiquetaDeTrimestre`) y los avisos. Análisis y forecast ya
+  usaban Q. Las claves internas (`2026-T3` en el forecast) no se tocan: no se ven.
+
+**Costo de volver:** `FijarObjetivo.tsx` y `fijarObjetivoAccion` están en el historial del 29-sep;
+`fijarObjetivo` en el dominio sigue existiendo (lo usan las pruebas) y acepta `ANUAL`.
+
+Dónde vive: `guardarCuotasDelEquipo` en `lib/domain/objetivo.ts`, `guardarCuotasAccion` en
+`app/(app)/objetivos/acciones.ts`, `components/objetivos/TablaDeObjetivos.tsx`,
+`app/(app)/objetivos/page.tsx`, `lib/etiquetas.ts`. Pruebas: `tests/integracion/objetivos.test.ts` (6).
+
+## 35. Análisis de ventas en gráficas, con Recharts (30 de septiembre de 2026)
+
+**Decisión del negocio:** las tablas de la pestaña **Análisis de ventas** se sustituyen por cuatro
+gráficas ejecutivas, al estilo de Pipedrive Insights sin copiarlo: avance contra objetivo (barras
+verticales por la dimensión elegida), histórico (barras de lo ganado con la utilidad como línea),
+rentabilidad (barras horizontales apiladas costo + utilidad, con la venta al final) y margen (barras
+horizontales de 0 a 100 %). Indicadores, filtros, pestañas, barra lateral y encabezado no cambian.
+Forecast y Actividad siguen en tablas; `TablaDeAnalisis` y `Reporte` se quedan para ellas.
+
+**Una dependencia nueva.** El proyecto no tenía librería de gráficas: las «barras» del embudo y de
+las tablas eran `div`. Se agregó **Recharts 3.10**, la que el negocio nombró. Entra con
+`next/dynamic` sin SSR: solo carga en la pestaña de ventas y en el navegador, que es donde puede
+medir el ancho. Los colores son los del manual (§13) en hexadecimal, porque el SVG se pinta con
+atributos; `react-doctor` marca la importación estática de Recharts dentro de las cuatro gráficas
+(`prefer-dynamic-import`) sin ver que ellas mismas entran diferidas: son cuatro hallazgos aceptados.
+
+**Los datos no cambian de fuente.** `PestanaVentas` sigue en el servidor, sigue usando
+`agruparVentas`, `historicoDeVentas` y `rentabilidad`, y ahora las corre para **todas** las
+agrupaciones de cada gráfica. `components/analisis/graficas/datos.ts` (puro, con pruebas) convierte
+cada resultado en puntos: **un número para la geometría y el texto ya formateado con `Decimal` para
+el tooltip**. INV-03 se conserva: el único formateo de dinero en el cliente es el corto de los ejes
+(«$328.8K»), y no se opera nada con él. INV-02 también: sin `VER_COSTO` no viaja utilidad ni costo,
+el histórico no lleva línea y rentabilidad y margen muestran el aviso.
+
+**«Agrupar por» cambia al instante y sigue en la URL.** Cada tarjeta recibe todas sus agrupaciones
+y el conmutador solo elige cuál se dibuja. La elección se escribe con `replaceState` en `g1`, `g2` y
+`g3` (rentabilidad y margen comparten `g3`), y `useSearchParams` es el único estado (INV-10): el
+reporte se sigue pegando en un correo. Al aplicar un filtro, la barra parte de la URL viva para no
+pisar la agrupación elegida. `ControlSegmentado` aprendió a ser de botones (`alElegir`) además de
+enlaces.
+
+**Lo que se conserva de las tablas:** cuatro trimestres cronológicos aunque estén en cero; las demás
+dimensiones de mayor a menor; el total no es una barra; la cuota solo si existe y es comparable (por
+trimestre va como barra clara al lado, y el tooltip trae cuota y cumplimiento; «en curso» y «no ha
+empezado» también van ahí); «Sin cotización» atenuado; la nota del reparto por producto. La variación
+y el margen son porcentajes y **no se dibujan sobre un eje de dinero**: van en el tooltip, y el margen
+en su propia gráfica. Una **pérdida** no cabe en una barra apilada: se dibuja el costo y el tooltip
+dice la utilidad negativa en coral; un margen negativo se dibuja en cero y se lee en coral (§33).
+
+**Con muchos registros** las barras verticales crecen a lo ancho y el contenedor hace scroll
+horizontal; las horizontales crecen a lo alto y hacen scroll vertical a partir de trece filas.
+
+**Lo que se pierde:** las cifras exactas ya no están a la vista, solo en el tooltip y en los cuatro
+indicadores. Si el negocio pide «ver como tabla», `TablaDeAnalisis` sigue existiendo: es un
+conmutador más, no una reconstrucción.
+
+**Costo de volver:** `PestanaVentas` con tablas está en el historial del 30-sep; quitar Recharts es
+`pnpm remove recharts` y borrar `components/analisis/graficas/`.
+
+Dónde vive: `components/analisis/graficas/` (`tipos`, `formato`, `datos`, `paleta`, `comun`, las
+cuatro gráficas y `TarjetasDeVentas`), `components/analisis/PestanaVentas.tsx`,
+`components/analisis/FiltrosDeAnalisis.tsx`, `components/ui/primitivas.tsx` (`ControlSegmentado`).
+Pruebas: `components/analisis/graficas/{formato,datos}.test.ts` (19).
+
+## 36. Análisis sin filtros de producto ni tipo de negocio, e indicadores de dos líneas (30 de septiembre de 2026)
+
+**Decisión del negocio:** en Análisis se quitan los filtros **Producto** y **Tipo de negocio**, y las
+tarjetas de métricas de las tres pestañas se compactan a **dos líneas: el nombre y el valor**.
+
+**Los filtros salieron de punta a punta,** no solo de la barra: `parseFiltrosDeAnalisis` ya no lee
+`producto` ni `tipo` (un enlace viejo que los traiga se ignora), el recorte de `lib/scope/analisis`
+ya no los aplica, y la pantalla ya no carga el catálogo de productos. Dejar el filtro vivo solo en
+la URL habría sido un filtro escondido: reportes que nadie podría reproducir desde la pantalla.
+
+**Consecuencia en el reporte 1:** la cuota consolidada **siempre es comparable** con lo ganado. El
+estado «— · no se reparte por producto ni por tipo» y el aviso «sin cuota comparable con estos
+filtros» desaparecen; queda solo «no hay cuota fijada» cuando no la hay. `puntosDeAvance` conserva
+la opción de cuota nula por si un recorte futuro la vuelve a hacer incomparable, y sus pruebas
+también. Las agrupaciones por producto y por tipo **siguen**: son dimensiones de las gráficas, no
+filtros.
+
+**Los indicadores** usan `StatTile denso` en Ventas, Forecast y Actividad: eyebrow y cifra, y el
+texto de apoyo pasa al `title`, para quien lo quiera al pasar el cursor. Es la misma tarjeta que
+Objetivos (§34) y el tablero.
+
+**Costo de volver:** los dos filtros están en el historial del 30-sep (parser, recorte, catálogo y
+pastillas); reponerlos es volver a leerlos en la URL y reponer `cuotaComparable` en `PestanaVentas`.
+
+Dónde vive: `lib/filters/analisis.ts`, `lib/scope/analisis.ts`, `app/(app)/analisis/page.tsx`,
+`components/analisis/{FiltrosDeAnalisis,PestanaVentas,PestanaForecast,PestanaActividad}.tsx`.
+Pruebas: `lib/filters/analisis.test.ts`, `tests/integracion/analisis.test.ts`.
+
+## 37. Forecast en gráficas: embudo, distribución, ciclo, estado y antigüedad (30 de septiembre de 2026)
+
+**Decisión del negocio:** la pestaña **Forecast** de Análisis deja de ser tabular. Debajo de los
+cuatro indicadores quedan seis tarjetas en dos columnas: embudo por trimestre de cierre, distribución
+del pipeline, ciclo de venta, antigüedad y estancamiento, antigüedad contra importe, y la tabla de las
+de mayor importe, que se conserva porque es operativa (folio con enlace).
+
+**Los datos no cambian.** `PestanaForecast` sigue en el servidor con `embudoDeForecast`,
+`cicloDeVenta` y `antiguedadYEstancamiento`; `graficas/datosDeForecast.ts` (puro, con pruebas) los
+convierte en puntos, como §35. Recharts ya estaba; entra igual con `next/dynamic`.
+
+**Cómo se dibuja cada reporte:**
+
+- **Embudo (4):** una barra por trimestre; la altura es el importe y el segmento verde de abajo el
+  ponderado (RN-01): se apila ponderado + resto, así la barra mide el importe sin inventar nada. Los
+  filtros de probabilidad y pronóstico siguen siendo enlaces del servidor: recortan antes de agregar.
+  La agrupación «dentro de cada trimestre» dejó de ser una tabla anidada: es la **distribución del
+  pipeline** por cliente o vendedor, sumando los subgrupos de todos los trimestres, y conmuta al
+  instante con `g4`.
+- **Ciclo de venta (5):** un conmutador nuevo en la URL, **`g5`** (`vendedor` por omisión,
+  `trimestre`), alterna barras por vendedor con la mediana como línea de referencia y una línea de
+  evolución por trimestre con la misma mediana. Un solo componente por forma, no dos tarjetas.
+- **Antigüedad y estancamiento (6):** los tres indicadores se quedan; debajo, barras **agrupadas**
+  por vendedor (abiertas, estancadas, sin actividad, vencidas). Nunca apiladas: son subconjuntos que
+  se traslapan. Y una **dispersión** edad × importe de cada abierta con la edad promedio de referencia.
+
+**Estado de etapa (regla nueva, de presentación):** días en la etapa ÷ límite de la etapa. Menos del
+75 % «en tiempo», del 75 % al límite «en riesgo», pasado el límite «fuera del límite de etapa» (es la
+misma condición que la bandera ESTANCADA de RN-03, así que las dos cuentan lo mismo). Se usa en la
+dispersión y en la columna «En etapa» de la tabla. **El 0.75 es un literal en
+`components/analisis/graficas/datosDeForecast.ts` (`BANDA_DE_RIESGO`)**, no en `lib/domain`: es una
+banda para teñir, no una regla que decida nada. Si el negocio quiere ajustarla por país, el sitio es
+`CommercialPolicy` (INV-05); hasta entonces queda dicho aquí. La vocabulario se mantuvo del CRM: la
+tercera banda se llama «fuera del límite de etapa» y no «vencida», porque «cierre vencido» ya
+significa otra cosa en la misma tarjeta (cierre estimado en el pasado).
+
+**Colores:** importe y «en tiempo» en azul; ponderado en verde de estado; «en riesgo» y estancadas en
+lima (el aviso del manual); sin actividad en coral; vencidas en magenta, el complementario de uso
+mínimo, porque dos rojos no se distinguen en barras agrupadas.
+
+**Costo de volver:** `PestanaForecast` tabular está en el historial del 30-sep; `g5` se quita del
+parser y `GraficaHorizontal` sigue sirviendo al margen de ventas.
+
+Dónde vive: `components/analisis/graficas/{datosDeForecast,GraficaDeEmbudo,GraficaHorizontal,
+GraficaDeLinea,GraficaAgrupada,GraficaDeDispersion,TarjetasDeForecast}.tsx`,
+`components/analisis/PestanaForecast.tsx`, `lib/filters/analisis.ts` (`g5`),
+`components/analisis/TablaDeAnalisis.tsx` (tono `alerta`). Pruebas:
+`components/analisis/graficas/datosDeForecast.test.ts` (9), `lib/filters/analisis.test.ts`.
+
+## 38. Actividad y MEDDIC en gráficas, con las tablas como detalle (30 de septiembre de 2026)
+
+**Decisión del negocio:** la tercera pestaña de Análisis también deja de ser tabular. Debajo de los
+cuatro indicadores: actividad por vendedor (barras agrupadas, una serie por tipo), actividad por mes
+(los doce meses del año fiscal), abiertas contra sin siguiente paso (agrupadas, azul y coral) y salud
+MEDDIC por etapa (barras horizontales de 0 a 100 con «Mínimo: 70» de referencia). La lista de las que
+están en cierre sin llegar al mínimo **sigue siendo tabla**, a lo ancho, porque es operativa. Y las
+dos tablas originales se quedan debajo como **Detalle**, con menos jerarquía, para quien opera.
+
+**Los datos no cambian.** `PestanaActividad` sigue en el servidor con `actividadPorVendedor` y
+`saludMeddic`; `graficas/datosDeActividad.ts` (puro, con pruebas) los convierte en puntos. No hay
+conmutadores propios: los filtros globales recortan antes y no existe estado aparte que se
+desincronice.
+
+**Reglas que se fijaron al convertir:**
+
+- **Los tipos de actividad son datos**, no una lista fija: una serie por cada tipo que exista con lo
+  filtrado, con el color por orden (azul, verde, lima, navy…). «Hechas» es el total y va en el
+  tooltip, no como barra.
+- **Los doce meses del año fiscal aparecen aunque estén vacíos**, empezando en `fiscalYearStartMonth`
+  (`rangoDeAnioFiscal`); el cero se atenúa y no lleva cifra encima. No se inventa actividad.
+- **El porcentaje sin siguiente paso no divide entre cero**: con cero abiertas se muestra «—».
+- **«Sin datos» de MEDDIC no es cero**: la etapa sin calificaciones lleva una barra gris mínima y el
+  texto «Sin datos»; con promedio, verde en o sobre el mínimo y coral debajo. El mínimo sigue viniendo
+  de la política comercial (INV-05).
+- **KPIs sin cambio de regla:** «Sin siguiente paso» en coral cuando hay, «En cierre bajo el mínimo»
+  verde en cero y coral con alguna, como ya estaban.
+
+**Lo que se generalizó:** `GraficaAgrupada` recibe las series como datos (el forecast la usa igual
+para el estado por vendedor), `GraficaDeBarras` acepta un formato de conteo y una etiqueta corta para
+el eje («sep» por «sep 2026»), y `GraficaHorizontal` pinta por tono (verde, coral, gris): el margen
+negativo de ventas ahora va en coral, que es lo que §33 pedía.
+
+**Costo de volver:** `PestanaActividad` tabular está en el historial del 30-sep.
+
+Dónde vive: `components/analisis/graficas/{datosDeActividad,TarjetasDeActividad,GraficaAgrupada,
+GraficaDeBarras,GraficaHorizontal}.tsx`, `components/analisis/PestanaActividad.tsx`. Pruebas:
+`components/analisis/graficas/datosDeActividad.test.ts` (6).
+

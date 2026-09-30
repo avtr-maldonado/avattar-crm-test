@@ -5,21 +5,12 @@ import { z } from "zod";
 import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { requireSession } from "@/lib/auth/session";
 import { crearProducto, editarProducto } from "@/lib/domain/product";
-import { getCommercialPolicy } from "@/lib/policy";
 import { getProducto } from "@/lib/scope/productos";
 
 /**
- * Las mutaciones de P-06.
- *
- * El piso de margen por línea se lee aquí y se pasa al dominio: `lib/domain` no
- * importa `lib/policy` (AC-31). La lista es única en USD para los tres países y
- * el piso es por país; **se usa el de México**, como hace el seed. Si el negocio
- * prefiere el más estricto de los tres, este es el único lugar que cambia.
+ * Las mutaciones de P-06. Sin umbrales que pasar al dominio desde el 29-sep-2026
+ * (decisiones §33): la lista es precio y costo, y nada más.
  */
-async function umbrales() {
-  const politica = await getCommercialPolicy("MX");
-  return { lineMarginFloor: politica.lineMarginFloor.toString() };
-}
 
 /** Alta y edición comparten formulario, así que comparten tipo de resultado. */
 export type ResultadoDeProducto = ResultadoAccion<{ id: string } | null>;
@@ -73,7 +64,6 @@ export async function crearProductoAccion(
   const r = await crearProducto(
     session,
     { ...datos.data, description: datos.data.description || null },
-    await umbrales(),
   );
   if (!r.ok) return r;
 
@@ -114,7 +104,6 @@ export async function editarProductoAccion(
       listPrice: d.listPrice ?? undefined,
       standardCost: d.standardCost ?? undefined,
     },
-    await umbrales(),
   );
   if (!r.ok) return r;
 

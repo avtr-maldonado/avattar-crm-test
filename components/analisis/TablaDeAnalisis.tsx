@@ -6,7 +6,7 @@ export type CeldaDeAnalisis =
   | string
   | {
       texto: string;
-      tono?: "titulo" | "tenue" | "exito" | "peligro" | "acento";
+      tono?: "titulo" | "tenue" | "exito" | "peligro" | "acento" | "alerta";
       /** 0 a 1: pinta una barra corta detrás del texto, para leer proporciones sin sumar. */
       barra?: number;
       negrita?: boolean;
@@ -109,6 +109,7 @@ const COLOR = {
   exito: "text-exito",
   peligro: "text-coral",
   acento: "text-acento",
+  alerta: "text-navy-500",
 };
 
 function Celda({ celda, derecha, sangria = false }: { celda: CeldaDeAnalisis; derecha: boolean; sangria?: boolean }) {

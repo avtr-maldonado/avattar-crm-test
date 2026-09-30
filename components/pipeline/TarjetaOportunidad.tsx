@@ -29,9 +29,8 @@ import { Avatar, Pastilla } from "@/components/ui/primitivas";
  * decide banderas: eso vive en `lib/domain` y `lib/money`, probado con tests
  * unitarios. «La UI nunca recalcula por su cuenta» (§4.3).
  *
- * El margen sigue siendo **la señal más importante de toda la interfaz**
- * (§13.1): verde en o sobre el piso, coral debajo. Viaja como
- * `margenBajoElPiso`, un booleano ya resuelto contra `CommercialPolicy`.
+ * El margen se lee como cifra (§33): sin piso, solo la pérdida se pinta en
+ * coral. Viaja como `margenNegativo`, un booleano ya resuelto en el servidor.
  */
 export type DatosTarjeta = {
   id: string;
@@ -42,7 +41,8 @@ export type DatosTarjeta = {
   importe: string;
   /** Ya formateado: «31.0 %». Nulo mientras no hay cotización. */
   margen: string | null;
-  margenBajoElPiso: boolean;
+  /** Utilidad negativa: se pinta en coral (§33). */
+  margenNegativo: boolean;
   meddicScore: number | null;
   /** Ya formateado: «15 oct 2026». */
   cierre: string;
@@ -106,7 +106,7 @@ export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
             <span
               className={clsx(
                 "tabular text-xs",
-                o.margenBajoElPiso ? "font-semibold text-coral" : "font-medium text-exito",
+                o.margenNegativo ? "font-semibold text-coral" : "font-medium text-texto-cuerpo",
               )}
             >
               {o.margen}
@@ -122,7 +122,7 @@ export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
 /**
  * La bandera, sin la fila que ocupaba.
  *
- * Coral cuando cuesta dinero o clientes —margen bajo el piso, sin siguiente
+ * Coral cuando cuesta dinero o clientes —una pérdida, sin siguiente
  * paso—; apagado cuando solo es un problema de ritmo (§13.1). El `title` lista
  * las banderas, así que el detalle no se pierde: se consulta.
  */

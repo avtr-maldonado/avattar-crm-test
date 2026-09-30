@@ -13,7 +13,7 @@ import { ciudadDe, etiquetaDeDuracion, fechaCortaEn, horaEn } from "@/lib/tiempo
 import { cotizacionVigente } from "@/lib/scope/cotizaciones";
 import { bitacoraDeOportunidad } from "@/lib/scope/bitacora";
 import { listProductos } from "@/lib/scope/productos";
-import { calcularLinea, lineasBajoElPiso } from "@/lib/domain/quote";
+import { calcularLinea } from "@/lib/domain/quote";
 import {
   TablaDeCotizacion,
   type LineaCalculada,
@@ -67,6 +67,7 @@ import { EditarPersona } from "@/components/contactos/EditarPersona";
 import { crearPersonaAccion, editarPersonaAccion } from "../../contactos/acciones";
 import { EditarOportunidad } from "@/components/oportunidad/EditarOportunidad";
 import { CerrarOportunidad } from "@/components/oportunidad/CerrarOportunidad";
+import { ReabrirOportunidad } from "@/components/oportunidad/ReabrirOportunidad";
 import { catalogosParaAlta, motivosDePerdida, tiposDeActividad } from "@/lib/scope/configuracion";
 import { destinatariosValidos, requisitosParaGanar } from "@/lib/domain/opportunity";
 import { can, type Session } from "@/lib/auth/permissions";
@@ -77,6 +78,7 @@ import {
   guardarActividadAccion,
   marcarGanadaAccion,
   marcarPerdidaAccion,
+  reabrirOportunidadAccion,
 } from "./acciones";
 
 /**
@@ -235,7 +237,6 @@ export default async function DetalleOportunidadPage({
               session={session}
               oportunidad={oportunidad}
               cotizacion={cotizacion}
-              politica={politica}
             />
           ) : pestanaActiva === "bitacora" ? (
             <Bitacora
@@ -299,12 +300,15 @@ function Encabezado({
   // pregunta para no ofrecer un botón que el servidor va a rechazar; la
   // autorización de verdad vive en `lib/domain`.
   const puedeEditar = o.status === "ABIERTA" && (o.owner.id === sesion.userId || puedeReasignar);
+  // RN-18 enmendada (§32): quien pudo cerrarla la reabre; Administración también.
+  const puedeReabrir =
+    o.status !== "ABIERTA" &&
+    (o.owner.id === sesion.userId || puedeReasignar || can(sesion, "REABRIR_OPORTUNIDAD"));
 
   const cotizacion = cotizacionConLineas(o);
   // `grossMargin` solo viene si el usuario tiene VER_MARGEN: el selector lo
   // omite del `select`, no lo oculta después (INV-02).
   const margen = "grossMargin" in o ? o.grossMargin : null;
-  const margenBajoElPiso = margen ? margen.lt(politica.marginFloor) : false;
 
   return (
     <section>
@@ -332,6 +336,14 @@ function Encabezado({
               requisitos={requisitosParaGanar(o).map((r) => ({ texto: r.texto, cumple: r.cumple }))}
               motivos={motivos}
               acciones={{ ganada: marcarGanadaAccion, perdida: marcarPerdidaAccion }}
+            />
+          )}
+          {puedeReabrir && (
+            <ReabrirOportunidad
+              opportunityId={o.id}
+              estatus={ETIQUETA_ESTATUS[o.status]}
+              etapa={o.stage.name}
+              accion={reabrirOportunidadAccion}
             />
           )}
         </div>
@@ -367,8 +379,8 @@ function Encabezado({
           <StatTile denso
             etiqueta="Margen"
             valor={formatPercent(toClient(margen))}
-            subtexto={`Piso ${formatPercent(toClient(politica.marginFloor), 0)}`}
-            tono={margenBajoElPiso ? "peligro" : "exito"}
+            subtexto="utilidad sobre el neto"
+            tono={margen.isNegative() ? "peligro" : "neutro"}
           />
         ) : (
           <StatTile denso
@@ -638,12 +650,10 @@ async function TabCotizacion({
   session,
   oportunidad,
   cotizacion,
-  politica,
 }: {
   session: Session;
   oportunidad: DetalleOportunidad;
   cotizacion: Awaited<ReturnType<typeof cotizacionVigente>>;
-  politica: Politica;
 }) {
   const verCosto = can(session, "VER_COSTO");
   const verMargen = can(session, "VER_MARGEN");
@@ -672,21 +682,17 @@ async function TabCotizacion({
   const productos = puedeEditar ? await listProductos(session) : [];
 
   // Las líneas, calculadas con Decimal y formateadas antes de cruzar.
-  const paraElPiso = cotizacion.lines.map((l) => ({
+  const paraCalcular = cotizacion.lines.map((l) => ({
     descripcion: l.description,
     quantity: l.quantity,
     unitPrice: l.unitPrice,
     discountRate: l.discountRate,
-    // Sin VER_COSTO el costo no viene (INV-02), y sin costo no hay margen que
-    // comparar contra el piso: la franja simplemente no señala nada.
+    // Sin VER_COSTO el costo no viene (INV-02): la utilidad de la línea no se calcula.
     unitCost: "unitCost" in l ? l.unitCost : money(0),
   }));
-  const bajas = new Set(
-    verCosto ? lineasBajoElPiso(paraElPiso, politica.lineMarginFloor).map((b) => b.descripcion) : [],
-  );
 
   const lineas: LineaCalculada[] = cotizacion.lines.map((l, i) => {
-    const calculo = calcularLinea(paraElPiso[i]!);
+    const calculo = calcularLinea(paraCalcular[i]!);
     return {
       id: l.id,
       descripcion: l.description,
@@ -700,7 +706,6 @@ async function TabCotizacion({
         ? { costoUnitario: toClient(l.unitCost), utilidad: formatUSD(calculo.utilidad) }
         : {}),
       ...(verMargen ? { margen: formatPercent(toClient(calculo.margen)) } : {}),
-      bajoElPiso: bajas.has(l.description),
     };
   });
 
@@ -745,12 +750,8 @@ async function TabCotizacion({
       verCosto={verCosto}
       verMargen={verMargen}
       puedeEditar={puedeEditar}
-      pisoDeLinea={formatPercent(toClient(politica.lineMarginFloor), 0)}
-      // Para la vista previa al editar: la tasa copiada (RN-24) y el piso por línea.
-      enVivo={{
-        taxRate: toClient(cotizacion.taxRate),
-        pisoDeLinea: toClient(politica.lineMarginFloor),
-      }}
+      // Para la vista previa al editar: la tasa copiada (RN-24).
+      enVivo={{ taxRate: toClient(cotizacion.taxRate) }}
       acciones={{
         guardarLinea: guardarLineaAccion,
         guardarCotizacion: guardarCotizacionAccion,

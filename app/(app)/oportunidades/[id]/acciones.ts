@@ -5,7 +5,13 @@ import { z } from "zod";
 import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { requireSession } from "@/lib/auth/session";
 import { editarActividad, registrarActividad } from "@/lib/domain/activity";
-import { cambiarEtapa, editarOportunidad, marcarGanada, marcarPerdida } from "@/lib/domain/opportunity";
+import {
+  cambiarEtapa,
+  editarOportunidad,
+  marcarGanada,
+  marcarPerdida,
+  reabrirOportunidad,
+} from "@/lib/domain/opportunity";
 import { cambioDeCampo } from "@/lib/domain/opportunityField";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { duracionEnMinutos, instanteEn } from "@/lib/tiempo";
@@ -268,6 +274,25 @@ export async function marcarGanadaAccion(
   if (!detalle) return falla("AUTORIZACION", NO_ALCANZA);
 
   const r = await marcarGanada(session, detalle);
+  if (!r.ok) return r;
+
+  revalidatePath(`/oportunidades/${detalle.id}`);
+  revalidatePath("/oportunidades");
+  return ok(null);
+}
+
+/** Reabrir · RN-18 enmendada (decisiones §32). Quién puede lo decide el dominio. */
+export async function reabrirOportunidadAccion(
+  _previo: ResultadoAccion | null,
+  form: FormData,
+): Promise<ResultadoAccion> {
+  const datos = esquemaCierre.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+
+  const { session, detalle } = await cargar(datos.data.opportunityId);
+  if (!detalle) return falla("AUTORIZACION", NO_ALCANZA);
+
+  const r = await reabrirOportunidad(session, detalle);
   if (!r.ok) return r;
 
   revalidatePath(`/oportunidades/${detalle.id}`);

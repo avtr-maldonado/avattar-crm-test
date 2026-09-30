@@ -210,10 +210,6 @@ model Country {
 model CommercialPolicy {
   id                    String      @id @default(cuid())
   countryCode           CountryCode @unique @map("country_code")
-  /// Piso de margen global. 0.2000 = 20 %.
-  marginFloor           Decimal     @map("margin_floor") @db.Decimal(7, 4)
-  /// Piso de margen por línea. Se señala aunque el total cumpla (RN-05).
-  lineMarginFloor       Decimal     @map("line_margin_floor") @db.Decimal(7, 4)
   /// Sobre este descuento autoriza Gerencia (RN-04).
   discountThresholdMgmt Decimal     @map("discount_threshold_mgmt") @db.Decimal(7, 4)
   /// Sobre este descuento autoriza Dirección (RN-04).
@@ -582,8 +578,6 @@ model PriceListEntry {
   id           String   @id @default(cuid())
   productId    String   @map("product_id")
   listPrice    Decimal  @map("list_price") @db.Decimal(18, 4)
-  /// RN-08 · piso duro. Un descuento que baje de aquí no se guarda.
-  minPrice     Decimal  @map("min_price") @db.Decimal(18, 4)
   standardCost Decimal  @map("standard_cost") @db.Decimal(18, 4)
   validFrom    DateTime @map("valid_from") @db.Date
   validTo      DateTime @map("valid_to") @db.Date
