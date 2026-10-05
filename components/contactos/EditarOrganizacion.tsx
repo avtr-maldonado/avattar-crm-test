@@ -114,11 +114,7 @@ export function EditarOrganizacion({
 
       <Panel
         titulo={esAlta ? "Nueva cuenta" : "Editar cuenta"}
-        subtitulo={
-          esAlta
-            ? "Queda a tu nombre y a la vista de toda la operación. Reasignarla se hace después, desde la ficha."
-            : `${organizacion.name}. La matriz no se edita aquí.`
-        }
+        subtitulo={esAlta ? undefined : organizacion.name}
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         ancho="lg"
@@ -168,7 +164,6 @@ export function EditarOrganizacion({
             <Campo
               etiqueta="Identificador fiscal"
               htmlFor={`${idFormulario}-taxId`}
-              ayuda="RFC, NIT o RUT, según dónde facture la empresa."
             >
               <Entrada
                 id={`${idFormulario}-taxId`}
@@ -217,7 +212,6 @@ export function EditarOrganizacion({
             etiqueta="País sede"
             htmlFor={`${idFormulario}-countryCode`}
             problema={problemaDe(resultado, "countryCode")}
-            ayuda="Informativo. No limita quién ve la cuenta ni dónde se le venden oportunidades."
           >
             <Seleccion
               id={`${idFormulario}-countryCode`}
@@ -255,7 +249,6 @@ export function EditarOrganizacion({
               etiqueta="Días de crédito"
               htmlFor={`${idFormulario}-creditDays`}
               problema={problemaDe(resultado, "creditDays")}
-              ayuda="Lo que se le concede para pagar."
             >
               <Entrada
                 id={`${idFormulario}-creditDays`}

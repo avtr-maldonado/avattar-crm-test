@@ -395,10 +395,6 @@ function SelectorDeLapso({
         </div>
       )}
 
-      <p className="mt-3 text-xs leading-snug text-texto-tenue">
-        El periodo siempre dice sobre qué fecha aplica. Sin eso, dos personas con la misma pantalla
-        obtienen números distintos.
-      </p>
 
       <div className="mt-3 flex justify-end">
         <Boton

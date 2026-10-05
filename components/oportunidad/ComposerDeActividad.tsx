@@ -125,7 +125,6 @@ export function ComposerDeActividad({
   usuarioActual,
   zona,
   zonaEtiqueta,
-  calendarioConfigurado,
   actividad,
   accion,
 }: {
@@ -135,7 +134,6 @@ export function ComposerDeActividad({
   usuarioActual: string;
   zona: string;
   zonaEtiqueta: string;
-  calendarioConfigurado: boolean;
   actividad?: ActividadEditable;
   accion: (previo: Resultado | null, form: FormData) => Promise<Resultado>;
 }) {
@@ -221,11 +219,6 @@ export function ComposerDeActividad({
 
       <Panel
         titulo={editando ? "Editar actividad" : "Nueva actividad"}
-        subtitulo={
-          editando
-            ? "Los cambios llegan también al calendario, si estaba agendada ahí."
-            : "Agenda lo que sigue, o marca como hecha para registrar lo que acaba de pasar."
-        }
         abierto={abierto}
         alCerrar={cerrar}
         ancho="lg"
@@ -313,11 +306,6 @@ export function ComposerDeActividad({
             etiqueta="Responsable"
             htmlFor="userId"
             problema={problemas.problema("userId")}
-            ayuda={
-              calendarioConfigurado && !estado.hecha
-                ? "Se agenda en su calendario de Microsoft 365."
-                : undefined
-            }
           >
             <Seleccion
               id="userId"
@@ -349,7 +337,6 @@ export function ComposerDeActividad({
             <Campo
               etiqueta="Resultado"
               htmlFor="outcome"
-              ayuda="Lo que cambió: qué dijeron, qué falta, con quién hay que hablar."
             >
               <AreaDeTexto
                 id="outcome"
@@ -578,9 +565,6 @@ function SinProximoPaso({
       <p className="text-sm text-texto-cuerpo">{mensaje}</p>
       {/* Dos caminos y dos botones, no tres: el de arriba guarda con lo que
           haya en estos campos, y el de abajo es el de decir que no habrá. */}
-      <p className="-mt-2 text-xs text-texto-tenue">
-        Agenda aquí el que sigue y pulsa «Guardar», o ciérrala sin seguimiento.
-      </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-[8rem_minmax(0,1fr)_10rem]">
         <Campo etiqueta="Tipo" htmlFor="siguienteTypeId">

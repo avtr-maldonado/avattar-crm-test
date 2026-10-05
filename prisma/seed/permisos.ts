@@ -36,6 +36,11 @@ export const PERMISOS_POR_ROL: Record<string, DefinicionPermiso> = {
     descripcion: "Todas las oportunidades de los países asignados al usuario.",
     roles: { VENDEDOR: no, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no },
   },
+  CREAR_OPORTUNIDAD: {
+    nombre: "Crear oportunidades",
+    descripcion: "Dar de alta oportunidades y trabajarlas en el tablero. Preventa las apoya: las ve y les agrega actividades (decisiones §39).",
+    roles: { VENDEDOR: si, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no },
+  },
   VER_MARGEN: {
     nombre: "Ver margen",
     descripcion: "El porcentaje de margen. Independiente de ver el costo (RN-09).",

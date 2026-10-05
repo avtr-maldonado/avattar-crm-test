@@ -171,10 +171,11 @@ describe("P-11 · catálogos", () => {
 });
 
 describe("P-11 · matriz de permisos · §5.2", () => {
-  it("los doce permisos están, con su valor por rol", async () => {
+  it("los trece permisos están, con su valor por rol", async () => {
     const permisos = await configuracionDePermisos();
-    // Once del spec §5.2 más VER_OBJETIVOS_EQUIPO, que llegó con P-08.
-    expect(permisos).toHaveLength(12);
+    // Once del spec §5.2 más VER_OBJETIVOS_EQUIPO (P-08) y CREAR_OPORTUNIDAD (§39).
+    expect(permisos).toHaveLength(13);
+    expect(permisos.map((p) => p.code)).toContain("CREAR_OPORTUNIDAD");
     for (const p of permisos) {
       expect(Object.keys(p.porRol)).toHaveLength(5);
     }

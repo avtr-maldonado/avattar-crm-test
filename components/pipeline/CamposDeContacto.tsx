@@ -123,11 +123,6 @@ export function CamposDeContacto({
 
   const lista = organizacionExiste ? contactos : null;
 
-  const ayudaDePersona = organizacionEsNueva
-    ? "La empresa es nueva: la persona también se creará."
-    : lista?.length === 0
-      ? "No hay contactos que elegir: captura uno nuevo."
-      : undefined;
 
   return (
     <>
@@ -154,7 +149,6 @@ export function CamposDeContacto({
           htmlFor="persona"
           anotacion={anotacionDe(persona)}
           tonoAnotacion={persona.tipo === "EXISTENTE" ? "exito" : "acento"}
-          ayuda={ayudaDePersona}
         >
           {organizacionExiste ? (
             <SelectorDeContacto
@@ -221,7 +215,6 @@ export function CamposDeContacto({
               <Campo
                 etiqueta="Rol en el comité"
                 htmlFor="personaRolComiteId"
-                ayuda="Declararlo satisface el requisito de entrada a Descubrimiento."
               >
                 <Seleccion id="personaRolComiteId" name="personaRolComiteId" defaultValue="">
                   <option value="">Sin declarar</option>

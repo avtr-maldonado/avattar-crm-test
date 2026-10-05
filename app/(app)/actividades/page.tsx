@@ -1,62 +1,59 @@
-import Link from "next/link";
 import type { CountryCode } from "@/lib/dto";
 import { oficinaActiva, requireSession } from "@/lib/auth/session";
-import { agendaSemanal, bandejaDeTrabajo } from "@/lib/scope/agenda";
+import { agendaSemanal, bandejaDeTrabajo, tableroDeActividades } from "@/lib/scope/agenda";
 import { tiposDeActividad } from "@/lib/scope/configuracion";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
+import { semanaElegida, type RelojDeAgenda } from "@/lib/domain/agenda";
 import { getCountry } from "@/lib/policy";
-import { configurado as calendarioConfigurado } from "@/lib/graph/token";
-import { ciudadDe } from "@/lib/tiempo";
-import { formatUSD } from "@/lib/money";
+import { ciudadDe, fechaEn, lunesDe } from "@/lib/tiempo";
 import { iniciales } from "@/lib/etiquetas";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
-import {
-  Avatar,
-  Boton,
-  ControlSegmentado,
-  EstadoVacio,
-  Pastilla,
-  StatTile,
-} from "@/components/ui/primitivas";
+import { ControlSegmentado, StatTile } from "@/components/ui/primitivas";
 import {
   ComposerDeActividad,
   type ActividadEditable,
   type TipoDeActividad,
 } from "@/components/oportunidad/ComposerDeActividad";
+import { formatos, type ActividadDeTablero } from "@/components/actividades/formato";
+import { VistaLista } from "@/components/actividades/VistaLista";
+import { VistaKanban } from "@/components/actividades/VistaKanban";
+import { VistaSemana } from "@/components/actividades/VistaSemana";
+import { NavegacionDeSemana } from "@/components/actividades/NavegacionDeSemana";
 import { guardarActividadAccion } from "@/app/(app)/oportunidades/[id]/acciones";
 
 /**
  * P-07 · Actividades.
  *
- * «Agenda semanal por día y hora, más la bandeja de trabajo en tres grupos:
- * vencidas, hoy, y oportunidades sin próxima actividad.»
- *
  * §12.4 lo llama **el flujo que decide la adopción**. Si un vendedor no abre
  * esta pantalla cada mañana, no abre el CRM, y entonces nada más importa.
  *
- * ## Las tres listas piden acciones distintas
+ * ## Tres vistas sobre los mismos datos (decisiones §42)
  *
- * **Vencidas** es deuda: algo se prometió y no se hizo. **Hoy** es el plan del
- * día. **Sin próxima actividad** no es una actividad en absoluto — es una
- * oportunidad abandonada, y es la única que no aparece en ninguna agenda
- * porque justamente no hay nada agendado. Mezclarlas daría una lista larga que
- * nadie termina.
+ * **Lista**: una fila por actividad, condensada, con su estado; debajo, las
+ * oportunidades sin próximo paso (RN-10). **Kanban**: cuatro columnas por
+ * estado, calculado y no capturado (INV-11): por realizar, en progreso,
+ * realizadas y vencidas. **Semana**: lunes a domingo con bloques por hora,
+ * verde lo hecho y coral lo vencido; se navega con flechas y la semana que se
+ * ve también vive en la URL (`semana=YYYY-MM-DD`, decisiones §44). La vista
+ * vive en la URL (INV-10).
+ *
+ * Los tres indicadores de arriba son los de la bandeja de §12.4 y cuentan lo
+ * mismo que el contador de Actividades del menú: la oficina activa recorta.
  *
  * ## Se edita aquí; se da de alta en la oportunidad
  *
  * Cada fila trae el mismo lápiz que la pestaña Actividades del detalle: abre
  * `ComposerDeActividad` cargado y guarda con la misma acción, en la zona del
- * país de la oportunidad y con sus responsables (decisiones §20). Resolver una
- * vencida —marcarla hecha o reprogramarla— no exige salir de la bandeja.
- *
- * El alta no vive aquí: una actividad nueva es el siguiente paso de **una**
- * oportunidad, y se agenda desde ella. El botón «Registrar actividad» que
- * llevaba a una ruta inexistente se quitó el 29-sep-2026 (decisiones §30).
+ * país de la oportunidad y con sus responsables (decisiones §20). El alta no
+ * vive aquí: una actividad nueva es el siguiente paso de **una** oportunidad.
  */
 const VISTAS = [
-  { valor: "bandeja", etiqueta: "Bandeja" },
+  { valor: "lista", etiqueta: "Lista" },
+  { valor: "kanban", etiqueta: "Kanban" },
   { valor: "semana", etiqueta: "Semana" },
 ] as const;
+
+type Vista = (typeof VISTAS)[number]["valor"];
 
 export default async function ActividadesPage({
   searchParams,
@@ -65,10 +62,10 @@ export default async function ActividadesPage({
 }) {
   // Independientes: `requireSession` es un viaje a la base (docs/latencia.md).
   const [session, sp] = await Promise.all([requireSession(), searchParams]);
-  const vista = sp.vista === "semana" ? "semana" : "bandeja";
+  const vista: Vista = sp.vista === "kanban" ? "kanban" : sp.vista === "semana" ? "semana" : "lista";
 
-  // La oficina activa de la barra superior: la bandeja y la semana cuentan lo
-  // mismo que el contador de Actividades del menú.
+  // La oficina activa de la barra superior: las tres vistas cuentan lo mismo
+  // que el contador de Actividades del menú.
   const pais = await oficinaActiva(session);
   const ahora = new Date();
 
@@ -79,19 +76,22 @@ export default async function ActividadesPage({
   const zona = codigoDeZona ? (await getCountry(codigoDeZona)).timezone : "UTC";
   const f = formatos(zona);
 
-  const [bandeja, semana, tipos, contextos] = await Promise.all([
+  // La semana que se ve: la de la URL, normalizada a su lunes, o la de hoy (§44).
+  const lunesDeHoy = lunesDe(fechaEn(ahora, zona));
+  const lunes = semanaElegida(sp.semana, fechaEn(ahora, zona));
+
+  // Solo se lee lo que la vista va a pintar; la bandeja siempre, por los indicadores.
+  const [bandeja, semana, tablero, tipos, contextos] = await Promise.all([
     bandejaDeTrabajo(session, ahora, pais, zona),
-    agendaSemanal(session, ahora, pais, zona),
+    vista === "semana" ? agendaSemanal(session, ahora, pais, zona, lunes) : null,
+    vista !== "semana" ? tableroDeActividades(session, ahora, pais, zona) : null,
     tiposDeActividad(),
     contextosPorPais(session.countryCodes),
   ]);
 
-  const edicion: Edicion = {
-    tipos,
-    contextos,
-    usuarioActual: session.userId,
-    calendarioConfigurado: calendarioConfigurado(),
-  };
+  const edicion: Edicion = { tipos, contextos, usuarioActual: session.userId };
+  const reloj: RelojDeAgenda = { ahora, inicioDeHoy: bandeja.inicioDeHoy };
+  const editorDe = (a: ActividadDeTablero) => <EditorDeActividad a={a} edicion={edicion} />;
 
   const pendientes = bandeja.vencidas.length + bandeja.hoy.length;
 
@@ -114,26 +114,19 @@ export default async function ActividadesPage({
       />
 
       <div className="flex-1 overflow-y-auto px-8 py-6">
-        <ControlSegmentado
-          opciones={VISTAS}
-          activa={vista}
-          hrefDe={(v) => `/actividades?vista=${v}`}
-        />
+        <ControlSegmentado opciones={VISTAS} activa={vista} hrefDe={(v) => `/actividades?vista=${v}`} />
 
         <div className="mt-5 grid grid-cols-3 gap-4">
-          <StatTile denso
+          <StatTile
+            denso
             etiqueta="Vencidas"
             valor={String(bandeja.vencidas.length)}
             subtexto="se prometieron y no se hicieron"
             tono={bandeja.vencidas.length > 0 ? "peligro" : "neutro"}
           />
-          <StatTile denso
-            etiqueta="Hoy"
-            valor={String(bandeja.hoy.length)}
-            subtexto="el plan del día"
-            tono="acento"
-          />
-          <StatTile denso
+          <StatTile denso etiqueta="Hoy" valor={String(bandeja.hoy.length)} subtexto="el plan del día" tono="acento" />
+          <StatTile
+            denso
             etiqueta="Sin próximo paso"
             valor={String(bandeja.sinProxima.length)}
             subtexto="oportunidades abiertas sin agenda"
@@ -142,11 +135,18 @@ export default async function ActividadesPage({
         </div>
 
         <div className="mt-6">
-          {vista === "semana" ? (
-            <VistaSemana semana={semana} f={f} edicion={edicion} />
-          ) : (
-            <VistaBandeja bandeja={bandeja} f={f} edicion={edicion} />
-          )}
+          {vista === "semana" && semana ? (
+            <>
+              <div className="mb-4">
+                <NavegacionDeSemana lunes={lunes} lunesDeHoy={lunesDeHoy} hrefDe={(l) => `/actividades?vista=semana&semana=${l}`} />
+              </div>
+              <VistaSemana dias={semana.dias} total={semana.total} reloj={reloj} f={f} editorDe={editorDe} />
+            </>
+          ) : vista === "kanban" && tablero ? (
+            <VistaKanban actividades={tablero.actividades} reloj={reloj} f={f} editorDe={editorDe} />
+          ) : tablero ? (
+            <VistaLista actividades={tablero.actividades} sinProxima={bandeja.sinProxima} reloj={reloj} f={f} editorDe={editorDe} />
+          ) : null}
         </div>
       </div>
     </>
@@ -160,7 +160,6 @@ type Edicion = {
   tipos: TipoDeActividad[];
   contextos: Map<CountryCode, ContextoDePais>;
   usuarioActual: string;
-  calendarioConfigurado: boolean;
 };
 
 type ContextoDePais = {
@@ -192,27 +191,12 @@ async function contextosPorPais(paises: CountryCode[]): Promise<Map<CountryCode,
   return new Map(entradas);
 }
 
-/** Lo que cualquiera de las dos lecturas trae de una actividad y el lápiz usa. */
-type ActividadDeAgenda = {
-  id: string;
-  subject: string;
-  notes: string | null;
-  outcome: string | null;
-  startsAt: Date;
-  durationMin: number | null;
-  completedAt: Date | null;
-  externalEventId: string | null;
-  type: { id: string };
-  user: { id: string };
-  opportunity: { id: string; countryCode: CountryCode } | null;
-};
-
 /**
  * El lápiz de una fila. Solo para actividades ligadas a una oportunidad: la
  * acción autoriza cargando la oportunidad por `lib/scope`, y una actividad
  * suelta no tiene por dónde entrar. Es la misma limitación del detalle.
  */
-function EditorDeActividad({ a, edicion }: { a: ActividadDeAgenda; edicion: Edicion }) {
+function EditorDeActividad({ a, edicion }: { a: ActividadDeTablero; edicion: Edicion }) {
   if (!a.opportunity) return null;
   const contexto = edicion.contextos.get(a.opportunity.countryCode);
   if (!contexto) return null;
@@ -238,276 +222,8 @@ function EditorDeActividad({ a, edicion }: { a: ActividadDeAgenda; edicion: Edic
       usuarioActual={edicion.usuarioActual}
       zona={contexto.zona}
       zonaEtiqueta={contexto.zonaEtiqueta}
-      calendarioConfigurado={edicion.calendarioConfigurado}
       actividad={actividad}
       accion={guardarActividadAccion}
     />
   );
 }
-
-// ────────────────────────────────────────────────────────────── Bandeja
-
-function VistaBandeja({
-  bandeja,
-  f,
-  edicion,
-}: {
-  bandeja: Awaited<ReturnType<typeof bandejaDeTrabajo>>;
-  f: Formatos;
-  edicion: Edicion;
-}) {
-  const todoResuelto =
-    bandeja.vencidas.length === 0 &&
-    bandeja.hoy.length === 0 &&
-    bandeja.sinProxima.length === 0;
-
-  if (todoResuelto) {
-    return (
-      <EstadoVacio
-        titulo="La bandeja está limpia"
-        explicacion="No hay actividades vencidas ni pendientes de hoy, y todas tus oportunidades abiertas tienen un próximo paso agendado."
-        accion={
-          <Boton href="/oportunidades" variante="secundario">
-            Ir al pipeline
-          </Boton>
-        }
-      />
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      <Grupo
-        titulo="Vencidas"
-        explicacion="Se agendaron y ya pasó su fecha. Resolver o reprogramar."
-        cantidad={bandeja.vencidas.length}
-        tono="peligro"
-        vacio="Sin actividades vencidas."
-      >
-        {bandeja.vencidas.map((a) => (
-          <FilaActividad key={a.id} a={a} f={f} vencida editor={<EditorDeActividad a={a} edicion={edicion} />} />
-        ))}
-      </Grupo>
-
-      <Grupo
-        titulo="Hoy"
-        explicacion="El plan del día."
-        cantidad={bandeja.hoy.length}
-        tono="acento"
-        vacio="Nada agendado para hoy."
-      >
-        {bandeja.hoy.map((a) => (
-          <FilaActividad key={a.id} a={a} f={f} editor={<EditorDeActividad a={a} edicion={edicion} />} />
-        ))}
-      </Grupo>
-
-      <Grupo
-        titulo="Oportunidades sin próximo paso"
-        explicacion="Están abiertas y no tienen nada agendado. Sin próxima actividad, el negocio depende de que alguien se acuerde (RN-10)."
-        cantidad={bandeja.sinProxima.length}
-        tono="peligro"
-        vacio="Todas tus oportunidades abiertas tienen un próximo paso."
-      >
-        {bandeja.sinProxima.map((o) => (
-          <li
-            key={o.id}
-            className="flex items-center gap-3 rounded-md border border-borde bg-superficie-tarjeta px-4 py-3"
-          >
-            <div className="min-w-0 flex-1">
-              <Link
-                href={`/oportunidades/${o.id}`}
-                className="text-sm font-medium text-texto-titulo hover:text-acento"
-              >
-                {o.name}
-              </Link>
-              <p className="truncate text-xs text-texto-tenue">
-                {o.organization.name} · {o.stage.name}
-                {o.lastActivityAt
-                  ? ` · última actividad ${f.fecha.format(o.lastActivityAt)}`
-                  : " · sin actividad registrada"}
-              </p>
-            </div>
-            <span className="tabular hidden w-32 shrink-0 text-right text-sm font-medium sm:block">
-              {formatUSD(o.amount)}
-            </span>
-            <Avatar iniciales={o.owner.initials} titulo={o.owner.name} />
-            <Boton href={`/oportunidades/${o.id}`} variante="secundario">
-              Agendar
-            </Boton>
-          </li>
-        ))}
-      </Grupo>
-    </div>
-  );
-}
-
-function Grupo({
-  titulo,
-  explicacion,
-  cantidad,
-  tono,
-  vacio,
-  children,
-}: {
-  titulo: string;
-  explicacion: string;
-  cantidad: number;
-  tono: "acento" | "peligro";
-  vacio: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-sm font-semibold text-texto-titulo">{titulo}</h2>
-        {cantidad > 0 && <Pastilla tono={tono}>{cantidad}</Pastilla>}
-      </div>
-      <p className="mt-0.5 text-xs text-texto-tenue">{explicacion}</p>
-
-      {cantidad === 0 ? (
-        <p className="mt-3 rounded-md border border-dashed border-borde px-4 py-5 text-center text-sm text-texto-tenue">
-          {vacio}
-        </p>
-      ) : (
-        <ul className="mt-3 space-y-2">{children}</ul>
-      )}
-    </section>
-  );
-}
-
-function FilaActividad({
-  a,
-  f,
-  vencida = false,
-  editor,
-}: {
-  a: Awaited<ReturnType<typeof bandejaDeTrabajo>>["hoy"][number];
-  f: Formatos;
-  vencida?: boolean;
-  /** El lápiz, o nada si la actividad no se puede editar desde aquí. */
-  editor: React.ReactNode;
-}) {
-  return (
-    <li className="flex items-center gap-3 rounded-md border border-borde bg-superficie-tarjeta px-4 py-3">
-      <span className="tabular w-24 shrink-0 text-xs text-texto-tenue">
-        {vencida ? f.fecha.format(a.startsAt) : f.hora.format(a.startsAt)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-texto-titulo">{a.subject}</p>
-        <p className="truncate text-xs text-texto-tenue">
-          {a.type.name}
-          {a.opportunity && (
-            <>
-              {" · "}
-              <Link
-                href={`/oportunidades/${a.opportunity.id}`}
-                className="text-acento hover:underline"
-              >
-                {a.opportunity.name}
-              </Link>
-            </>
-          )}
-        </p>
-      </div>
-      {vencida && <Pastilla tono="peligro">Vencida</Pastilla>}
-      <Avatar iniciales={a.user.initials} titulo={a.user.name} />
-      {editor}
-    </li>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────── Semana
-
-function VistaSemana({
-  semana,
-  f,
-  edicion,
-}: {
-  semana: Awaited<ReturnType<typeof agendaSemanal>>;
-  f: Formatos;
-  edicion: Edicion;
-}) {
-  if (semana.total === 0) {
-    return (
-      <EstadoVacio
-        titulo="Semana sin actividades"
-        explicacion="No hay nada registrado ni agendado entre el lunes y el domingo de esta semana. Las actividades se agendan desde cada oportunidad."
-        accion={
-          <Boton href="/oportunidades" variante="secundario">
-            Ir al pipeline
-          </Boton>
-        }
-      />
-    );
-  }
-
-  return (
-    <div className="grid gap-3 md:grid-cols-7">
-      {semana.dias.map((d) => (
-        <section
-          key={d.fecha.toISOString()}
-          className={`rounded-md border p-3 ${
-            d.esHoy ? "border-acento bg-superficie-tinte" : "border-borde bg-superficie-tarjeta"
-          }`}
-        >
-          <p className={`eyebrow ${d.esHoy ? "text-acento" : ""}`}>
-            {f.diaSemana.format(d.fecha)}
-          </p>
-          <p className="tabular text-sm font-semibold text-texto-titulo">
-            {d.dia}
-          </p>
-
-          <ul className="mt-3 space-y-2">
-            {d.actividades.map((a) => (
-              <li key={a.id} className="text-xs">
-                <div className="flex items-center justify-between gap-1">
-                  <span className="tabular text-texto-tenue">{f.hora.format(a.startsAt)}</span>
-                  <EditorDeActividad a={a} edicion={edicion} />
-                </div>
-                <p
-                  className={
-                    a.completedAt
-                      ? "text-texto-tenue line-through"
-                      : "font-medium text-texto-cuerpo"
-                  }
-                >
-                  {a.subject}
-                </p>
-                {a.opportunity && (
-                  <Link
-                    href={`/oportunidades/${a.opportunity.id}`}
-                    className="block truncate text-texto-tenue hover:text-acento"
-                  >
-                    {a.opportunity.folio}
-                  </Link>
-                )}
-              </li>
-            ))}
-            {d.actividades.length === 0 && (
-              <li className="py-3 text-center text-xs text-texto-tenue">—</li>
-            )}
-          </ul>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Los formatos de la pantalla, en la zona de la oficina. Antes eran constantes
- * en UTC, y en Vercel eso corría seis horas cada actividad mexicana.
- */
-function formatos(zona: string) {
-  return {
-    fecha: new Intl.DateTimeFormat("es-MX", { day: "2-digit", month: "short", timeZone: zona }),
-    hora: new Intl.DateTimeFormat("es-MX", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23",
-      timeZone: zona,
-    }),
-    diaSemana: new Intl.DateTimeFormat("es-MX", { weekday: "short", timeZone: zona }),
-  };
-}
-
-type Formatos = ReturnType<typeof formatos>;

@@ -150,10 +150,12 @@ export function Casilla({
  * líneas de `useEffect` que se rompen en cuanto aparece un `<select>` nativo
  * dentro.
  *
- * **No cierra al pulsar el fondo, a propósito.** Es un patrón común, pero aquí
- * el modal contiene captura: un clic desviado destruiría lo tecleado sin que
- * nada lo advirtiera. Escape sigue funcionando —es una tecla que se pulsa
- * queriendo— y están la ✕ y el botón de cancelar.
+ * **Un formulario no cierra al pulsar el fondo, a propósito.** Es un patrón
+ * común, pero el modal contiene captura: un clic desviado destruiría lo tecleado
+ * sin que nada lo advirtiera. Escape sigue funcionando —es una tecla que se
+ * pulsa queriendo— y están la ✕ y el botón de cancelar. Los paneles que solo
+ * **muestran** —el detalle de una barra, el aviso de una compuerta— sí cierran
+ * al fondo con `cerrarAlFondo` (decisiones §44): no hay nada que perder.
  */
 export function Panel({
   titulo,
@@ -162,6 +164,7 @@ export function Panel({
   alCerrar,
   ancho = "md",
   pie,
+  cerrarAlFondo = false,
   children,
 }: {
   titulo: string;
@@ -170,6 +173,8 @@ export function Panel({
   alCerrar: () => void;
   ancho?: "md" | "lg";
   pie?: ReactNode;
+  /** Solo para paneles sin captura: un clic en el fondo cierra. */
+  cerrarAlFondo?: boolean;
   children: ReactNode;
 }) {
   const dialogo = useRef<HTMLDialogElement>(null);
@@ -181,6 +186,25 @@ export function Panel({
     if (abierto && !el.open) el.showModal();
     if (!abierto && el.open) el.close();
   }, [abierto]);
+
+  // El fondo de un <dialog> modal no es un elemento: un clic ahí llega al
+  // propio <dialog> como destino, y un clic dentro del contenido llega con
+  // otro. Se escucha en el nodo, no en JSX, porque el panel no lleva relleno
+  // propio y porque la última `alCerrar` se lee por referencia sin volver a
+  // suscribir en cada render.
+  const ultimaCerrar = useRef(alCerrar);
+  useEffect(() => {
+    ultimaCerrar.current = alCerrar;
+  });
+  useEffect(() => {
+    const el = dialogo.current;
+    if (!el || !cerrarAlFondo) return;
+    const alPulsar = (e: MouseEvent) => {
+      if (e.target === el) ultimaCerrar.current();
+    };
+    el.addEventListener("click", alPulsar);
+    return () => el.removeEventListener("click", alPulsar);
+  }, [cerrarAlFondo]);
 
   return (
     <dialog

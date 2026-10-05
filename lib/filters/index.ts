@@ -24,3 +24,18 @@ export {
   type OpcionesParseo,
   type ParsedFilters,
 } from "./opportunities";
+
+// §45 · el lapso de Análisis: año fiscal, trimestre, mes o rango, en la URL.
+export {
+  anioFiscalDeLapso,
+  enElLapso,
+  esFechaDePared,
+  etiquetaDeLapso,
+  parametrosDeLapso,
+  parseLapso,
+  rangoDeLapso,
+  TIPOS_DE_LAPSO,
+  trimestresDelLapso,
+  type Lapso,
+  type TipoDeLapso,
+} from "./lapso";

@@ -10,6 +10,7 @@ import {
   type VentaGanada,
 } from "@/lib/domain/analisis";
 import type { FiltrosDeAnalisis } from "@/lib/filters/analisis";
+import { enElLapso } from "@/lib/filters/lapso";
 import type { ForecastCategory } from "@/lib/dto";
 import { ControlSegmentado, StatTile } from "@/components/ui/primitivas";
 import { TablaDeAnalisis, type CeldaDeAnalisis } from "./TablaDeAnalisis";
@@ -59,20 +60,21 @@ type HrefDe = (cambios: Record<string, string | readonly string[] | null>) => st
 
 export function PestanaForecast({
   abiertas,
-  ventasDelAnio,
+  ventasDelLapso,
   filtros,
   hrefDe,
   fiscalYearStartMonth,
   ahora,
 }: {
   abiertas: OportunidadAbierta[];
-  ventasDelAnio: VentaGanada[];
+  /** Las ganadas por cierre real dentro del lapso (§45): lo que mide el ciclo. */
+  ventasDelLapso: VentaGanada[];
   filtros: FiltrosDeAnalisis;
   hrefDe: HrefDe;
   fiscalYearStartMonth: number;
   ahora: Date;
 }) {
-  const { anio } = filtros;
+  const prosa = enElLapso(filtros.lapso);
 
   const opcionesDeEmbudo = {
     probabilidadMinima: filtros.prob === null ? null : money(filtros.prob).div(100),
@@ -84,7 +86,7 @@ export function PestanaForecast({
   const embudoPorCliente = embudoDeForecast(abiertas, { ...opcionesDeEmbudo, segunda: "cliente" });
   const embudoPorVendedor = embudoDeForecast(abiertas, { ...opcionesDeEmbudo, segunda: "vendedor" });
   const embudo = embudoPorCliente;
-  const ciclo = cicloDeVenta(ventasDelAnio, fiscalYearStartMonth);
+  const ciclo = cicloDeVenta(ventasDelLapso, fiscalYearStartMonth);
   const antiguedad = antiguedadYEstancamiento(abiertas, ahora);
   const dispersion = puntosDeAntiguedad(antiguedad);
 
@@ -104,8 +106,8 @@ export function PestanaForecast({
           valor={ciclo.promedioDias === null ? "Sin datos suficientes" : dias(ciclo.promedioDias)}
           subtexto={
             ciclo.promedioDias === null
-              ? `ninguna ganada en ${anio} con estos filtros`
-              : `mediana ${dias(ciclo.medianaDias)} · ${ciclo.cuantas} ${ciclo.cuantas === 1 ? "cierre" : "cierres"} en ${anio}`
+              ? `ninguna ganada ${prosa} con estos filtros`
+              : `mediana ${dias(ciclo.medianaDias)} · ${ciclo.cuantas} ${ciclo.cuantas === 1 ? "cierre" : "cierres"} ${prosa}`
           }
         />
         <StatTile
@@ -121,15 +123,19 @@ export function PestanaForecast({
         />
       </div>
 
+      {/* Cada punto lleva las oportunidades que lo suman, para el detalle al pulsar (§43). */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <TarjetaDeEmbudo puntos={puntosDeEmbudo(embudo)} filtros={<FiltrosDelEmbudo filtros={filtros} hrefDe={hrefDe} />} />
+        <TarjetaDeEmbudo puntos={puntosDeEmbudo(embudo, abiertas)} filtros={<FiltrosDelEmbudo filtros={filtros} hrefDe={hrefDe} />} />
         <TarjetaDeDistribucion
           inicial={filtros.g4}
-          variantes={{ cliente: distribucionDelPipeline(embudoPorCliente), vendedor: distribucionDelPipeline(embudoPorVendedor) }}
+          variantes={{
+            cliente: distribucionDelPipeline(embudoPorCliente, abiertas),
+            vendedor: distribucionDelPipeline(embudoPorVendedor, abiertas),
+          }}
         />
 
-        <TarjetaDeCiclo anio={anio} inicial={filtros.g5} barras={barrasDeCiclo(ciclo)} serie={serieDeCiclo(ciclo)} />
-        <TarjetaDeEstado estado={estadoPorVendedor(antiguedad)}>
+        <TarjetaDeCiclo lapso={prosa} inicial={filtros.g5} barras={barrasDeCiclo(ciclo, ventasDelLapso)} serie={serieDeCiclo(ciclo, ventasDelLapso)} />
+        <TarjetaDeEstado estado={estadoPorVendedor(antiguedad, abiertas)}>
           <div className="grid gap-3 sm:grid-cols-3">
             <StatTile
               denso
@@ -150,7 +156,7 @@ export function PestanaForecast({
         </TarjetaDeEstado>
 
         <TarjetaDeDispersion puntos={dispersion.puntos} edadPromedio={dispersion.edadPromedio} />
-        <Tarjeta titulo="Las de mayor importe" descripcion="Las abiertas que más pesan, con su etapa medida hoy. El folio lleva a la oportunidad.">
+        <Tarjeta titulo="Las de mayor importe">
           <TablaDeAnalisis
             columnas={[
               { titulo: "Folio" },
@@ -173,12 +179,6 @@ export function PestanaForecast({
             }))}
             vacio="Ninguna oportunidad abierta con estos filtros."
           />
-          {antiguedad.detalle.length > 0 ? (
-            <p className="mt-2 text-xs text-texto-tenue">
-              Las {antiguedad.detalle.length} de mayor importe. «En etapa» son los días en la etapa actual contra el límite de esa
-              etapa: en coral ya lo pasó; en azul marino va entre el 75 % y el límite.
-            </p>
-          ) : null}
         </Tarjeta>
       </div>
     </>

@@ -32,6 +32,8 @@ const PAULINA = { id: "u2", name: "Paulina Estrada" };
 
 function ganada(p: Partial<VentaGanada> & { id: string }): VentaGanada {
   return {
+    folio: `OPP-${p.id}`,
+    name: `Venta ${p.id}`,
     amount: money("100000"),
     actualCloseDate: new Date("2026-08-15T12:00:00Z"),
     createdAt: new Date("2026-06-01T12:00:00Z"),
@@ -108,8 +110,8 @@ describe("agruparVentas · avance contra objetivo, por dimensión", () => {
 describe("completarTrimestres · los cuatro trimestres del año, con su cuota", () => {
   it("pone en cero el trimestre sin ventas, une la cuota y calcula el cumplimiento", () => {
     const filas = [
-      { clave: "2026-Q1", etiqueta: "Q1 2026", importe: money("120000"), utilidad: null, cuantas: 2, participacion: money("0.6") },
-      { clave: "2026-Q3", etiqueta: "Q3 2026", importe: money("80000"), utilidad: null, cuantas: 1, participacion: money("0.4") },
+      { clave: "2026-Q1", etiqueta: "Q1 2026", importe: money("120000"), utilidad: null, cuantas: 2, participacion: money("0.6"), aportes: [] },
+      { clave: "2026-Q3", etiqueta: "Q3 2026", importe: money("80000"), utilidad: null, cuantas: 1, participacion: money("0.4"), aportes: [] },
     ];
     const cuotas = [money("100000"), money("100000"), money("100000"), money("0")];
     const r = completarTrimestres(filas, 2026, cuotas, { fiscalYear: 2026, quarter: 3 });
@@ -308,9 +310,9 @@ describe("antiguedadYEstancamiento · lo que se está quedando, hoy", () => {
 
 describe("actividadPorVendedor · quién trabaja el pipeline", () => {
   const actividades = [
-    { completedAt: new Date("2026-08-05T12:00:00Z"), tipo: "Llamada", usuario: JORGE },
-    { completedAt: new Date("2026-08-06T12:00:00Z"), tipo: "Reunión", usuario: JORGE },
-    { completedAt: new Date("2026-09-06T12:00:00Z"), tipo: "Llamada", usuario: PAULINA },
+    { id: "act1", subject: "Llamada de arranque", completedAt: new Date("2026-08-05T12:00:00Z"), tipo: "Llamada", usuario: JORGE, opportunity: { id: "a", folio: "OPP-a", name: "Oportunidad a" } },
+    { id: "act2", subject: "Reunión de alcance", completedAt: new Date("2026-08-06T12:00:00Z"), tipo: "Reunión", usuario: JORGE, opportunity: null },
+    { id: "act3", subject: "Seguimiento", completedAt: new Date("2026-09-06T12:00:00Z"), tipo: "Llamada", usuario: PAULINA, opportunity: { id: "c", folio: "OPP-c", name: "Oportunidad c" } },
   ];
   const abiertas = [abierta({ id: "a" }), abierta({ id: "b", nextActivityAt: null }), abierta({ id: "c", owner: PAULINA })];
 
@@ -347,5 +349,138 @@ describe("saludMeddic · qué tan calificado está lo que se pronostica", () => 
     ]);
     expect(r.sinEvidencia).toBe(1);
     expect(r.enCierreBajoMinimo.map((o) => o.folio)).toEqual(["OPP-c", "OPP-d"]);
+  });
+});
+
+// ═══════════════════════════ Qué hay detrás de cada barra (decisiones §43)
+
+describe("cada fila agregada dice qué ítems la suman, para listarlos al pulsar la barra (§43)", () => {
+  const ventas = [
+    ganada({ id: "a", actualCloseDate: new Date("2026-02-10T12:00:00Z"), amount: money("100000"), cotizacion: CON_LINEAS }),
+    ganada({ id: "b", actualCloseDate: new Date("2026-08-15T12:00:00Z"), amount: money("300000"), organization: NORTE, businessType: "RENOVACION" }),
+    ganada({ id: "c", actualCloseDate: new Date("2026-09-01T12:00:00Z"), amount: money("100000"), owner: PAULINA }),
+  ];
+
+  it("agruparVentas · los aportes de un trimestre son las ventas con su importe; por producto, la línea y no la venta", () => {
+    const porTrimestre = agruparVentas(ventas, "trimestre", { ...FISCAL, etiquetaDeTipo: TIPOS });
+    const q3 = porTrimestre.filas.find((f) => f.clave === "2026-Q3")!;
+    expect(q3.aportes.map((a) => [a.id, a.importe.toFixed(0)])).toEqual([["b", "300000"], ["c", "100000"]]);
+    expect(q3.cuantas).toBe(q3.aportes.length);
+
+    const porProducto = agruparVentas(ventas, "producto", { ...FISCAL, etiquetaDeTipo: TIPOS });
+    const servicios = porProducto.filas.find((f) => f.etiqueta === "Servicios administrados")!;
+    expect(servicios.aportes.map((a) => [a.id, a.importe.toFixed(0), a.utilidad?.toFixed(0) ?? null])).toEqual([["a", "70000", "25000"]]);
+    const sinCotizacion = porProducto.filas.find((f) => f.clave === "__sin_cotizacion")!;
+    expect(sinCotizacion.aportes.map((a) => a.id)).toEqual(["b", "c"]);
+  });
+
+  it("agruparVentas · una venta con dos líneas del mismo producto es un solo aporte, sumado", () => {
+    const dosLineas = ganada({
+      id: "d",
+      cotizacion: {
+        netSubtotal: money("50000"),
+        lineas: [
+          { productId: "p1", descripcion: "Servicios administrados", importe: money("30000") },
+          { productId: "p1", descripcion: "Servicios administrados", importe: money("20000") },
+        ],
+      },
+    });
+    const r = agruparVentas([dosLineas], "producto", { ...FISCAL, etiquetaDeTipo: TIPOS });
+    expect(r.filas[0]!.aportes).toHaveLength(1);
+    expect(r.filas[0]!.aportes[0]!.importe.toFixed(0)).toBe("50000");
+    expect(r.filas[0]!.cuantas).toBe(1);
+  });
+
+  it("completarTrimestres · un trimestre sin ventas no tiene aportes", () => {
+    const r = completarTrimestres([], 2026, [], { fiscalYear: 2026, quarter: 3 });
+    expect(r.every((t) => t.aportes.length === 0)).toBe(true);
+  });
+
+  it("rentabilidad · cada aporte trae importe y costo de esa venta en esa fila", () => {
+    const r = rentabilidad(
+      [
+        ganada({ id: "a", cotizacion: CON_LINEAS }),
+        ganada({
+          id: "b",
+          organization: NORTE,
+          cotizacion: {
+            netSubtotal: money("50000"),
+            totalCost: money("45000"),
+            grossProfit: money("5000"),
+            lineas: [{ productId: "p1", descripcion: "Servicios administrados", importe: money("50000"), costo: money("45000") }],
+          },
+        }),
+      ],
+      "producto",
+      TIPOS,
+    );
+    const sa = r.filas.find((f) => f.etiqueta === "Servicios administrados")!;
+    expect(sa.aportes.map((a) => [a.id, a.importe.toFixed(0), a.costo.toFixed(0)])).toEqual([["a", "70000", "45000"], ["b", "50000", "45000"]]);
+    const porCliente = rentabilidad([ganada({ id: "a", cotizacion: CON_LINEAS })], "cliente", TIPOS);
+    expect(porCliente.filas[0]!.aportes.map((a) => [a.id, a.importe.toFixed(0), a.costo.toFixed(0)])).toEqual([["a", "100000", "60000"]]);
+  });
+
+  it("historicoDeVentas · cada periodo lleva sus aportes", () => {
+    const { filas } = historicoDeVentas(ventas, "anio", FISCAL.fiscalYearStartMonth);
+    expect(filas[0]!.aportes.map((a) => a.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("lo abierto y lo hecho también dicen de qué ítems salen (§43)", () => {
+  const abiertas = [
+    abierta({ id: "a", amount: money("100000"), expectedCloseDate: new Date("2026-10-10T12:00:00Z") }),
+    abierta({ id: "b", amount: money("200000"), expectedCloseDate: new Date("2026-12-10T12:00:00Z"), organization: NORTE, owner: PAULINA }),
+    abierta({ id: "c", amount: money("50000"), expectedCloseDate: new Date("2027-02-01T12:00:00Z") }),
+  ];
+
+  it("embudoDeForecast · ids por trimestre, por subgrupo y en el total", () => {
+    const r = embudoDeForecast(abiertas, { segunda: "cliente", probabilidadMinima: null, categorias: new Set(), ...FISCAL });
+    expect(r.trimestres[0]!.ids).toEqual(["a", "b"]);
+    expect(r.trimestres[0]!.subgrupos.find((s) => s.etiqueta === "Banco del Norte")!.ids).toEqual(["b"]);
+    expect(r.total.ids).toEqual(["a", "b", "c"]);
+  });
+
+  it("cicloDeVenta · cada vendedor y cada trimestre saben qué cierres promedian, con sus días", () => {
+    const ventas = [
+      ganada({ id: "a", createdAt: new Date("2026-01-01T12:00:00Z"), actualCloseDate: new Date("2026-01-31T12:00:00Z") }),
+      ganada({ id: "b", createdAt: new Date("2026-01-01T12:00:00Z"), actualCloseDate: new Date("2026-03-02T12:00:00Z") }),
+      ganada({ id: "c", createdAt: new Date("2026-01-01T12:00:00Z"), actualCloseDate: new Date("2026-04-01T12:00:00Z"), owner: PAULINA }),
+    ];
+    const r = cicloDeVenta(ventas, FISCAL.fiscalYearStartMonth);
+    expect(r.porVendedor[0]!.cierres).toEqual([{ id: "a", dias: 30 }, { id: "b", dias: 60 }]);
+    expect(r.porTrimestre[1]!.cierres).toEqual([{ id: "c", dias: 90 }]);
+  });
+
+  it("antiguedadYEstancamiento · por vendedor, los ids de cada cuenta", () => {
+    const r = antiguedadYEstancamiento(
+      [
+        abierta({ id: "sana" }),
+        abierta({ id: "estancada", stageEnteredAt: new Date("2026-08-01T12:00:00Z") }),
+        abierta({ id: "sinActividad", nextActivityAt: null, lastActivityAt: new Date("2026-08-20T12:00:00Z"), owner: PAULINA }),
+        abierta({ id: "vencida", expectedCloseDate: new Date("2026-09-01T12:00:00Z") }),
+      ],
+      HOY,
+    );
+    const jorge = r.porVendedor.find((v) => v.clave === "u1")!;
+    expect(jorge.ids).toEqual({ abiertas: ["sana", "estancada", "vencida"], estancadas: ["estancada"], sinActividad: [], vencidas: ["vencida"] });
+    const paulina = r.porVendedor.find((v) => v.clave === "u2")!;
+    expect(paulina.ids.sinActividad).toEqual(["sinActividad"]);
+  });
+
+  it("actividadPorVendedor · ids de actividades por tipo y por mes, y de abiertas y sin siguiente paso", () => {
+    const actividades = [
+      { id: "act1", subject: "Llamada", completedAt: new Date("2026-08-05T12:00:00Z"), tipo: "Llamada", usuario: JORGE, opportunity: null },
+      { id: "act2", subject: "Reunión", completedAt: new Date("2026-08-06T12:00:00Z"), tipo: "Reunión", usuario: JORGE, opportunity: null },
+      { id: "act3", subject: "Llamada", completedAt: new Date("2026-09-06T12:00:00Z"), tipo: "Llamada", usuario: PAULINA, opportunity: null },
+    ];
+    const r = actividadPorVendedor(actividades, [abierta({ id: "a" }), abierta({ id: "b", nextActivityAt: null })], HOY);
+    expect(r.porVendedor[0]!.ids).toEqual({ porTipo: { Llamada: ["act1"], Reunión: ["act2"] }, abiertas: ["a", "b"], sinSiguientePaso: ["b"] });
+    expect(r.porMes.map((m) => m.ids)).toEqual([["act1", "act2"], ["act3"]]);
+  });
+
+  it("saludMeddic · cada etapa sabe qué abiertas promedia", () => {
+    const cierre = { name: "Cierre", position: 5, probability: money("0.9"), staleAfterDays: 10, isClosing: true };
+    const r = saludMeddic([abierta({ id: "a" }), abierta({ id: "b", meddicScore: null }), abierta({ id: "c", stage: cierre })], 70);
+    expect(r.porEtapa.map((e) => e.ids)).toEqual([["a", "b"], ["c"]]);
   });
 });

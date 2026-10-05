@@ -8,6 +8,7 @@ import {
   type VentaGanada,
 } from "@/lib/domain/analisis";
 import type { FiltrosDeAnalisis } from "@/lib/filters/analisis";
+import { enElLapso, etiquetaDeLapso, trimestresDelLapso } from "@/lib/filters/lapso";
 import { StatTile } from "@/components/ui/primitivas";
 import { filasDeMargen, filasDeRentabilidad, puntosDeAvance, puntosHistoricos } from "./graficas/datos";
 import { Tarjeta } from "./graficas/comun";
@@ -54,7 +55,7 @@ function porOpcion<T extends string, R>(opciones: readonly { valor: T }[], calcu
 }
 
 export function PestanaVentas({
-  ventasDelAnio,
+  ventasDelLapso,
   historico,
   cuotas,
   filtros,
@@ -62,7 +63,8 @@ export function PestanaVentas({
   trimestreEnCurso,
   verCosto,
 }: {
-  ventasDelAnio: VentaGanada[];
+  /** Las ganadas por cierre real dentro del lapso (§45). */
+  ventasDelLapso: VentaGanada[];
   historico: VentaGanada[];
   cuotas: CuotasDeVenta[];
   filtros: FiltrosDeAnalisis;
@@ -71,46 +73,56 @@ export function PestanaVentas({
   trimestreEnCurso: TrimestreEnCurso;
   verCosto: boolean;
 }) {
-  const { anio } = filtros;
+  const { anio, lapso } = filtros;
+  const etiqueta = etiquetaDeLapso(lapso);
+  const prosa = enElLapso(lapso);
+  // La cuota existe por trimestre: solo se compara con un año o un trimestre
+  // fiscal completos (§45). Con un mes o un rango no hay trimestres que dibujar
+  // ni cuota que reclamar.
+  const trimestres = trimestresDelLapso(lapso);
 
   const cuotasPorTrimestre = [0, 1, 2, 3].map((i) => sum(cuotas.map((c) => c.cuotaVenta[i]!)));
   // RN-32 · si coexisten, la anual manda para el reporte de año.
   const cuotaAnual = sum(cuotas.map((c) => c.cuotaAnualVenta ?? sum([...c.cuotaVenta])));
+  const cuotaDelLapso = lapso.tipo === "anio" ? cuotaAnual : lapso.tipo === "trimestre" ? cuotasPorTrimestre[lapso.quarter - 1]! : null;
 
   const agrupar = (dimension: DimensionDeAvance) =>
-    agruparVentas(ventasDelAnio, dimension, { fiscalYearStartMonth, etiquetaDeTipo: ETIQUETA_TIPO_DE_NEGOCIO });
+    agruparVentas(ventasDelLapso, dimension, { fiscalYearStartMonth, etiquetaDeTipo: ETIQUETA_TIPO_DE_NEGOCIO });
   const avance = porOpcion(DIMENSIONES_DE_AVANCE, agrupar);
   const total = avance.trimestre.total;
-  const cumplimiento = cuotaAnual.isZero() ? null : total.importe.div(cuotaAnual);
+  const cumplimiento = cuotaDelLapso === null || cuotaDelLapso.isZero() ? null : total.importe.div(cuotaDelLapso);
   const utilidadVisible = verCosto && total.utilidad !== null;
 
+  // Cada punto lleva las ventas que lo suman, para el detalle al pulsar (§43).
   const variantesDeAvance = porOpcion(DIMENSIONES_DE_AVANCE, (d) =>
     puntosDeAvance(avance[d], d, {
       anio,
+      trimestres,
       cuotasPorTrimestre,
       trimestreEnCurso,
       utilidadVisible,
+      ventas: ventasDelLapso,
     }),
   );
   const variantesHistoricas = porOpcion(AGRUPACIONES_HISTORICAS, (a: AgrupacionHistorica) =>
-    puntosHistoricos(historicoDeVentas(historico, a, fiscalYearStartMonth), verCosto),
+    puntosHistoricos(historicoDeVentas(historico, a, fiscalYearStartMonth), verCosto, historico),
   );
   const rentable = verCosto
-    ? porOpcion(DIMENSIONES_DE_RENTABILIDAD, (d: DimensionDeRentabilidad) => rentabilidad(ventasDelAnio, d, ETIQUETA_TIPO_DE_NEGOCIO))
+    ? porOpcion(DIMENSIONES_DE_RENTABILIDAD, (d: DimensionDeRentabilidad) => rentabilidad(ventasDelLapso, d, ETIQUETA_TIPO_DE_NEGOCIO))
     : null;
 
   return (
     <>
       <Indicadores
-        anio={anio}
+        etiqueta={etiqueta}
         total={total}
-        cuotaAnual={cuotaAnual}
+        cuota={cuotaDelLapso}
         cumplimiento={cumplimiento}
         utilidadVisible={utilidadVisible}
       />
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <TarjetaDeAvance anio={anio} inicial={filtros.g1} variantes={variantesDeAvance} />
+        <TarjetaDeAvance lapso={prosa} inicial={filtros.g1} variantes={variantesDeAvance} />
         <TarjetaHistorica
           inicial={filtros.g2}
           variantes={variantesHistoricas}
@@ -118,12 +130,20 @@ export function PestanaVentas({
         />
         {rentable ? (
           <>
-            <TarjetaDeRentabilidad anio={anio} inicial={filtros.g3} variantes={porOpcion(DIMENSIONES_DE_RENTABILIDAD, (d) => filasDeRentabilidad(rentable[d]))} />
-            <TarjetaDeMargen anio={anio} inicial={filtros.g3} variantes={porOpcion(DIMENSIONES_DE_RENTABILIDAD, (d) => filasDeMargen(rentable[d]))} />
+            <TarjetaDeRentabilidad
+              lapso={prosa}
+              inicial={filtros.g3}
+              variantes={porOpcion(DIMENSIONES_DE_RENTABILIDAD, (d) => filasDeRentabilidad(rentable[d], ventasDelLapso))}
+            />
+            <TarjetaDeMargen
+              lapso={prosa}
+              inicial={filtros.g3}
+              variantes={porOpcion(DIMENSIONES_DE_RENTABILIDAD, (d) => filasDeMargen(rentable[d], ventasDelLapso))}
+            />
           </>
         ) : (
           <div className="xl:col-span-2">
-            <Tarjeta titulo="Rentabilidad y margen" descripcion={`Ganadas en ${anio} cuya cotización trae costo. Venta, costo y utilidad salen de la cotización.`}>
+            <Tarjeta titulo="Rentabilidad y margen">
               <p className="rounded-sm border border-dashed border-borde-fuerte px-4 py-6 text-center text-sm text-texto-tenue">
                 La rentabilidad necesita el costo de cada venta y tu rol no lo ve. Dirección y administración sí.
               </p>
@@ -138,15 +158,17 @@ export function PestanaVentas({
 // ─────────────────────────────────────────────────────────── Indicadores
 
 function Indicadores({
-  anio,
+  etiqueta,
   total,
-  cuotaAnual,
+  cuota,
   cumplimiento,
   utilidadVisible,
 }: {
-  anio: number;
+  /** «Año fiscal 2026», «Q3 2026», «sep 2026»… */
+  etiqueta: string;
   total: TotalAgrupado;
-  cuotaAnual: Money;
+  /** La cuota del lapso: la anual, la del trimestre, o nula con un mes o un rango (§45). */
+  cuota: Money | null;
   cumplimiento: Money | null;
   utilidadVisible: boolean;
 }) {
@@ -157,26 +179,28 @@ function Indicadores({
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatTile
         denso
-        etiqueta={`Ganado ${anio}`}
+        etiqueta={`Ganado · ${etiqueta}`}
         valor={formatUSD(total.importe)}
         subtexto={`${total.cuantas} ${total.cuantas === 1 ? "negocio" : "negocios"} por fecha de cierre real`}
       />
       <StatTile
         denso
         etiqueta="Cuota consolidada"
-        valor={formatUSD(cuotaAnual)}
-        subtexto="suma de las cuotas del alcance"
+        valor={cuota ? formatUSD(cuota) : "—"}
+        subtexto={cuota ? "suma de las cuotas del alcance" : "la cuota es por trimestre fiscal"}
       />
       <StatTile
         denso
         etiqueta="Cumplimiento"
-        valor={cumplimiento ? formatPercent(cumplimiento, 0) : "Sin cuota"}
+        valor={cumplimiento ? formatPercent(cumplimiento, 0) : cuota ? "Sin cuota" : "—"}
         subtexto={
-          cumplimiento
+          cumplimiento && cuota
             ? cumplimiento.gte(1)
-              ? `${formatUSD(total.importe.minus(cuotaAnual))} arriba de la cuota`
-              : `faltan ${formatUSD(cuotaAnual.minus(total.importe))}`
-            : `no hay cuota fijada para ${anio}`
+              ? `${formatUSD(total.importe.minus(cuota))} arriba de la cuota`
+              : `faltan ${formatUSD(cuota.minus(total.importe))}`
+            : cuota
+              ? `no hay cuota fijada para ${etiqueta.toLocaleLowerCase("es")}`
+              : "sin cuota comparable en este lapso"
         }
         tono={cumplimiento?.gte(1) ? "exito" : "neutro"}
       />

@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { Esqueleto, Tarjeta } from "./comun";
 import { PALETA } from "./paleta";
+import { ACTIVIDADES } from "./seleccion";
 import type { FilaDeGrupos, FilaHorizontal, PuntoDeBarra, ReferenciaDeGrafica, SerieDeGrupos } from "./tipos";
 
 /**
@@ -29,27 +30,29 @@ const COLORES_DE_SERIE = [PALETA.ganado, PALETA.utilidad, PALETA.riesgo, PALETA.
 const FORMATO_DE_CONTEO = { eje: (n: number) => String(n), etiqueta: (n: number) => (n === 0 ? "" : String(n)) };
 const TICKS_MEDDIC = [0, 20, 40, 60, 80, 100];
 
-export function TarjetaDeActividadPorVendedor({ anio, series, filas }: { anio: number; series: SerieDeGrupos[]; filas: FilaDeGrupos[] }) {
+export function TarjetaDeActividadPorVendedor({ lapso, series, filas }: { lapso: string; series: SerieDeGrupos[]; filas: FilaDeGrupos[] }) {
   return (
-    <Tarjeta titulo="Actividad por vendedor" descripcion={`Actividades marcadas como hechas en el año fiscal ${anio}, por quien las hizo.`}>
+    <Tarjeta titulo="Actividad por vendedor">
       <GraficaAgrupada
         filas={filas}
         series={series.map((s, i) => ({ ...s, color: COLORES_DE_SERIE[i % COLORES_DE_SERIE.length]! }))}
-        vacio={`Nadie ha marcado actividades como hechas en ${anio} con estos filtros.`}
+        unidad={ACTIVIDADES}
+        vacio={`Nadie ha marcado actividades como hechas ${lapso} con estos filtros.`}
       />
     </Tarjeta>
   );
 }
 
-export function TarjetaDeActividadPorMes({ anio, puntos }: { anio: number; puntos: PuntoDeBarra[] }) {
+export function TarjetaDeActividadPorMes({ puntos }: { puntos: PuntoDeBarra[] }) {
   return (
-    <Tarjeta titulo="Actividad por mes" descripcion={`Actividades hechas en cada mes del año fiscal ${anio}. Los meses sin nada se ven en claro.`}>
+    <Tarjeta titulo="Actividad por mes">
       <GraficaDeBarras
         puntos={puntos}
         conCuota={false}
         formato={FORMATO_DE_CONTEO}
         enteros
         nombreDeSerie="Actividades hechas"
+        unidad={ACTIVIDADES}
         vacio="Sin actividades hechas."
       />
     </Tarjeta>
@@ -63,7 +66,6 @@ export function TarjetaDeAbiertasSinPaso({ series, filas }: { series: SerieDeGru
   return (
     <Tarjeta
       titulo="Oportunidades abiertas y sin siguiente paso"
-      descripcion="Total de abiertas por vendedor y cuántas no tienen una siguiente acción definida, medido hoy."
     >
       <GraficaAgrupada
         filas={filas}
@@ -75,18 +77,15 @@ export function TarjetaDeAbiertasSinPaso({ series, filas }: { series: SerieDeGru
 }
 
 export function TarjetaDeSaludMeddic({
-  minimo,
   filas,
   referencia,
 }: {
-  minimo: number;
   filas: FilaHorizontal[];
   referencia: ReferenciaDeGrafica;
 }) {
   return (
     <Tarjeta
       titulo="Salud MEDDIC por etapa"
-      descripcion={`Puntaje MEDDIC promedio de las abiertas, por etapa. El mínimo para avanzar a cierre es ${minimo}; el puntaje gatea, no pondera (RN-01).`}
     >
       <GraficaHorizontal
         filas={filas}

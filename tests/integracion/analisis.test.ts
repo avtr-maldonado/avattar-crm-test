@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { can, type Session } from "@/lib/auth/permissions";
 import { getCountry } from "@/lib/policy";
 import { rangoDeAnioFiscal, trimestreDe } from "@/lib/filters/dates";
-import { abiertasDelAnalisis, actividadesHechasDelAnio, ganadas } from "@/lib/scope/analisis";
+import { abiertasDelAnalisis, actividadesHechas, ganadas } from "@/lib/scope/analisis";
 
 /**
  * Lectores de P-09 · Análisis · INV-01, INV-02, AC-25 · decisiones §28.
@@ -65,7 +65,7 @@ describe("ganadas · la cotización viaja con costo solo con VER_COSTO (INV-02)"
     const { fiscalYearStartMonth } = await getCountry(pais);
     const { fiscalYear } = trimestreDe(new Date(), fiscalYearStartMonth);
     const rango = rangoDeAnioFiscal(fiscalYear, fiscalYearStartMonth);
-    const ventas = await ganadas(direccion, SIN_RECORTE, { fiscalYear, fiscalYearStartMonth });
+    const ventas = await ganadas(direccion, SIN_RECORTE, rango);
     for (const v of ventas) {
       expect(v.actualCloseDate >= rango.from && v.actualCloseDate <= rango.to).toBe(true);
     }
@@ -98,13 +98,13 @@ describe("abiertasDelAnalisis · etapa como datos y MEDDIC sin evidencia", () =>
   });
 });
 
-describe("actividadesHechasDelAnio · solo lo hecho, dentro del año", () => {
+describe("actividadesHechas · solo lo hecho, dentro del lapso", () => {
   it("cada actividad trae fecha de realización dentro del rango", async () => {
     const pais = direccion.countryCodes[0]!;
     const { fiscalYearStartMonth } = await getCountry(pais);
     const { fiscalYear } = trimestreDe(new Date(), fiscalYearStartMonth);
     const rango = rangoDeAnioFiscal(fiscalYear, fiscalYearStartMonth);
-    const hechas = await actividadesHechasDelAnio(direccion, { pais: [], vendedor: [] }, { fiscalYear, fiscalYearStartMonth });
+    const hechas = await actividadesHechas(direccion, { pais: [], vendedor: [] }, rango);
     for (const a of hechas) {
       expect(a.completedAt >= rango.from && a.completedAt <= rango.to).toBe(true);
       expect(typeof a.tipo).toBe("string");

@@ -207,6 +207,23 @@ function eventoDeAuditoria(
         titulo: "Propietario reasignado",
       };
 
+    // §39 · el responsable de preventa entra, cambia o sale; con nombres.
+    case "CAMBIAR_PREVENTA": {
+      const nombres = [antes.nombre, despues.nombre].filter((n): n is string => typeof n === "string");
+      return {
+        id: a.id,
+        tipo: "PROPIETARIO",
+        cuando: a.at,
+        quien: a.byUser.name,
+        titulo: despues.presalesUserId
+          ? antes.presalesUserId
+            ? "Responsable de preventa cambiado"
+            : "Responsable de preventa asignado"
+          : "Responsable de preventa retirado",
+        detalle: nombres.length > 0 ? nombres.join(" → ") : undefined,
+      };
+    }
+
     case "EDITAR_COTIZACION": {
       // Un alta o una baja traen una línea; un guardado trae la lista de lo
       // que cambió. Los dos se leen como una sola entrada.

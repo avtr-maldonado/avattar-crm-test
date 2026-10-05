@@ -2,8 +2,10 @@
 
 import { Bar, CartesianGrid, ComposedChart, LabelList, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatoCompacto, formatoDeEje } from "./formato";
-import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion } from "./comun";
+import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion, useDetalle } from "./comun";
+import { PanelDeDetalle } from "./PanelDeDetalle";
 import { ETIQUETA_DE_BARRA, PALETA, TIPOGRAFIA_DE_EJE } from "./paleta";
+import { indiceActivo, seleccionDe } from "./seleccion";
 import type { PuntoHistorico } from "./tipos";
 
 const ALTO = 288;
@@ -12,10 +14,12 @@ const ANCHO_POR_PERIODO = 72;
 /**
  * Reporte 2 · lo ganado por periodo como barras y la utilidad como línea
  * encima, las dos en dólares sobre el mismo eje. La variación va en el
- * tooltip: es un por ciento y no comparte eje con el dinero.
+ * tooltip: es un por ciento y no comparte eje con el dinero. Barra y punto de
+ * la línea son el mismo periodo: responde la columna entera (§43).
  */
 export function GraficaHistorica({ puntos, conUtilidad, vacio }: { puntos: PuntoHistorico[]; conUtilidad: boolean; vacio: string }) {
   const anima = useAnimacion();
+  const detalle = useDetalle();
   if (puntos.length === 0) return <SinDatos texto={vacio} alto={ALTO} />;
 
   return (
@@ -23,7 +27,17 @@ export function GraficaHistorica({ puntos, conUtilidad, vacio }: { puntos: Punto
       <div className="overflow-x-auto">
         <div style={{ minWidth: Math.max(280, puntos.length * ANCHO_POR_PERIODO) }}>
           <ResponsiveContainer width="100%" height={ALTO}>
-            <ComposedChart data={puntos} margin={{ top: 24, right: 12, left: 0, bottom: 0 }} barCategoryGap="32%">
+            <ComposedChart
+              data={puntos}
+              margin={{ top: 24, right: 12, left: 0, bottom: 0 }}
+              barCategoryGap="32%"
+              className="cursor-pointer"
+              onClick={(e) => {
+                const i = indiceActivo(e);
+                const punto = i === null ? undefined : puntos[i];
+                if (punto) detalle.elegir(seleccionDe(punto));
+              }}
+            >
               <CartesianGrid vertical={false} stroke={PALETA.rejilla} />
               <XAxis dataKey="etiqueta" interval={0} tickLine={false} axisLine={{ stroke: PALETA.rejilla }} tick={TIPOGRAFIA_DE_EJE} />
               <YAxis width={56} tickLine={false} axisLine={false} tick={TIPOGRAFIA_DE_EJE} tickFormatter={formatoDeEje} />
@@ -63,6 +77,7 @@ export function GraficaHistorica({ puntos, conUtilidad, vacio }: { puntos: Punto
           ...(conUtilidad ? [{ etiqueta: "Utilidad", color: PALETA.utilidad, linea: true }] : []),
         ]}
       />
+      <PanelDeDetalle seleccion={detalle.seleccion} abierto={detalle.abierto} alCerrar={detalle.cerrar} />
     </div>
   );
 }

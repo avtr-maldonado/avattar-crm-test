@@ -8,7 +8,6 @@ import {
   type DetalleOportunidad,
 } from "@/lib/scope/opportunityDetail";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
-import { configurado as calendarioConfigurado } from "@/lib/graph/token";
 import { ciudadDe, etiquetaDeDuracion, fechaCortaEn, horaEn } from "@/lib/tiempo";
 import { cotizacionVigente } from "@/lib/scope/cotizaciones";
 import { bitacoraDeOportunidad } from "@/lib/scope/bitacora";
@@ -69,7 +68,8 @@ import { EditarOportunidad } from "@/components/oportunidad/EditarOportunidad";
 import { CerrarOportunidad } from "@/components/oportunidad/CerrarOportunidad";
 import { ReabrirOportunidad } from "@/components/oportunidad/ReabrirOportunidad";
 import { catalogosParaAlta, motivosDePerdida, tiposDeActividad } from "@/lib/scope/configuracion";
-import { destinatariosValidos, requisitosParaGanar } from "@/lib/domain/opportunity";
+import { destinatariosValidos, preventasValidos, requisitosParaGanar } from "@/lib/domain/opportunity";
+import { preventaDe } from "@/lib/domain/opportunityAccess";
 import { can, type Session } from "@/lib/auth/permissions";
 import {
   cambiarEtapaAccion,
@@ -132,7 +132,7 @@ export default async function DetalleOportunidadPage({
     oportunidad.status === "ABIERTA" &&
     (oportunidad.owner.id === session.userId || puedeReasignar);
 
-  const [politica, pais, actividades, catalogos, tiposActividad, propietarios, cotizacion, bitacora, motivos] =
+  const [politica, pais, actividades, catalogos, tiposActividad, propietarios, cotizacion, bitacora, motivos, preventas] =
     await Promise.all([
       getCommercialPolicy(oportunidad.pipeline.countryCode),
       // La zona horaria de la oportunidad: las actividades se capturan y se
@@ -149,6 +149,8 @@ export default async function DetalleOportunidadPage({
       bitacoraDeOportunidad(session, oportunidad),
       // Para el panel de «Perdida»: el motivo es obligatorio (AC-20).
       motivosDePerdida(),
+      // §39 · quién puede ser responsable de preventa en el país de la oportunidad.
+      puedeEditarDetalle ? preventasValidos(oportunidad.countryCode) : Promise.resolve([]),
     ]);
 
   const composer = {
@@ -157,9 +159,7 @@ export default async function DetalleOportunidadPage({
     usuarios: propietarios.map((u) => ({ id: u.id, name: u.name })),
     usuarioActual: session.userId,
     zona: pais.timezone,
-    zonaEtiqueta: ciudadDe(pais.timezone),
-    calendarioConfigurado: calendarioConfigurado(),
-    accion: guardarActividadAccion,
+    zonaEtiqueta: ciudadDe(pais.timezone),    accion: guardarActividadAccion,
   };
 
   const pestanaActiva = typeof sp.p === "string" ? sp.p : "resumen";
@@ -259,6 +259,7 @@ export default async function DetalleOportunidadPage({
               rolesDeComite={catalogos.rolesComite}
               origenes={catalogos.origenes}
               propietarios={propietarios.map((u) => ({ id: u.id, name: u.name }))}
+              preventas={preventas.map((u) => ({ id: u.id, name: u.name }))}
               puedeEditar={puedeEditarDetalle}
               puedeReasignar={puedeReasignar}
             />
@@ -341,7 +342,6 @@ function Encabezado({
           {puedeReabrir && (
             <ReabrirOportunidad
               opportunityId={o.id}
-              estatus={ETIQUETA_ESTATUS[o.status]}
               etapa={o.stage.name}
               accion={reabrirOportunidadAccion}
             />
@@ -415,6 +415,7 @@ function TabResumen({
   rolesDeComite,
   origenes,
   propietarios,
+  preventas,
   puedeEditar,
   puedeReasignar,
 }: {
@@ -424,9 +425,11 @@ function TabResumen({
   rolesDeComite: { id: string; name: string }[];
   origenes: { id: string; name: string }[];
   propietarios: { id: string; name: string }[];
+  preventas: { id: string; name: string }[];
   puedeEditar: boolean;
   puedeReasignar: boolean;
 }) {
+  const preventa = preventaDe(o);
   // La oportunidad viaja atada a la acción una sola vez, aquí: cada dato
   // editable solo manda su campo y su valor.
   const guardarCampo = editarCampoAccion.bind(null, o.id);
@@ -456,6 +459,7 @@ function TabResumen({
                   forecastCategory: o.forecastCategory,
                   sourceId: o.source?.id ?? null,
                   ownerId: o.owner.id,
+                  presalesUserId: preventa?.id ?? null,
                   tieneCotizacion: conCotizacion,
                   meddicScore: o.meddicScore,
                 }}
@@ -466,6 +470,7 @@ function TabResumen({
                 }))}
                 origenes={origenes}
                 propietarios={propietarios}
+                preventas={preventas}
                 puedeReasignar={puedeReasignar}
                 minimoParaCompromiso={Number(politica.meddicMinToCommit)}
                 accion={editarOportunidadAccion}
@@ -533,6 +538,15 @@ function TabResumen({
               // Q-13 · reasignar es de Gerencia, así que para el vendedor su
               // propio nombre es un dato, no un control.
               editable={puedeEditar && puedeReasignar}
+              guardar={guardarCampo}
+            />
+            <DatoEditable
+              etiqueta="Responsable de preventa"
+              campo="presalesUserId"
+              valor={preventa?.id ?? ""}
+              texto={preventa?.name ?? "Sin asignar"}
+              opciones={[{ valor: "", etiqueta: "Sin asignar" }, ...preventas.map((u) => ({ valor: u.id, etiqueta: u.name }))]}
+              editable={puedeEditar && preventas.length > 0}
               guardar={guardarCampo}
             />
             <Dato etiqueta="Creada por" valor={o.createdBy.name} />

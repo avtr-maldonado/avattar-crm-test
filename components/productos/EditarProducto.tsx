@@ -85,10 +85,6 @@ export function EditarProducto({
 
   const idFormulario = `producto-${producto?.id ?? "nuevo"}`;
   // Los dos vacíos = sin lista (§22): precio y costo se fijan en cada cotización.
-  const sinLista = lista.trim() === "" && costo.trim() === "";
-  const teniaLista = producto !== undefined && producto.listPrice !== "";
-  const tocaPrecios =
-    !esAlta && (lista !== (producto?.listPrice ?? "") || costo !== (producto?.standardCost ?? ""));
 
   return (
     <>
@@ -98,25 +94,12 @@ export function EditarProducto({
 
       <Panel
         titulo={esAlta ? "Nuevo producto" : "Editar producto"}
-        subtitulo={
-          esAlta
-            ? "Lista única en USD para los tres países. Sin precio ni costo, se fijan en cada cotización."
-            : `${producto?.sku} · el SKU no se edita`
-        }
+        subtitulo={esAlta ? undefined : producto?.sku}
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         ancho="lg"
         pie={
           <>
-            <p className="max-w-sm text-xs leading-snug text-texto-tenue">
-              {tocaPrecios && !sinLista
-                ? teniaLista
-                  ? "Cambiar precio o costo abre una vigencia nueva desde hoy. La anterior queda como histórico (RN-26)."
-                  : "Con precio y costo el producto estrena lista desde hoy (RN-26)."
-                : sinLista
-                  ? "Sin precio ni costo el producto queda sin lista: se fijan en cada cotización."
-                  : "Con precio y costo, el producto cotiza con su lista vigente."}
-            </p>
             <div className="flex items-center gap-2">
               <Boton variante="fantasma" type="button" onClick={() => setAbierto(false)}>
                 Cancelar
@@ -136,7 +119,6 @@ export function EditarProducto({
               etiqueta="SKU"
               htmlFor={`${idFormulario}-sku`}
               problema={problemaDe(resultado, "sku")}
-              ayuda={esAlta ? "Se fija al crear: lo referencian las cotizaciones." : undefined}
             >
               <Entrada
                 id={`${idFormulario}-sku`}
@@ -226,7 +208,6 @@ export function EditarProducto({
                   etiqueta="Costo estándar"
                   htmlFor={`${idFormulario}-standardCost`}
                   problema={problemaDe(resultado, "standardCost")}
-                  ayuda="Cambiarlo refresca la fecha del costo (C-01)."
                 >
                   <Entrada
                     id={`${idFormulario}-standardCost`}
@@ -244,7 +225,7 @@ export function EditarProducto({
             </div>
           ) : (
             <p className="rounded-sm border border-borde bg-superficie-sutil px-4 py-3 text-sm text-texto-tenue">
-              Precio y costo solo los edita quien puede ver el costo (INV-02).
+              Precio y costo solo los edita quien puede ver el costo.
             </p>
           )}
 

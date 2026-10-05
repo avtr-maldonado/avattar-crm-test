@@ -46,11 +46,12 @@ const GraficaHorizontal = dynamic(() => import("./GraficaHorizontal").then((m) =
 const TICKS_DE_MARGEN = [0, 0.2, 0.4, 0.6, 0.8, 1];
 
 export function TarjetaDeAvance({
-  anio,
+  lapso,
   inicial,
   variantes,
 }: {
-  anio: number;
+  /** El lapso en prosa: «en el Q3 2026» (§45). */
+  lapso: string;
   inicial: DimensionDeAvance;
   variantes: Record<DimensionDeAvance, SerieDeAvance>;
 }) {
@@ -59,11 +60,10 @@ export function TarjetaDeAvance({
   return (
     <Tarjeta
       titulo="Avance contra objetivo consolidado"
-      descripcion={`Ganadas por fecha de cierre real dentro del año fiscal ${anio}. La cuota se compara en el total y por trimestre.`}
       agrupacion={{ opciones: DIMENSIONES_DE_AVANCE, activa, alElegir: elegir }}
       pie={serie.nota}
     >
-      <GraficaDeBarras puntos={serie.puntos} conCuota={serie.conCuota} vacio={`Ninguna oportunidad ganada en ${anio} con estos filtros.`} />
+      <GraficaDeBarras puntos={serie.puntos} conCuota={serie.conCuota} vacio={`Ninguna oportunidad ganada ${lapso} con estos filtros.`} />
     </Tarjeta>
   );
 }
@@ -81,7 +81,6 @@ export function TarjetaHistorica({
   return (
     <Tarjeta
       titulo="Histórico de venta"
-      descripcion="Toda la historia por fecha de cierre real; el filtro de año no aplica aquí. La variación es contra el periodo anterior con ventas."
       agrupacion={{ opciones: AGRUPACIONES_HISTORICAS, activa, alElegir: elegir }}
     >
       <GraficaHistorica
@@ -94,11 +93,11 @@ export function TarjetaHistorica({
 }
 
 export function TarjetaDeRentabilidad({
-  anio,
+  lapso,
   inicial,
   variantes,
 }: {
-  anio: number;
+  lapso: string;
   inicial: DimensionDeRentabilidad;
   variantes: Record<DimensionDeRentabilidad, FilaApilada[]>;
 }) {
@@ -106,23 +105,22 @@ export function TarjetaDeRentabilidad({
   return (
     <Tarjeta
       titulo="Rentabilidad"
-      descripcion={`Ganadas en ${anio} cuya cotización trae costo. Venta, costo y utilidad salen de la cotización.`}
       agrupacion={{ opciones: DIMENSIONES_DE_RENTABILIDAD, activa, alElegir: elegir }}
     >
       <GraficaApilada
         filas={variantes[activa]}
-        vacio={`Ninguna venta ganada en ${anio} tiene cotización con costo. Sin costo no hay rentabilidad que calcular.`}
+        vacio={`Ninguna venta ganada ${lapso} tiene cotización con costo. Sin costo no hay rentabilidad que calcular.`}
       />
     </Tarjeta>
   );
 }
 
 export function TarjetaDeMargen({
-  anio,
+  lapso,
   inicial,
   variantes,
 }: {
-  anio: number;
+  lapso: string;
   inicial: DimensionDeRentabilidad;
   variantes: Record<DimensionDeRentabilidad, FilaDeMargen[]>;
 }) {
@@ -131,7 +129,6 @@ export function TarjetaDeMargen({
   return (
     <Tarjeta
       titulo="Margen"
-      descripcion="Porcentaje de utilidad sobre la venta, de mayor a menor."
       agrupacion={{ opciones: DIMENSIONES_DE_RENTABILIDAD, activa, alElegir: elegir }}
     >
       <GraficaHorizontal
@@ -142,13 +139,14 @@ export function TarjetaDeMargen({
           etiquetaDeValor: f.margenTexto,
           ...(f.negativo ? { tono: "peligro" as const } : {}),
           detalle: f.detalle,
+          items: f.items,
         }))}
         color={PALETA.margen}
         dominio={[0, 1]}
         ticks={TICKS_DE_MARGEN}
         formatoDeEje={formatoDePorcentaje}
         leyenda={[{ etiqueta: "Margen", color: PALETA.margen }]}
-        vacio={`Ninguna venta ganada en ${anio} tiene cotización con costo.`}
+        vacio={`Ninguna venta ganada ${lapso} tiene cotización con costo.`}
       />
     </Tarjeta>
   );

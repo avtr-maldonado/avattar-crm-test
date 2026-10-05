@@ -1,8 +1,10 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion } from "./comun";
+import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion, useDetalle } from "./comun";
+import { PanelDeDetalle } from "./PanelDeDetalle";
 import { PALETA, TIPOGRAFIA_DE_EJE } from "./paleta";
+import { indiceActivo, seleccionDe } from "./seleccion";
 import type { PuntoDeLinea, ReferenciaDeGrafica } from "./tipos";
 
 const ALTO = 240;
@@ -10,7 +12,9 @@ const ANCHO_POR_PUNTO = 72;
 
 /**
  * Una serie en el tiempo: el ciclo de venta por trimestre de cierre. La
- * `referencia` es una línea horizontal punteada (la mediana del año).
+ * `referencia` es una línea horizontal punteada (la mediana del año). El
+ * punto es pequeño, así que responde la columna entera: pulsar en cualquier
+ * parte de un trimestre abre su detalle (§43).
  */
 export function GraficaDeLinea({
   puntos,
@@ -26,6 +30,7 @@ export function GraficaDeLinea({
   vacio: string;
 }) {
   const anima = useAnimacion();
+  const detalle = useDetalle();
   if (puntos.length === 0) return <SinDatos texto={vacio} alto={ALTO} />;
 
   return (
@@ -33,7 +38,16 @@ export function GraficaDeLinea({
       <div className="overflow-x-auto">
         <div style={{ minWidth: Math.max(280, puntos.length * ANCHO_POR_PUNTO) }}>
           <ResponsiveContainer width="100%" height={ALTO}>
-            <LineChart data={puntos} margin={{ top: 16, right: 24, left: 0, bottom: 0 }}>
+            <LineChart
+              data={puntos}
+              margin={{ top: 16, right: 24, left: 0, bottom: 0 }}
+              className="cursor-pointer"
+              onClick={(e) => {
+                const i = indiceActivo(e);
+                const punto = i === null ? undefined : puntos[i];
+                if (punto) detalle.elegir(seleccionDe(punto));
+              }}
+            >
               <CartesianGrid vertical={false} stroke={PALETA.rejilla} />
               <XAxis dataKey="etiqueta" interval={0} tickLine={false} axisLine={{ stroke: PALETA.rejilla }} tick={TIPOGRAFIA_DE_EJE} padding={{ left: 24, right: 24 }} />
               <YAxis width={48} tickLine={false} axisLine={false} tick={TIPOGRAFIA_DE_EJE} tickFormatter={formatoDeEje} allowDecimals={false} />
@@ -68,6 +82,7 @@ export function GraficaDeLinea({
           ...(referencia ? [{ etiqueta: "Mediana", color: PALETA.texto, linea: true }] : []),
         ]}
       />
+      <PanelDeDetalle seleccion={detalle.seleccion} abierto={detalle.abierto} alCerrar={detalle.cerrar} />
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { clsx } from "clsx";
-import { ETIQUETA_CATEGORIA } from "@/lib/etiquetas";
 import { ControlSegmentado, EstadoVacio } from "@/components/ui/primitivas";
 import { TarjetaOportunidad, type DatosTarjeta } from "./TarjetaOportunidad";
 
@@ -106,9 +105,6 @@ export function Forecast({
           />
         </nav>
 
-        <p className="ml-auto text-xs text-texto-tenue">
-          {agrupar === "mes" ? "Por mes de cierre estimado" : "Por trimestre fiscal de cierre estimado"}
-        </p>
       </div>
 
       {/* La misma rejilla del kanban: tantas columnas iguales como periodos,
@@ -175,12 +171,6 @@ export function Forecast({
         ))}
       </div>
 
-      <p className="text-xs text-texto-tenue">
-        La barra de cada columna es la mezcla por categoría de pronóstico (el juicio del
-        vendedor): {ETIQUETA_CATEGORIA.COMPROMISO} en azul marino, {ETIQUETA_CATEGORIA.MEJOR_CASO}{" "}
-        en azul y {ETIQUETA_CATEGORIA.PIPELINE} en azul claro; el desglose sale al pasar el cursor.
-        El ponderado es la probabilidad de la etapa. «Omitida» cuenta en el total y no en la barra.
-      </p>
     </div>
   );
 }

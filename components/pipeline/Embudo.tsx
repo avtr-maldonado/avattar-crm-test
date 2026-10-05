@@ -63,12 +63,10 @@ const PORCENTAJE = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
 export function Embudo({
   etapas,
   riesgos,
-  ventanaEnDias,
   accionVacio,
 }: {
   etapas: EtapaVisible[];
   riesgos: RiesgoVisible[];
-  ventanaEnDias: number;
   accionVacio: React.ReactNode;
 }) {
   const hayValor = etapas.some((e) => e.cuantas > 0);
@@ -79,9 +77,6 @@ export function Embudo({
         <h2 className="text-sm font-semibold text-texto-titulo">
           Embudo · conversión etapa a etapa
         </h2>
-        <p className="mt-0.5 text-xs text-texto-tenue">
-          Valor abierto ahora y tasa de paso de los últimos {ventanaEnDias} días.
-        </p>
 
         {hayValor ? (
           <ol className="mt-5 space-y-4">
@@ -159,9 +154,6 @@ function ColaDeRiesgo({ riesgos }: { riesgos: RiesgoVisible[] }) {
   return (
     <section className="rounded-md border border-borde bg-superficie-tarjeta px-5 py-4">
       <h2 className="text-sm font-semibold text-texto-titulo">Cola de riesgo</h2>
-      <p className="mt-0.5 text-xs text-texto-tenue">
-        Ordenada por valor: sin actividad futura o estancada.
-      </p>
 
       {riesgos.length === 0 ? (
         <p className="mt-5 rounded-sm border border-dashed border-borde px-4 py-6 text-center text-sm text-texto-tenue">

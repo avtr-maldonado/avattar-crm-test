@@ -9,6 +9,22 @@ export type Tono = "exito" | "peligro" | "tenue";
 /** Un renglón del tooltip: «Ganado · $328,835.00». */
 export type DetalleDePunto = { etiqueta: string; texto: string; tono?: Tono };
 
+/**
+ * Un ítem detrás de un punto: lo que se lista al pulsar la barra (decisiones
+ * §43). Dos líneas a la izquierda (título y subtítulo) y dos a la derecha
+ * (cifra y nota), ya formateadas en el servidor. `href` lleva a la ficha
+ * cuando el ítem es una oportunidad.
+ */
+export type ItemDePunto = {
+  clave: string;
+  href?: string;
+  titulo: string;
+  subtitulo?: string;
+  cifra: string;
+  nota?: string;
+  tono?: Tono;
+};
+
 /** Una barra del avance. `cuota` solo existe cuando hay cuota consolidada. */
 export type PuntoDeBarra = {
   clave: string;
@@ -20,6 +36,7 @@ export type PuntoDeBarra = {
   /** Un trimestre que no ha empezado o lo ganado sin cotización: se pinta más claro. */
   tenue?: boolean;
   detalle: DetalleDePunto[];
+  items: ItemDePunto[];
 };
 
 export type SerieDeAvance = {
@@ -36,6 +53,7 @@ export type PuntoHistorico = {
   ganado: number;
   utilidad: number | null;
   detalle: DetalleDePunto[];
+  items: ItemDePunto[];
 };
 
 /** Una barra apilada de rentabilidad: costo + utilidad = venta. */
@@ -47,6 +65,7 @@ export type FilaApilada = {
   utilidad: number;
   venta: number;
   detalle: DetalleDePunto[];
+  items: ItemDePunto[];
 };
 
 export type FilaDeMargen = {
@@ -57,12 +76,21 @@ export type FilaDeMargen = {
   margenTexto: string;
   negativo: boolean;
   detalle: DetalleDePunto[];
+  items: ItemDePunto[];
 };
 
 // ───────────────────────────────────────────────────────── Forecast (§37)
 
 /** Una barra del embudo: la altura es el importe; `ponderado` + `resto` la apilan. */
-export type PuntoDeEmbudo = { clave: string; etiqueta: string; importe: number; ponderado: number; resto: number; detalle: DetalleDePunto[] };
+export type PuntoDeEmbudo = {
+  clave: string;
+  etiqueta: string;
+  importe: number;
+  ponderado: number;
+  resto: number;
+  detalle: DetalleDePunto[];
+  items: ItemDePunto[];
+};
 
 /** Una barra horizontal de una sola serie, con la cifra ya escrita al final. */
 export type FilaHorizontal = {
@@ -73,19 +101,30 @@ export type FilaHorizontal = {
   /** Pinta la barra por estado: verde, coral o gris; sin tono, el color de la gráfica. */
   tono?: "exito" | "peligro" | "tenue";
   detalle: DetalleDePunto[];
+  items: ItemDePunto[];
 };
 
 /** Una línea de referencia: la mediana, la edad promedio. */
 export type ReferenciaDeGrafica = { valor: number; etiqueta: string };
 
-export type PuntoDeLinea = { clave: string; etiqueta: string; valor: number | null; detalle: DetalleDePunto[] };
+export type PuntoDeLinea = { clave: string; etiqueta: string; valor: number | null; detalle: DetalleDePunto[]; items: ItemDePunto[] };
 
 /** Una serie de barras agrupadas; el color lo pone la tarjeta. */
 export type SerieDeGrupos = { clave: string; etiqueta: string };
 export type SerieConColor = SerieDeGrupos & { color: string };
 
-/** Un grupo de barras agrupadas (nunca apiladas: los conteos se traslapan): un valor por serie. */
-export type FilaDeGrupos = { clave: string; etiqueta: string; valores: Record<string, number>; detalle: DetalleDePunto[] };
+/**
+ * Un grupo de barras agrupadas (nunca apiladas: los conteos se traslapan): un
+ * valor por serie. La barra que se pulsa es **una serie**, así que los ítems
+ * van por serie.
+ */
+export type FilaDeGrupos = {
+  clave: string;
+  etiqueta: string;
+  valores: Record<string, number>;
+  detalle: DetalleDePunto[];
+  itemsPorSerie: Record<string, ItemDePunto[]>;
+};
 
 /** Días en la etapa contra su límite: < 75 % en tiempo, hasta el límite en riesgo, pasado el límite estancada (§37). */
 export type EstadoDeEtapa = "en_tiempo" | "en_riesgo" | "estancada";
@@ -97,6 +136,8 @@ export type PuntoDeAntiguedad = {
   importe: number;
   estado: EstadoDeEtapa;
   detalle: DetalleDePunto[];
+  /** El punto es una oportunidad: un solo ítem, con su enlace. */
+  items: ItemDePunto[];
 };
 
 export const AGRUPACIONES_DE_EMBUDO = [

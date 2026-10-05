@@ -56,12 +56,8 @@ export function DetalleDeEtapa({ etapa, children }: { etapa: EtapaDetallada; chi
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         ancho="lg"
+        cerrarAlFondo
       >
-        <p className="text-xs text-texto-tenue">
-          El valor de la barra es la suma de los importes abiertos en la etapa. El ponderado
-          multiplica cada importe por la probabilidad de la etapa, no por el pronóstico del
-          vendedor. {etapa.leyendaDePaso}.
-        </p>
 
         {etapa.oportunidades.length === 0 ? (
           <p className="mt-4 rounded-sm border border-dashed border-borde px-4 py-6 text-center text-sm text-texto-tenue">

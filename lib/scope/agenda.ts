@@ -1,7 +1,7 @@
 import type { CountryCode } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { fechaEn, instanteEn } from "@/lib/tiempo";
+import { fechaEn, instanteEn, lunesDe, sumarDias } from "@/lib/tiempo";
 import { actividadEnOficina, activityScope } from "./activities";
 import { opportunityScope } from "./opportunities";
 
@@ -27,6 +27,25 @@ import { opportunityScope } from "./opportunities";
  * es lo que hace que el contador de Actividades del menú y esta pantalla
  * cuenten lo mismo.
  */
+/**
+ * Lo que la fila muestra y lo que el lápiz necesita para editar en el sitio:
+ * el país de la oportunidad decide la zona y los responsables (decisiones §20).
+ */
+const SELECCION_DE_AGENDA = {
+  id: true,
+  subject: true,
+  notes: true,
+  outcome: true,
+  startsAt: true,
+  durationMin: true,
+  completedAt: true,
+  externalEventId: true,
+  type: { select: { id: true, name: true } },
+  user: { select: { id: true, name: true, initials: true } },
+  opportunity: { select: { id: true, folio: true, name: true, amount: true, countryCode: true } },
+  organization: { select: { id: true, name: true } },
+} as const;
+
 export type BandejaDeTrabajo = Awaited<ReturnType<typeof bandejaDeTrabajo>>;
 
 export async function bandejaDeTrabajo(
@@ -39,22 +58,6 @@ export async function bandejaDeTrabajo(
   const enOficina = pais ? actividadEnOficina(pais) : {};
   const { inicio: inicioDeHoy, fin: finDeHoy } = diaEn(fechaEn(ahora, zona), zona);
 
-  // Lo que la fila muestra y lo que el lápiz necesita para editar en el sitio:
-  // el país de la oportunidad decide la zona y los responsables (decisiones §20).
-  const seleccion = {
-    id: true,
-    subject: true,
-    notes: true,
-    outcome: true,
-    startsAt: true,
-    durationMin: true,
-    completedAt: true,
-    externalEventId: true,
-    type: { select: { id: true, name: true } },
-    user: { select: { id: true, name: true, initials: true } },
-    opportunity: { select: { id: true, folio: true, name: true, amount: true, countryCode: true } },
-    organization: { select: { id: true, name: true } },
-  } as const;
 
   const [vencidas, hoy, sinProxima] = await Promise.all([
     prisma.activity.findMany({
@@ -65,7 +68,7 @@ export async function bandejaDeTrabajo(
           enOficina,
         ],
       },
-      select: seleccion,
+      select: SELECCION_DE_AGENDA,
       // Lo más viejo primero: es lo que más tiempo lleva sin atenderse.
       orderBy: { startsAt: "asc" },
     }),
@@ -78,7 +81,7 @@ export async function bandejaDeTrabajo(
           enOficina,
         ],
       },
-      select: seleccion,
+      select: SELECCION_DE_AGENDA,
       orderBy: { startsAt: "asc" },
     }),
 
@@ -115,6 +118,37 @@ export async function bandejaDeTrabajo(
   return { vencidas, hoy, sinProxima, inicioDeHoy };
 }
 
+const DIAS_DE_HISTORIA = 14;
+
+/**
+ * El tablero de actividades · P-07, decisiones §42: lo que alimenta la lista
+ * y el kanban.
+ *
+ * Todo lo pendiente, de cualquier fecha (la deuda no caduca), más lo hecho en
+ * las últimas dos semanas: lo bastante para ver qué se cerró sin convertir la
+ * pantalla en un archivo. El estado de cada una se calcula en `lib/domain/agenda`.
+ */
+export async function tableroDeActividades(
+  session: Session,
+  ahora = new Date(),
+  pais?: CountryCode,
+  zona = "UTC",
+) {
+  const enOficina = pais ? actividadEnOficina(pais) : {};
+  const { inicio: inicioDeHoy } = diaEn(fechaEn(ahora, zona), zona);
+  const desde = new Date(ahora.getTime() - DIAS_DE_HISTORIA * 24 * 60 * 60 * 1000);
+
+  const actividades = await prisma.activity.findMany({
+    where: {
+      AND: [activityScope(session), { OR: [{ completedAt: null }, { completedAt: { gte: desde } }] }, enOficina],
+    },
+    select: SELECCION_DE_AGENDA,
+    orderBy: { startsAt: "asc" },
+  });
+
+  return { actividades, inicioDeHoy, desde };
+}
+
 /**
  * La agenda de la semana · §11 P-07.
  *
@@ -128,14 +162,17 @@ export async function agendaSemanal(
   pais?: CountryCode,
   /** La zona de la oficina: los días de la semana son los de esa ciudad. */
   zona = "UTC",
+  /** El lunes de la semana que se quiere ver, `YYYY-MM-DD`; sin él, la de hoy (decisiones §44). */
+  semana?: string,
 ) {
   // La semana arranca en lunes: es una agenda de trabajo, no un calendario.
   // Se calcula sobre la fecha local de la oficina, y cada cubeta va de la
   // medianoche local a la siguiente: una reunión a las 22:00 en CDMX es del
-  // 29, aunque en UTC ya sea el 30.
+  // 29, aunque en UTC ya sea el 30. «Hoy» sigue siendo hoy aunque se navegue
+  // a otra semana: ahí simplemente no se marca ningún día.
   const hoy = fechaEn(ahora, zona);
-  const diaDeLaSemana = (new Date(`${hoy}T00:00:00Z`).getUTCDay() + 6) % 7;
-  const fechas = Array.from({ length: 7 }, (_, i) => sumarDias(hoy, i - diaDeLaSemana));
+  const inicio = semana ?? lunesDe(hoy);
+  const fechas = Array.from({ length: 7 }, (_, i) => sumarDias(inicio, i));
   const lunes = diaEn(fechas[0]!, zona).inicio;
   const domingo = diaEn(fechas[6]!, zona).fin;
 
@@ -181,10 +218,4 @@ function diaEn(fecha: string, zona: string) {
   const inicio = instanteEn(fecha, "00:00", zona);
   const fin = new Date(instanteEn(sumarDias(fecha, 1), "00:00", zona).getTime() - 1);
   return { inicio, fin };
-}
-
-function sumarDias(fecha: string, dias: number): string {
-  const d = new Date(`${fecha}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + dias);
-  return d.toISOString().slice(0, 10);
 }

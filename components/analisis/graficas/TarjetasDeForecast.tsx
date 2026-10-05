@@ -51,7 +51,6 @@ export function TarjetaDeEmbudo({ puntos, filtros }: { puntos: PuntoDeEmbudo[]; 
   return (
     <Tarjeta
       titulo="Embudo por trimestre de cierre"
-      descripcion="Abiertas por fecha de cierre estimado. El ponderado es importe × probabilidad de la etapa (RN-01)."
     >
       <div className="mb-3">{filtros}</div>
       <GraficaDeEmbudo
@@ -73,7 +72,6 @@ export function TarjetaDeDistribucion({
   return (
     <Tarjeta
       titulo={`Distribución del pipeline por ${activa === "cliente" ? "cliente" : "vendedor"}`}
-      descripcion="Importe abierto que cumple los filtros del embudo, de mayor a menor, con su peso en el total."
       agrupacion={{ opciones: AGRUPACIONES_DE_EMBUDO, activa, alElegir: elegir }}
     >
       <GraficaHorizontal
@@ -87,22 +85,22 @@ export function TarjetaDeDistribucion({
 }
 
 export function TarjetaDeCiclo({
-  anio,
+  lapso,
   inicial,
   barras,
   serie,
 }: {
-  anio: number;
+  /** El lapso en prosa: «en el Q3 2026» (§45). */
+  lapso: string;
   inicial: VistaDeCiclo;
   barras: { filas: FilaHorizontal[]; referencia: ReferenciaDeGrafica | null };
   serie: PuntoDeLinea[];
 }) {
   const [activa, elegir] = useAgrupacion("g5", VISTAS_DE_CICLO, inicial);
-  const vacio = `Sin datos suficientes: ninguna oportunidad ganada en ${anio} con estos filtros. El ciclo se mide sobre lo que ya cerró.`;
+  const vacio = `Sin datos suficientes: ninguna oportunidad ganada ${lapso} con estos filtros. El ciclo se mide sobre lo que ya cerró.`;
   return (
     <Tarjeta
       titulo="Ciclo de venta medio"
-      descripcion={`Del alta al cierre real, en días, sobre las ganadas en ${anio}. La mediana aguanta el negocio de dos años que sesga el promedio.`}
       agrupacion={{ opciones: VISTAS_DE_CICLO, activa, alElegir: elegir }}
     >
       {activa === "vendedor" ? (
@@ -142,7 +140,6 @@ export function TarjetaDeEstado({
   return (
     <Tarjeta
       titulo="Antigüedad y estancamiento"
-      descripcion="Abiertas, medidas hoy: días en la etapa contra el límite de la etapa, edad desde el alta, y cierre estimado ya vencido. Mismas señales que el tablero."
     >
       <div className="mb-4">{children}</div>
       <h3 className="mb-1 text-xs font-semibold text-texto-titulo">Estado de oportunidades por vendedor</h3>
@@ -159,7 +156,6 @@ export function TarjetaDeDispersion({ puntos, edadPromedio }: { puntos: PuntoDeA
   return (
     <Tarjeta
       titulo="Antigüedad contra importe"
-      descripcion="Cada punto es una abierta: edad desde el alta contra importe. El color es el estado de su etapa; la línea, la edad promedio."
     >
       <GraficaDeDispersion puntos={puntos} edadPromedio={edadPromedio} vacio="Ninguna oportunidad abierta con estos filtros." />
     </Tarjeta>

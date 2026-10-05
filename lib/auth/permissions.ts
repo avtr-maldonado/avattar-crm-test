@@ -16,6 +16,7 @@ import { money, type Money } from "@/lib/money";
 export type PermissionCode =
   | "VER_OPORTUNIDADES_PROPIAS"
   | "VER_OPORTUNIDADES_OFICINA"
+  | "CREAR_OPORTUNIDAD"
   | "VER_MARGEN"
   | "VER_COSTO"
   | "AUTORIZAR_DESCUENTO"
@@ -31,6 +32,7 @@ export type PermissionCode =
 export const PERMISOS: readonly PermissionCode[] = [
   "VER_OPORTUNIDADES_PROPIAS",
   "VER_OPORTUNIDADES_OFICINA",
+  "CREAR_OPORTUNIDAD",
   "VER_MARGEN",
   "VER_COSTO",
   "AUTORIZAR_DESCUENTO",

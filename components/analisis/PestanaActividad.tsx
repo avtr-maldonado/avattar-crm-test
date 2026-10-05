@@ -7,7 +7,8 @@ import {
 import { StatTile } from "@/components/ui/primitivas";
 import { TablaDeAnalisis, type CeldaDeAnalisis } from "./TablaDeAnalisis";
 import { Tarjeta } from "./graficas/comun";
-import { abiertasYSinPaso, actividadPorMesFiscal, actividadPorTipo, saludPorEtapaGrafica } from "./graficas/datosDeActividad";
+import { enElLapso, etiquetaDeLapso, type Lapso } from "@/lib/filters/lapso";
+import { abiertasYSinPaso, actividadPorMes, actividadPorTipo, saludPorEtapaGrafica } from "./graficas/datosDeActividad";
 import {
   TarjetaDeAbiertasSinPaso,
   TarjetaDeActividadPorMes,
@@ -37,35 +38,40 @@ export function PestanaActividad({
   abiertas,
   ahora,
   minimoCierre,
-  anio,
-  fiscalYearStartMonth,
+  lapso,
+  rango,
 }: {
+  /** Las hechas dentro del lapso (§45). */
   actividades: ActividadHecha[];
   abiertas: OportunidadAbierta[];
   ahora: Date;
   /** `meddicMinToClosing` de la política comercial (INV-05). */
   minimoCierre: number;
-  anio: number;
-  fiscalYearStartMonth: number;
+  lapso: Lapso;
+  /** Las fechas del lapso: la gráfica por mes dibuja los meses que abarca. */
+  rango: { from: Date; to: Date };
 }) {
   const actividad = actividadPorVendedor(actividades, abiertas, ahora);
   const salud = saludMeddic(abiertas, minimoCierre);
+  const etiqueta = etiquetaDeLapso(lapso);
+  const prosa = enElLapso(lapso);
 
   const hechas = actividad.porVendedor.reduce((a, v) => a + v.hechas, 0);
   const sinSiguientePaso = actividad.porVendedor.reduce((a, v) => a + v.sinSiguientePaso, 0);
   const totalAbiertas = actividad.porVendedor.reduce((a, v) => a + v.abiertas, 0);
 
-  const porTipo = actividadPorTipo(actividad);
-  const porMes = actividadPorMesFiscal(actividad.porMes, anio, fiscalYearStartMonth);
-  const sinPaso = abiertasYSinPaso(actividad.porVendedor);
-  const saludGrafica = saludPorEtapaGrafica(salud.porEtapa, minimoCierre);
+  // Cada punto lleva las actividades o las abiertas que lo suman, para el detalle al pulsar (§43).
+  const porTipo = actividadPorTipo(actividad, actividades);
+  const porMes = actividadPorMes(actividad.porMes, rango, actividades);
+  const sinPaso = abiertasYSinPaso(actividad.porVendedor, abiertas);
+  const saludGrafica = saludPorEtapaGrafica(salud.porEtapa, minimoCierre, abiertas);
 
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           denso
-          etiqueta={`Actividades hechas en ${anio}`}
+          etiqueta={`Actividades hechas · ${etiqueta}`}
           valor={String(hechas)}
           subtexto={`${actividad.tipos.length} ${actividad.tipos.length === 1 ? "tipo" : "tipos"} de actividad`}
         />
@@ -93,15 +99,14 @@ export function PestanaActividad({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <TarjetaDeActividadPorVendedor anio={anio} series={porTipo.series} filas={porTipo.filas} />
-        <TarjetaDeActividadPorMes anio={anio} puntos={porMes} />
+        <TarjetaDeActividadPorVendedor lapso={prosa} series={porTipo.series} filas={porTipo.filas} />
+        <TarjetaDeActividadPorMes puntos={porMes} />
         <TarjetaDeAbiertasSinPaso series={sinPaso.series} filas={sinPaso.filas} />
-        <TarjetaDeSaludMeddic minimo={minimoCierre} filas={saludGrafica.filas} referencia={saludGrafica.referencia} />
+        <TarjetaDeSaludMeddic filas={saludGrafica.filas} referencia={saludGrafica.referencia} />
 
         <div className="xl:col-span-2">
           <Tarjeta
             titulo="En cierre sin llegar al mínimo"
-            descripcion={`Abiertas en una etapa de cierre con MEDDIC menor a ${minimoCierre}. Llegaron antes de que el mínimo se exigiera, o el mínimo subió después; la compuerta de ganar (≥ 80 y E, I, C confirmados) sigue aplicando.`}
           >
             <TablaDeAnalisis
               columnas={[{ titulo: "Folio" }, { titulo: "Oportunidad" }, { titulo: "MEDDIC", alineacion: "derecha" }]}
@@ -153,7 +158,7 @@ export function PestanaActividad({
                 String(totalAbiertas),
                 String(sinSiguientePaso),
               ]}
-              vacio={`Nadie ha marcado actividades como hechas en ${anio} con estos filtros, y no hay abiertas que atender.`}
+              vacio={`Nadie ha marcado actividades como hechas ${prosa} con estos filtros, y no hay abiertas que atender.`}
             />
           </Detalle>
           <Detalle titulo="Salud MEDDIC por etapa">
@@ -179,7 +184,6 @@ export function PestanaActividad({
               }))}
               vacio="Ninguna oportunidad abierta con estos filtros."
             />
-            <p className="mt-2 text-xs text-texto-tenue">El puntaje gatea, no pondera (RN-01): el mínimo bloquea el avance a cierre.</p>
           </Detalle>
         </div>
       </section>

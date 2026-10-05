@@ -1,15 +1,16 @@
 "use client";
 
-import { Fragment, useCallback, useSyncExternalStore } from "react";
+import { Fragment, useCallback, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { ControlSegmentado } from "@/components/ui/primitivas";
+import type { SeleccionDeGrafica } from "./seleccion";
 import type { DetalleDePunto, Tono } from "./tipos";
 
 /**
- * Lo que comparten las cuatro gráficas de Análisis de ventas: la agrupación en
- * la URL, el tooltip, la leyenda, la tarjeta y los estados vacío y de carga.
- * Los colores viven en `paleta.ts`.
+ * Lo que comparten las gráficas de Análisis: la agrupación en la URL, el
+ * tooltip, el detalle al pulsar (§43), la leyenda, la tarjeta y los estados
+ * vacío y de carga. Los colores viven en `paleta.ts`.
  */
 
 /**
@@ -53,6 +54,17 @@ export function useAnimacion(): boolean {
   );
 }
 
+/**
+ * El punto pulsado y si su panel está abierto (§43). Al cerrar se conserva la
+ * selección: el `<dialog>` se desvanece con su contenido, no vacío.
+ */
+export function useDetalle() {
+  const [estado, setEstado] = useState<{ seleccion: SeleccionDeGrafica | null; abierto: boolean }>({ seleccion: null, abierto: false });
+  const elegir = useCallback((seleccion: SeleccionDeGrafica) => setEstado({ seleccion, abierto: true }), []);
+  const cerrar = useCallback(() => setEstado((e) => ({ ...e, abierto: false })), []);
+  return { ...estado, elegir, cerrar };
+}
+
 // ─────────────────────────────────────────────────────────── La tarjeta
 
 export function Tarjeta<T extends string>({
@@ -63,8 +75,7 @@ export function Tarjeta<T extends string>({
   children,
 }: {
   titulo: string;
-  /** Qué fecha manda y qué entra: cada reporte lo dice (§10.2). */
-  descripcion: string;
+  descripcion?: string;
   agrupacion?: {
     opciones: readonly { valor: T; etiqueta: string }[];
     activa: T;
@@ -78,11 +89,11 @@ export function Tarjeta<T extends string>({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
         <div className="min-w-[14rem] flex-1">
           <h2 className="text-sm font-semibold text-texto-titulo">{titulo}</h2>
-          <p className="mt-0.5 text-xs text-texto-tenue">{descripcion}</p>
+          {descripcion ? <p className="mt-0.5 text-xs text-texto-tenue">{descripcion}</p> : null}
         </div>
         {agrupacion ? (
+          // Sin «Agrupar por» (§45): las opciones se explican solas y el título ya dice qué se agrupa.
           <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
-            <span className="text-xs text-texto-tenue">Agrupar por</span>
             <ControlSegmentado opciones={agrupacion.opciones} activa={agrupacion.activa} alElegir={agrupacion.alElegir} />
           </div>
         ) : null}
@@ -102,11 +113,12 @@ const COLOR_DE_TONO: Record<Tono | "normal", string> = {
   tenue: "text-texto-tenue",
 };
 
-type PuntoConDetalle = { etiqueta: string; detalle: DetalleDePunto[] };
+type PuntoConDetalle = { etiqueta: string; detalle: DetalleDePunto[]; items?: unknown[]; itemsPorSerie?: unknown };
 
 /**
  * El tooltip de todas las gráficas: el nombre del punto y sus renglones, que ya
  * llegan formateados del servidor. Recharts lo clona con `active` y `payload`.
+ * Si el punto trae ítems, el pie invita a pulsarlo (§43).
  */
 export function TooltipDeGrafica({
   active,
@@ -117,6 +129,7 @@ export function TooltipDeGrafica({
 }) {
   const punto = payload?.[0]?.payload as PuntoConDetalle | undefined;
   if (!active || !punto) return null;
+  const conDetalle = (punto.items?.length ?? 0) > 0 || punto.itemsPorSerie != null;
   return (
     <div className="max-w-72 rounded-sm border border-borde bg-superficie-tarjeta px-3 py-2 text-xs shadow-md">
       <p className="mb-1.5 font-semibold text-texto-titulo">{punto.etiqueta}</p>
@@ -128,6 +141,7 @@ export function TooltipDeGrafica({
           </Fragment>
         ))}
       </dl>
+      {conDetalle ? <p className="mt-1.5 border-t border-borde pt-1.5 text-[11px] text-texto-tenue">Clic para ver el detalle</p> : null}
     </div>
   );
 }

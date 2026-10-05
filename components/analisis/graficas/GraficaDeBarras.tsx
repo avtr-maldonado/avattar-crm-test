@@ -2,8 +2,10 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { acortar, formatoCompacto, formatoDeEje } from "./formato";
-import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion } from "./comun";
+import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion, useDetalle } from "./comun";
+import { PanelDeDetalle } from "./PanelDeDetalle";
 import { ETIQUETA_DE_BARRA, PALETA, TIPOGRAFIA_DE_EJE } from "./paleta";
+import { OPORTUNIDADES, seleccionDe, type UnidadDeItems } from "./seleccion";
 import type { PuntoDeBarra } from "./tipos";
 
 const ALTO = 288;
@@ -20,7 +22,8 @@ function anchoPorBarra(puntos: readonly PuntoDeBarra[]): number {
  *
  * Con cuota consolidada, cada trimestre lleva al lado su cuota en azul claro;
  * sin cuota, no hay serie. Con muchas categorías la gráfica crece a lo ancho y
- * el contenedor hace scroll, en vez de encimar las etiquetas.
+ * el contenedor hace scroll, en vez de encimar las etiquetas. Pulsar una barra
+ * —la de lo ganado o la de la cuota— abre el detalle del trimestre (§43).
  */
 const FORMATO_DE_DINERO = { eje: formatoDeEje, etiqueta: formatoCompacto };
 
@@ -31,6 +34,7 @@ export function GraficaDeBarras({
   formato = FORMATO_DE_DINERO,
   enteros = false,
   nombreDeSerie = "Ganado",
+  unidad = OPORTUNIDADES,
 }: {
   puntos: PuntoDeBarra[];
   conCuota: boolean;
@@ -39,11 +43,15 @@ export function GraficaDeBarras({
   formato?: { eje: (valor: number) => string; etiqueta: (valor: number) => string };
   enteros?: boolean;
   nombreDeSerie?: string;
+  /** Qué se cuenta en el detalle: oportunidades por omisión, actividades en la gráfica por mes. */
+  unidad?: UnidadDeItems;
 }) {
   const anima = useAnimacion();
+  const detalle = useDetalle();
   if (puntos.length === 0) return <SinDatos texto={vacio} alto={ALTO} />;
   const ancho = anchoPorBarra(puntos);
   const letras = Math.floor((ancho - 12) / PX_POR_LETRA);
+  const abrir = (d: { payload?: unknown }) => detalle.elegir(seleccionDe(d.payload as PuntoDeBarra, unidad));
 
   return (
     <div>
@@ -76,6 +84,8 @@ export function GraficaDeBarras({
                   fill={PALETA.cuota}
                   stroke={PALETA.cuotaBorde}
                   radius={[3, 3, 0, 0]}
+                  cursor="pointer"
+                  onClick={abrir}
                   isAnimationActive={anima}
                   animationDuration={350}
                 />
@@ -86,6 +96,8 @@ export function GraficaDeBarras({
                 fill={PALETA.ganado}
                 radius={[3, 3, 0, 0]}
                 minPointSize={2}
+                cursor="pointer"
+                onClick={abrir}
                 isAnimationActive={anima}
                 animationDuration={350}
               >
@@ -104,6 +116,7 @@ export function GraficaDeBarras({
           ...(conCuota ? [{ etiqueta: "Cuota", color: PALETA.cuota, borde: PALETA.cuotaBorde }] : []),
         ]}
       />
+      <PanelDeDetalle seleccion={detalle.seleccion} abierto={detalle.abierto} alCerrar={detalle.cerrar} />
     </div>
   );
 }

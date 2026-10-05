@@ -145,7 +145,6 @@ export function PanelDocumentos({
 
       <Panel
         titulo="Cargar documento"
-        subtitulo="PDF, Word, Excel, PowerPoint, imágenes o texto. Hasta 25 MB."
         abierto={subiendo}
         alCerrar={() => setSubiendo(false)}
         pie={
@@ -188,7 +187,6 @@ export function PanelDocumentos({
             etiqueta="Archivo"
             htmlFor="archivo"
             problema={problemaDe(resultado, "archivo")}
-            ayuda="El contrato o la orden de compra son los que abren la etapa de Cierre."
           >
             <Entrada id="archivo" name="archivo" type="file" />
           </Campo>

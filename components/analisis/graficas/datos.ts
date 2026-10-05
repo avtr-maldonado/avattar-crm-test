@@ -1,14 +1,18 @@
 import { formatPercent, formatUSD, type Money } from "@/lib/money";
 import {
   completarTrimestres,
+  type AporteDeRentabilidad,
+  type AporteDeVenta,
   type DimensionDeVenta,
   type FilaAgrupada,
   type FilaDeRentabilidad,
   type FilaHistorica,
   type TotalAgrupado,
   type TrimestreConCuota,
+  type VentaGanada,
 } from "@/lib/domain/analisis";
-import type { DetalleDePunto, FilaApilada, FilaDeMargen, PuntoHistorico, SerieDeAvance } from "./tipos";
+import { itemDeVenta, notaDeUtilidad, porId } from "./items";
+import type { DetalleDePunto, FilaApilada, FilaDeMargen, ItemDePunto, PuntoHistorico, SerieDeAvance } from "./tipos";
 
 /**
  * De las filas agregadas de `lib/domain/analisis` a los puntos de las gráficas.
@@ -22,6 +26,10 @@ import type { DetalleDePunto, FilaApilada, FilaDeMargen, PuntoHistorico, SerieDe
  *   cliente, producto o tipo, de mayor a menor ganado. El total no es una barra.
  * - Sin cuota no se inventa una: ni serie ni renglón en el tooltip.
  * - La utilidad solo aparece con `VER_COSTO` (INV-02): el servidor la omite.
+ *
+ * Cada punto lleva además sus **ítems** (decisiones §43): las ventas que lo
+ * suman, resueltas por id contra la lista acotada que llegó de `lib/scope`.
+ * Un aporte cuya venta no esté en la lista se omite: nada se inventa.
  */
 const NOTA_PRODUCTO =
   "Por producto, cada venta se reparte entre las líneas de su cotización; el número de negocios de una barra cuenta en cuántas oportunidades aparece ese producto.";
@@ -45,24 +53,46 @@ function cumplimientoDe(t: TrimestreConCuota): DetalleDePunto {
   return t.estado === "cerrado" ? { etiqueta: "Cumplimiento", texto, tono: "peligro" } : { etiqueta: "Cumplimiento", texto };
 }
 
+/** Las ventas de una fila, con lo que cada una puso en ella. */
+function itemsDeVenta(aportes: readonly AporteDeVenta[], indice: ReadonlyMap<string, VentaGanada>): ItemDePunto[] {
+  return aportes.flatMap((a) => {
+    const v = indice.get(a.id);
+    return v ? [itemDeVenta(v, formatUSD(a.importe))] : [];
+  });
+}
+
 export function puntosDeAvance(
   agrupado: { filas: readonly FilaAgrupada[]; total: TotalAgrupado },
   dimension: DimensionDeVenta,
   opciones: {
+    /** El año fiscal de la cuota: el del inicio del lapso. */
     anio: number;
+    /**
+     * Las claves de trimestre que se dibujan y se comparan con la cuota
+     * (`trimestresDelLapso`, §45): los cuatro de un año, el único de un
+     * trimestre. Nulo con un mes o un rango: se dibuja solo lo que hubo y no
+     * hay cuota, porque la cuota existe por trimestre completo.
+     */
+    trimestres: readonly string[] | null;
     /** Nula cuando la cuota no es comparable con los filtros (producto o tipo). */
     cuotasPorTrimestre: readonly Money[] | null;
     trimestreEnCurso: { fiscalYear: number; quarter: number };
     utilidadVisible: boolean;
+    /** Las ventas de donde salen las filas: para listar las de cada barra (§43). */
+    ventas: readonly VentaGanada[];
   },
 ): SerieDeAvance {
   const { filas, total } = agrupado;
   if (total.cuantas === 0) return { puntos: [], conCuota: false, nota: null };
+  const indice = porId(opciones.ventas);
 
-  if (dimension === "trimestre") {
+  if (dimension === "trimestre" && opciones.trimestres !== null) {
     const cuotas = opciones.cuotasPorTrimestre;
     const conCuota = cuotas !== null && cuotas.some((c) => !c.isZero());
-    const trimestres = completarTrimestres(filas, opciones.anio, conCuota ? cuotas : [], opciones.trimestreEnCurso);
+    const visibles = new Set(opciones.trimestres);
+    const trimestres = completarTrimestres(filas, opciones.anio, conCuota ? cuotas : [], opciones.trimestreEnCurso).filter((t) =>
+      visibles.has(t.clave),
+    );
     const puntos = trimestres.map((t) => {
       const detalle: DetalleDePunto[] = [
         { etiqueta: "Ganado", texto: formatUSD(t.importe) },
@@ -85,14 +115,16 @@ export function puntosDeAvance(
         ...(conCuota ? { cuota: numero(t.cuota) } : {}),
         ...(t.estado === "futuro" ? { tenue: true } : {}),
         detalle,
+        items: itemsDeVenta(t.aportes, indice),
       };
     });
     return { puntos, conCuota, nota: null };
   }
 
-  const puntos = [...filas]
-    .sort((a, b) => b.importe.minus(a.importe).toNumber())
-    .map((f) => ({
+  // Por trimestre sin cuota comparable (un mes, un rango): lo que hubo, cronológico.
+  // Por cliente, producto o tipo: de mayor a menor ganado.
+  const ordenadas = dimension === "trimestre" ? [...filas] : [...filas].sort((a, b) => b.importe.minus(a.importe).toNumber());
+  const puntos = ordenadas.map((f) => ({
       clave: f.clave,
       etiqueta: f.etiqueta,
       valor: numero(f.importe),
@@ -103,6 +135,7 @@ export function puntosDeAvance(
         { etiqueta: "Participación", texto: formatPercent(f.participacion) },
         ...(opciones.utilidadVisible ? [utilidadDe(f.utilidad)] : []),
       ],
+      items: itemsDeVenta(f.aportes, indice),
     }));
   return { puntos, conCuota: false, nota: dimension === "producto" ? NOTA_PRODUCTO : null };
 }
@@ -113,7 +146,12 @@ function variacionDe(v: Money | null): DetalleDePunto {
   return { etiqueta: "Variación", texto, tono: v.isNegative() ? "peligro" : "exito" };
 }
 
-export function puntosHistoricos(h: { filas: readonly FilaHistorica[] }, utilidadVisible: boolean): PuntoHistorico[] {
+export function puntosHistoricos(
+  h: { filas: readonly FilaHistorica[] },
+  utilidadVisible: boolean,
+  ventas: readonly VentaGanada[],
+): PuntoHistorico[] {
+  const indice = porId(ventas);
   return h.filas.map((f) => ({
     clave: f.clave,
     etiqueta: f.etiqueta,
@@ -126,6 +164,7 @@ export function puntosHistoricos(h: { filas: readonly FilaHistorica[] }, utilida
       { etiqueta: "Participación", texto: formatPercent(f.participacion) },
       negocios(f.cuantas),
     ],
+    items: itemsDeVenta(f.aportes, indice),
   }));
 }
 
@@ -133,7 +172,29 @@ function margenDe(m: Money): DetalleDePunto {
   return { etiqueta: "Margen", texto: formatPercent(m), ...(m.isNegative() ? { tono: "peligro" as const } : {}) };
 }
 
-export function filasDeRentabilidad(r: { filas: readonly FilaDeRentabilidad[] }): FilaApilada[] {
+/**
+ * Las ventas de una fila de rentabilidad. Estas gráficas solo existen con
+ * `VER_COSTO` (INV-02): el lector no manda costo sin él y la pestaña no las
+ * pinta, así que aquí el costo de cada venta sí se escribe.
+ */
+function itemsDeRentabilidad(
+  aportes: readonly AporteDeRentabilidad[],
+  indice: ReadonlyMap<string, VentaGanada>,
+  modo: "venta" | "margen",
+): ItemDePunto[] {
+  return aportes.flatMap((a) => {
+    const v = indice.get(a.id);
+    if (!v) return [];
+    const utilidad = a.importe.minus(a.costo);
+    const tono = utilidad.isNegative() ? ("peligro" as const) : undefined;
+    if (modo === "venta") return [itemDeVenta(v, formatUSD(a.importe), { nota: notaDeUtilidad(utilidad, a.costo), tono })];
+    const margen = a.importe.isZero() ? a.importe : utilidad.div(a.importe);
+    return [itemDeVenta(v, formatPercent(margen), { nota: `Venta ${formatUSD(a.importe)} · Utilidad ${formatUSD(utilidad)}`, tono })];
+  });
+}
+
+export function filasDeRentabilidad(r: { filas: readonly FilaDeRentabilidad[] }, ventas: readonly VentaGanada[]): FilaApilada[] {
+  const indice = porId(ventas);
   return [...r.filas]
     .sort((a, b) => b.importe.minus(a.importe).toNumber())
     .map((f) => ({
@@ -151,10 +212,12 @@ export function filasDeRentabilidad(r: { filas: readonly FilaDeRentabilidad[] })
         margenDe(f.margen),
         negocios(f.cuantas),
       ],
+      items: itemsDeRentabilidad(f.aportes, indice, "venta"),
     }));
 }
 
-export function filasDeMargen(r: { filas: readonly FilaDeRentabilidad[] }): FilaDeMargen[] {
+export function filasDeMargen(r: { filas: readonly FilaDeRentabilidad[] }, ventas: readonly VentaGanada[]): FilaDeMargen[] {
+  const indice = porId(ventas);
   return [...r.filas]
     .sort((a, b) => b.margen.minus(a.margen).toNumber())
     .map((f) => ({
@@ -169,5 +232,6 @@ export function filasDeMargen(r: { filas: readonly FilaDeRentabilidad[] }): Fila
         utilidadDe(f.utilidad),
         negocios(f.cuantas),
       ],
+      items: itemsDeRentabilidad(f.aportes, indice, "margen"),
     }));
 }

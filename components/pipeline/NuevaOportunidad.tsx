@@ -52,6 +52,7 @@ export function NuevaOportunidad({
   origenes,
   rolesDeComite,
   propietarios,
+  preventas,
   usuarioActual,
   puedeAsignar,
   buscarOrganizaciones,
@@ -62,6 +63,7 @@ export function NuevaOportunidad({
   origenes: { id: string; name: string }[];
   rolesDeComite: { id: string; name: string }[];
   propietarios: { id: string; name: string }[];
+  preventas: { id: string; name: string }[];
   usuarioActual: { id: string; name: string };
   puedeAsignar: boolean;
   buscarOrganizaciones: (texto: string) => Promise<Sugerencia[]>;
@@ -181,15 +183,6 @@ export function NuevaOportunidad({
 
       <Panel
         titulo="Nueva oportunidad"
-        subtitulo={
-          <>
-            Folio{" "}
-            <span className="[font-variant-numeric:tabular-nums]">
-              OPP-{new Date().getFullYear()}-·····
-            </span>{" "}
-            se asigna al crear · pipeline {pipeline?.name ?? "—"} · USD
-          </>
-        }
         abierto={panelAbierto}
         alCerrar={limpiar}
         ancho="lg"
@@ -262,11 +255,6 @@ export function NuevaOportunidad({
             htmlFor="name"
             anotacion={nombreEsSugerido(estado) && prefijo ? "sugerido" : null}
             problema={problemas.problema("name")}
-            ayuda={
-              prefijo
-                ? "Completa con el servicio: «Servicios administrados», «Migración ERP»."
-                : undefined
-            }
           >
             <Entrada
               id="name"
@@ -286,6 +274,7 @@ export function NuevaOportunidad({
             cierre={cierre}
             origenes={origenes}
             propietarios={propietarios}
+            preventas={preventas}
             usuarioActual={usuarioActual}
             puedeAsignar={puedeAsignar}
             problema={problemas.problema}

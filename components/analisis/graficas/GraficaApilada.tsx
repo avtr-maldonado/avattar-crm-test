@@ -2,8 +2,10 @@
 
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { acortar, formatoCompacto, formatoDeEje } from "./formato";
-import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion } from "./comun";
+import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion, useDetalle } from "./comun";
+import { PanelDeDetalle } from "./PanelDeDetalle";
 import { ETIQUETA_DE_BARRA, PALETA, TIPOGRAFIA_DE_EJE } from "./paleta";
+import { seleccionDe } from "./seleccion";
 import type { FilaApilada } from "./tipos";
 
 const ALTO_POR_FILA = 36;
@@ -13,15 +15,18 @@ const ALTO_MAXIMO_VISIBLE = 448;
 /**
  * Reporte 3 · barras horizontales apiladas: costo + utilidad = venta, con la
  * venta al final de cada barra. El margen es un por ciento y no cabe en una
- * barra de dólares: va en el tooltip y en la gráfica de al lado.
+ * barra de dólares: va en el tooltip y en la gráfica de al lado. Pulsar
+ * cualquiera de los dos segmentos abre el detalle de la fila (§43).
  *
  * La altura crece con las filas; pasadas trece, el contenedor hace scroll
  * vertical en vez de aplastar las barras.
  */
 export function GraficaApilada({ filas, vacio }: { filas: FilaApilada[]; vacio: string }) {
   const anima = useAnimacion();
+  const detalle = useDetalle();
   if (filas.length === 0) return <SinDatos texto={vacio} alto={ALTO_MINIMO} />;
   const alto = Math.max(ALTO_MINIMO, filas.length * ALTO_POR_FILA + 40);
+  const abrir = (d: { payload?: unknown }) => detalle.elegir(seleccionDe(d.payload as FilaApilada));
 
   return (
     <div>
@@ -40,7 +45,16 @@ export function GraficaApilada({ filas, vacio }: { filas: FilaApilada[]; vacio: 
               tickFormatter={(v: string) => acortar(v, 32)}
             />
             <Tooltip cursor={{ fill: PALETA.cursor }} content={<TooltipDeGrafica />} />
-            <Bar dataKey="costo" name="Costo" stackId="venta" fill={PALETA.costo} isAnimationActive={anima} animationDuration={350} />
+            <Bar
+              dataKey="costo"
+              name="Costo"
+              stackId="venta"
+              fill={PALETA.costo}
+              cursor="pointer"
+              onClick={abrir}
+              isAnimationActive={anima}
+              animationDuration={350}
+            />
             <Bar
               dataKey="utilidad"
               name="Utilidad"
@@ -48,6 +62,8 @@ export function GraficaApilada({ filas, vacio }: { filas: FilaApilada[]; vacio: 
               fill={PALETA.utilidad}
               radius={[0, 3, 3, 0]}
               minPointSize={1}
+              cursor="pointer"
+              onClick={abrir}
               isAnimationActive={anima}
               animationDuration={350}
             >
@@ -62,6 +78,7 @@ export function GraficaApilada({ filas, vacio }: { filas: FilaApilada[]; vacio: 
           { etiqueta: "Utilidad", color: PALETA.utilidad },
         ]}
       />
+      <PanelDeDetalle seleccion={detalle.seleccion} abierto={detalle.abierto} alCerrar={detalle.cerrar} />
     </div>
   );
 }

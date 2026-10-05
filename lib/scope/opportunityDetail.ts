@@ -109,6 +109,8 @@ export async function getOpportunityDetail(session: Session, id: string) {
       },
       owner: { select: { id: true, name: true, initials: true } },
       createdBy: { select: { id: true, name: true, initials: true } },
+      // §39 · el responsable de preventa. La misma fila recorta el alcance de PREVENTA.
+      supportUsers: { select: { user: { select: { id: true, name: true, initials: true, role: true } } } },
       source: { select: { id: true, name: true } },
       lossReason: { select: { id: true, name: true, requiresCompetitor: true } },
 
