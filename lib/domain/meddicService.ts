@@ -1,6 +1,7 @@
 import type { MeddicComponent, MeddicStatus } from "@prisma/client";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import type { Session } from "@/lib/auth/permissions";
+import { puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
 import { prisma } from "@/lib/db";
 import { iniciales } from "@/lib/etiquetas";
 import type { DetalleOportunidad } from "@/lib/scope/opportunityDetail";
@@ -34,6 +35,8 @@ export async function guardarComponenteMeddic(
   },
   pesos: MeddicWeights,
 ): Promise<ResultadoAccion<{ puntaje: number }>> {
+  // §39 · Preventa lee el MEDDIC; calificarlo es del propietario o Gerencia.
+  if (!puedeEditarOportunidad(session, detalle)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   if (detalle.status !== "ABIERTA") {
     return falla("AUTORIZACION", "Una oportunidad cerrada ya no se califica.");
   }

@@ -61,7 +61,7 @@ describe("lo que no acepta", () => {
 });
 
 describe("el catálogo de campos editables", () => {
-  it("son los cinco de la ficha, y ninguno más", () => {
+  it("son los seis de la ficha, y ninguno más", () => {
     // La lista la usan el componente y la acción: si alguien agrega uno aquí
     // sin pensarlo, esta prueba lo dice en voz alta.
     expect([...CAMPOS_RAPIDOS]).toEqual([
@@ -70,6 +70,15 @@ describe("el catálogo de campos editables", () => {
       "expectedCloseDate",
       "sourceId",
       "ownerId",
+      "presalesUserId",
     ]);
   });
 });
+
+describe("el responsable de preventa también se corrige desde la ficha (§39)", () => {
+  it("vacío lo retira; un id lo asigna", () => {
+    expect(cambioDeCampo("presalesUserId", "")).toEqual({ ok: true, datos: { presalesUserId: null } });
+    expect(cambioDeCampo("presalesUserId", "u-7")).toEqual({ ok: true, datos: { presalesUserId: "u-7" } });
+  });
+});
+

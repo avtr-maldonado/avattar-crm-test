@@ -100,6 +100,7 @@ const esquema = z.object({
   forecastCategory: z.enum(["PIPELINE", "MEJOR_CASO", "COMPROMISO", "OMITIDA"]).default("PIPELINE"),
   sourceId: z.string().optional(),
   ownerId: z.string().optional(),
+  presalesUserId: z.string().optional(),
 });
 
 export async function crearOportunidadAccion(
@@ -151,6 +152,7 @@ export async function crearOportunidadAccion(
       forecastCategory: d.forecastCategory,
       sourceId: d.sourceId || undefined,
       ownerId: d.ownerId || undefined,
+      presalesUserId: d.presalesUserId || undefined,
     },
     { meddicMinToClosing: Number(politica.meddicMinToClosing) },
   );

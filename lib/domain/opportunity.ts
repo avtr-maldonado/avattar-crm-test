@@ -11,6 +11,7 @@ import {
 } from "@/lib/scope/opportunityDetail";
 import { evaluateGate, type GateContext, type GateFailure, type GateResult } from "./stageGate";
 import { nextFolio } from "./folio";
+import { preventaDe, puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
 import { cuadreDeHitos } from "./milestone";
 
 export type DecisionDeTransicion = {
@@ -111,6 +112,15 @@ export async function destinatariosValidos(countryCode?: CountryCode | null) {
   });
 }
 
+/** Quién puede ser responsable de preventa en un país (§39): activos con rol PREVENTA que operan ahí. */
+export async function preventasValidos(countryCode: CountryCode) {
+  return prisma.user.findMany({
+    where: { active: true, deletedAt: null, role: "PREVENTA", countryCodes: { has: countryCode } },
+    select: { id: true, name: true, initials: true },
+    orderBy: { name: "asc" },
+  });
+}
+
 export type OrganizacionNueva = {
   name: string;
   type: "CLIENTE" | "PROSPECTO" | "PARTNER" | "FABRICANTE" | "PROVEEDOR";
@@ -144,6 +154,8 @@ export type EntradaDeAlta = {
   forecastCategory?: ForecastCategory;
   sourceId?: string;
   ownerId?: string;
+  /** §39 · el responsable de preventa, si lo hay. Solo alguien con ese rol. */
+  presalesUserId?: string;
 };
 
 /**
@@ -167,6 +179,11 @@ export async function crearOportunidad(
   input: EntradaDeAlta,
   umbrales: { meddicMinToClosing: number },
 ): Promise<ResultadoAccion<{ id: string; folio: string; gateOverride: boolean }>> {
+  // §39 · crear es trabajar la oportunidad: Preventa la apoya, no la abre.
+  if (!can(session, "CREAR_OPORTUNIDAD")) {
+    return falla("AUTORIZACION", "Tu rol no da de alta oportunidades: las ve y les registra actividades.");
+  }
+
   if (!input.organizationId === !input.organizacionNueva) {
     return falla("VALIDACION", {
       campo: "organizationId",
@@ -274,6 +291,17 @@ export async function crearOportunidad(
     }
   }
 
+  // §39 · el responsable de preventa: solo alguien con ese rol, activo y del país.
+  if (input.presalesUserId) {
+    const preventas = await preventasValidos(countryCode);
+    if (!preventas.some((u) => u.id === input.presalesUserId)) {
+      return falla("VALIDACION", {
+        campo: "presalesUserId",
+        mensaje: `Ese usuario no es de preventa, no está activo o no opera en ${countryCode}.`,
+      });
+    }
+  }
+
   const ahora = new Date();
 
   const creada = await prisma.$transaction(async (tx) => {
@@ -343,6 +371,11 @@ export async function crearOportunidad(
       select: { id: true, folio: true },
     });
 
+    // §39 · la fila de apoyo es lo que le abre el alcance al preventa.
+    if (input.presalesUserId) {
+      await tx.opportunitySupport.create({ data: { opportunityId: oportunidad.id, userId: input.presalesUserId } });
+    }
+
     // Nacer en una etapa avanzada es una transición como cualquier otra, y su
     // `gateOverride` alimenta el mismo reporte de §8.3. Sin esta fila, la
     // oportunidad aparecería en Negociación sin que nada explique cómo llegó.
@@ -393,6 +426,9 @@ export async function cambiarEtapa(
       `Esta oportunidad está ${ETIQUETA_ESTATUS[detalle.status].toLowerCase()}. Reabrirla es de Administración (RN-18).`,
     );
   }
+
+  // §39 · mover de etapa es editar: Preventa la ve, no la mueve.
+  if (!puedeEditarOportunidad(session, detalle)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
 
   const destino = detalle.pipeline.stages.find((e) => e.id === input.toStageId);
   if (!destino) {
@@ -454,6 +490,8 @@ export type EdicionDeOportunidad = {
   forecastCategory?: ForecastCategory;
   sourceId?: string | null;
   ownerId?: string;
+  /** §39 · `null` retira al responsable de preventa; ausente, no se toca. */
+  presalesUserId?: string | null;
 };
 
 /**
@@ -484,9 +522,8 @@ export async function editarOportunidad(
     );
   }
 
-  const esSuya = detalle.owner.id === session.userId;
-  if (!esSuya && !can(session, "VER_OPORTUNIDADES_OFICINA")) {
-    return falla("AUTORIZACION", "Solo su propietario o Gerencia pueden editarla.");
+  if (!puedeEditarOportunidad(session, detalle)) {
+    return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   }
 
   const datos: Prisma.OpportunityUpdateInput = {};
@@ -551,7 +588,24 @@ export async function editarOportunidad(
     datos.owner = { connect: { id: cambios.ownerId } };
   }
 
-  if (Object.keys(datos).length === 0) return ok(null);
+  // ── Responsable de preventa · §39 ────────────────────────────────────────
+  // Lo asigna quien edita (propietario o Gerencia). Una fila de apoyo por
+  // oportunidad: la tabla admite varias, la pantalla asigna una.
+  const preventaActual = preventaDe(detalle);
+  const cambiaPreventa = cambios.presalesUserId !== undefined && cambios.presalesUserId !== (preventaActual?.id ?? null);
+  let preventaNueva: { id: string; name: string } | null = null;
+  if (cambiaPreventa && cambios.presalesUserId) {
+    const preventas = await preventasValidos(detalle.countryCode);
+    preventaNueva = preventas.find((u) => u.id === cambios.presalesUserId) ?? null;
+    if (!preventaNueva) {
+      return falla("VALIDACION", {
+        campo: "presalesUserId",
+        mensaje: `Ese usuario no es de preventa, no está activo o no opera en ${detalle.countryCode}.`,
+      });
+    }
+  }
+
+  if (Object.keys(datos).length === 0 && !cambiaPreventa) return ok(null);
 
   // Mover el cierre es lo que más se edita y lo que más explica, meses
   // después, por qué un trimestre no cerró como se prometió. Sin rastro nadie
@@ -563,7 +617,22 @@ export async function editarOportunidad(
   // El cambio de propietario SÍ está en INV-09; el cierre entró con la
   // bitácora. Los dos van en la misma transacción que el cambio.
   await auditedTransaction(async (tx, audit) => {
-    await tx.opportunity.update({ where: { id: detalle.id }, data: datos });
+    if (Object.keys(datos).length > 0) await tx.opportunity.update({ where: { id: detalle.id }, data: datos });
+    if (cambiaPreventa) {
+      await tx.opportunitySupport.deleteMany({ where: { opportunityId: detalle.id } });
+      if (preventaNueva) {
+        await tx.opportunitySupport.create({ data: { opportunityId: detalle.id, userId: preventaNueva.id } });
+      }
+      // Cambia quién ve la oportunidad: queda en la bitácora (INV-09).
+      await audit({
+        entity: "Opportunity",
+        entityId: detalle.id,
+        action: "CAMBIAR_PREVENTA",
+        byUserId: session.userId,
+        before: { presalesUserId: preventaActual?.id ?? null, nombre: preventaActual?.name ?? null },
+        after: { presalesUserId: preventaNueva?.id ?? null, nombre: preventaNueva?.name ?? null },
+      });
+    }
     if (reasigna) {
       await audit({
         entity: "Opportunity",

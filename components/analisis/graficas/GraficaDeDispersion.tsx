@@ -2,8 +2,10 @@
 
 import { CartesianGrid, ReferenceLine, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis, ZAxis } from "recharts";
 import { formatoDeEje } from "./formato";
-import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion } from "./comun";
+import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion, useDetalle } from "./comun";
+import { PanelDeDetalle } from "./PanelDeDetalle";
 import { PALETA, TIPOGRAFIA_DE_EJE } from "./paleta";
+import { seleccionDe } from "./seleccion";
 import type { EstadoDeEtapa, PuntoDeAntiguedad } from "./tipos";
 
 const ALTO = 272;
@@ -17,8 +19,8 @@ const ESTADOS: readonly { estado: EstadoDeEtapa; etiqueta: string; color: string
 /**
  * Reporte 6 · cada abierta como un punto: edad desde el alta contra importe.
  * El color es el estado de su etapa (§37) y la línea punteada, la edad
- * promedio. El tooltip trae la ficha completa; el folio está en la tabla de
- * al lado, que sí enlaza a la oportunidad.
+ * promedio. El tooltip trae la ficha completa; pulsar el punto abre el
+ * detalle con el enlace a la oportunidad (§43).
  */
 export function GraficaDeDispersion({
   puntos,
@@ -30,6 +32,7 @@ export function GraficaDeDispersion({
   vacio: string;
 }) {
   const anima = useAnimacion();
+  const detalle = useDetalle();
   if (puntos.length === 0) return <SinDatos texto={vacio} alto={ALTO} />;
 
   return (
@@ -64,6 +67,8 @@ export function GraficaDeDispersion({
               name={e.etiqueta}
               data={puntos.filter((p) => p.estado === e.estado)}
               fill={e.color}
+              cursor="pointer"
+              onClick={(d) => detalle.elegir(seleccionDe(d.payload as PuntoDeAntiguedad))}
               isAnimationActive={anima}
               animationDuration={350}
             />
@@ -71,6 +76,7 @@ export function GraficaDeDispersion({
         </ScatterChart>
       </ResponsiveContainer>
       <Leyenda series={ESTADOS} />
+      <PanelDeDetalle seleccion={detalle.seleccion} abierto={detalle.abierto} alCerrar={detalle.cerrar} />
     </div>
   );
 }

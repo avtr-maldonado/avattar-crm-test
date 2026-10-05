@@ -151,10 +151,6 @@ export function TablaDeEquipo({
         </table>
       </div>
 
-      <p className="border-t border-borde px-5 py-2.5 text-xs text-texto-tenue">
-        El total sale de sumar los renglones de arriba, no de una consulta aparte: para cada quien
-        es el total de lo que alcanza a ver.
-      </p>
     </section>
   );
 }

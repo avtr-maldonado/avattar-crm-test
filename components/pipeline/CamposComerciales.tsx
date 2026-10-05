@@ -30,6 +30,7 @@ export function CamposComerciales({
   cierre,
   origenes,
   propietarios,
+  preventas,
   usuarioActual,
   puedeAsignar,
   problema,
@@ -44,6 +45,8 @@ export function CamposComerciales({
   cierre: string;
   origenes: { id: string; name: string }[];
   propietarios: { id: string; name: string }[];
+  /** Quienes pueden ser responsables de preventa en el país de la oficina (§39). Vacío oculta el campo. */
+  preventas: { id: string; name: string }[];
   usuarioActual: { id: string; name: string };
   puedeAsignar: boolean;
   /** El problema vigente de un campo, ya apagado si el usuario lo corrigió. */
@@ -52,7 +55,6 @@ export function CamposComerciales({
   alCambiarEtapa: (id: string) => void;
   alCambiarCierre: (iso: string) => void;
 }) {
-  const esPrimeraEtapa = stageId === etapas[0]?.id;
 
   return (
     <>
@@ -94,11 +96,6 @@ export function CamposComerciales({
           Etapa
         </span>
         <SelectorDeEtapa name="stageId" etapas={etapas} valor={stageId} alCambiar={alCambiarEtapa} />
-        {!esPrimeraEtapa && (
-          <p className="text-xs text-texto-tenue">
-            Nace en una etapa avanzada: queda en su historial, como cualquier movimiento.
-          </p>
-        )}
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -147,7 +144,6 @@ export function CamposComerciales({
           etiqueta="Propietario"
           htmlFor="ownerId"
           problema={problema("ownerId")}
-          ayuda={puedeAsignar ? undefined : "Las oportunidades que das de alta son tuyas."}
         >
           <Seleccion
             id="ownerId"
@@ -164,12 +160,30 @@ export function CamposComerciales({
         </Campo>
       </div>
 
+      {preventas.length > 0 && (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Campo
+            etiqueta="Responsable de preventa"
+            htmlFor="presalesUserId"
+            problema={problema("presalesUserId")}
+          >
+            <Seleccion id="presalesUserId" name="presalesUserId" defaultValue="">
+              <option value="">Sin preventa</option>
+              {preventas.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </Seleccion>
+          </Campo>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Campo
           etiqueta="Pronóstico"
           htmlFor="forecastCategory"
           ayudaEmergente={<AyudaEmergente titulo="Qué significa cada pronóstico" puntos={AYUDA_DE_PRONOSTICO} />}
-          ayuda="«Compromiso» exige el puntaje MEDDIC mínimo (RN-29)."
         >
           <Seleccion id="forecastCategory" name="forecastCategory" defaultValue="PIPELINE">
             {CATEGORIAS.map((c) => (

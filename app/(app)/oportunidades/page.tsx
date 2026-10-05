@@ -3,7 +3,7 @@ import { listOpportunities, listOrganizations } from "@/lib/scope";
 import { listPipelines, pipelinePorOmision } from "@/lib/scope/pipelines";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
 import { historiasDeEtapas } from "@/lib/scope/funnel";
-import { destinatariosValidos } from "@/lib/domain/opportunity";
+import { destinatariosValidos, preventasValidos } from "@/lib/domain/opportunity";
 import { can } from "@/lib/auth/permissions";
 import { getCountry } from "@/lib/policy";
 import { formatPercent, formatUSD, sum, toClient, type Money } from "@/lib/money";
@@ -122,6 +122,10 @@ export default async function PipelinePage({
   const paisActivo = await oficinaActiva(session);
 
   const puedeAsignar = can(session, "VER_OPORTUNIDADES_OFICINA");
+
+  // §39 · crear y mover en el tablero: todos los roles comerciales; Preventa no.
+
+  const puedeCrear = can(session, "CREAR_OPORTUNIDAD");
   const filtros = parseFilters(urlParams, session);
   // §25 · sin estatus en la URL se ven las abiertas, como pedía §9.2; la barra
   // lo hace visible. La consulta NO recorta por estatus: las cerradas hacen
@@ -156,6 +160,7 @@ export default async function PipelinePage({
     pais,
     catalogos,
     propietarios,
+    preventas,
     cuentas,
     oportunidades,
     historias,
@@ -166,6 +171,8 @@ export default async function PipelinePage({
     // Solo si de verdad puede asignar: consultar usuarios para deshabilitar un
     // control sería pagar por una lista que nadie va a poder usar (Q-13).
     puedeAsignar ? destinatariosValidos(paisActivo) : Promise.resolve([]),
+    // §39 · el responsable de preventa se elige al dar de alta; solo quien crea lo necesita.
+    puedeCrear ? preventasValidos(paisActivo) : Promise.resolve([]),
     // Las opciones del filtro «Cliente», ya acotadas por alcance: un vendedor
     // solo puede filtrar por las cuentas que alcanza. Sin recorte por oficina:
     // las cuentas no son de un país (decisiones §18).
@@ -211,19 +218,20 @@ export default async function PipelinePage({
     })),
   }));
 
-  const botonDeAlta = (
+  const botonDeAlta = puedeCrear ? (
     <NuevaOportunidad
       pipelines={pipelinesParaAlta}
       origenes={catalogos.origenes}
       rolesDeComite={catalogos.rolesComite}
       propietarios={propietarios.map((u) => ({ id: u.id, name: u.name }))}
+      preventas={preventas.map((u) => ({ id: u.id, name: u.name }))}
       usuarioActual={{ id: session.userId, name: session.name }}
       puedeAsignar={puedeAsignar}
       buscarOrganizaciones={buscarOrganizacionesAccion}
       cargarPersonas={personasDeOrganizacionAccion}
       accion={crearOportunidadAccion}
     />
-  );
+  ) : null;
 
   // El mismo país que la política y el selector del encabezado. Pasarlo
   // explícitamente es lo que impide que el tablero y la política se separen.
@@ -440,8 +448,9 @@ export default async function PipelinePage({
             <TableroKanban
               columnas={columnas}
               // Mover desde el tablero es la misma acción que desde el
-              // detalle: una sola evaluación de RN-02, un solo camino.
-              puedeMover
+              // detalle: una sola evaluación de RN-02, un solo camino. Preventa
+              // no mueve (§39); el dominio lo vuelve a comprobar por oportunidad.
+              puedeMover={puedeCrear}
               accion={cambiarEtapaAccion}
               accionVacio={accionVacio}
             />
@@ -455,7 +464,6 @@ export default async function PipelinePage({
             <Embudo
               etapas={etapasDelEmbudo}
               riesgos={riesgos}
-              ventanaEnDias={VENTANA_DE_PASO_EN_DIAS}
               accionVacio={accionVacio}
             />
           )}

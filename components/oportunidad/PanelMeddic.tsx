@@ -262,11 +262,6 @@ export function PanelMeddic({
 
       <Panel
         titulo={editando?.nombre ?? ""}
-        subtitulo={
-          editando?.anclaPersona
-            ? "Confirmarlo exige evidencia y una persona real del comité de compra (§2.1); si no existe, créala aquí."
-            : "Confirmar exige evidencia; en parcial se pide, no se exige (RN-30, §27)."
-        }
         abierto={editando !== null}
         alCerrar={() => setEditando(null)}
         pie={
@@ -375,7 +370,6 @@ function FormularioDeCalificacion({
       <Campo
         etiqueta="Evidencia"
         htmlFor="evidence"
-        ayuda="Qué se sabe y cómo se sabe: quién lo dijo, en qué reunión, con qué cifra."
       >
         <AreaDeTexto
           id="evidence"
@@ -392,7 +386,6 @@ function FormularioDeCalificacion({
             etiqueta="Persona"
             htmlFor="personId"
             problema={problemaDe(resultado, "personId")}
-            ayuda="Del comité de compra de esta cuenta. Si no está, créala aquí."
           >
             <Seleccion
               id="personId"

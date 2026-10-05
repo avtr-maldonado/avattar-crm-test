@@ -193,15 +193,8 @@ export function CambioDeEtapa({
               >
                 Avanzar de todos modos
               </Boton>
-              <p className="mt-1.5 text-xs text-texto-tenue">
-                Queda registrado en el historial y en el reporte semanal de incumplimiento.
-              </p>
             </div>
-          ) : (
-            <p className="mt-3 text-xs font-medium text-texto-tenue">
-              Esta etapa es bloqueante: hay que cumplirlos para entrar.
-            </p>
-          )}
+          ) : null}
         </div>
       )}
     </form>

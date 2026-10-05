@@ -16,7 +16,7 @@ function sesion(p: Partial<Session> & Pick<Session, "role" | "userId">): Session
 const gerente = sesion({ role: "GERENTE_PAIS", userId: "u-jorge", countryCodes: ["MX"] });
 const direccion = sesion({ role: "DIRECCION", userId: "u-dir", countryCodes: ["MX", "CO", "CL"] });
 const params = (qs: string) => new URLSearchParams(qs);
-const OPCIONES = { anioActual: 2026 };
+const OPCIONES = { anioActual: 2026, fiscalYearStartMonth: 1 };
 
 describe("parseFiltrosDeAnalisis · el estado vive en la URL (INV-10)", () => {
   it("sin nada: pestaña Ventas, año en curso, sin recortes, agrupaciones por omisión", () => {
@@ -89,5 +89,21 @@ describe("hrefDeAnalisis · listas", () => {
       "/analisis?p=forecast&g4=cliente&pron=PIPELINE&pron=COMPROMISO",
     );
     expect(hrefDeAnalisis(sp, { pron: [] })).toBe("/analisis?p=forecast&g4=cliente");
+  });
+});
+
+describe("parseFiltrosDeAnalisis · el lapso (decisiones §45)", () => {
+  it("sin nada, el lapso es el año fiscal en curso y `anio` lo refleja", () => {
+    const f = parseFiltrosDeAnalisis(params(""), direccion, OPCIONES);
+    expect(f.lapso).toEqual({ tipo: "anio", fiscalYear: 2026 });
+    expect(f.anio).toBe(2026);
+  });
+
+  it("un trimestre o un mes dan su año fiscal en `anio`, según el calendario fiscal", () => {
+    expect(parseFiltrosDeAnalisis(params("q=2025-Q2"), direccion, OPCIONES).lapso).toEqual({ tipo: "trimestre", fiscalYear: 2025, quarter: 2 });
+    expect(parseFiltrosDeAnalisis(params("q=2025-Q2"), direccion, OPCIONES).anio).toBe(2025);
+    const abril = parseFiltrosDeAnalisis(params("mes=2026-02"), direccion, { ...OPCIONES, fiscalYearStartMonth: 4 });
+    expect(abril.lapso).toEqual({ tipo: "mes", anio: 2026, mes: 2 });
+    expect(abril.anio).toBe(2025);
   });
 });

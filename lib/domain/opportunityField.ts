@@ -8,7 +8,7 @@ import type { EdicionDeOportunidad } from "./opportunity";
  *
  * El nombre del campo llega del cliente. Sin una lista cerrada, bastaría
  * cambiar un `name` en el navegador para escribir en algo que la pantalla
- * nunca ofreció. Estos cinco son exactamente los que la ficha pinta como
+ * nunca ofreció. Estos seis son exactamente los que la ficha pinta como
  * editables; el folio es inmutable (`INV-12`), la cuenta cambiaría el país y
  * la etapa tiene su propia barra, que evalúa `RN-02`.
  *
@@ -21,6 +21,7 @@ export const CAMPOS_RAPIDOS = [
   "expectedCloseDate",
   "sourceId",
   "ownerId",
+  "presalesUserId",
 ] as const;
 
 export type CampoRapido = (typeof CAMPOS_RAPIDOS)[number];
@@ -64,6 +65,10 @@ export function cambioDeCampo(
     // depende quién la ve (`RN-31`).
     case "ownerId":
       return valor ? ok({ ownerId: valor }) : rechaza(campo, "Elige el propietario.");
+
+    // §39 · vacío retira al responsable de preventa; el dominio valida el rol y el país.
+    case "presalesUserId":
+      return ok({ presalesUserId: valor || null });
 
     default:
       return rechaza(campo, "Ese dato no se edita desde la ficha.");

@@ -84,6 +84,43 @@ export function fechaEn(instante: Date, zona: string): string {
   return `${v("year")}-${v("month")}-${v("day")}`;
 }
 
+/**
+ * Suma días a una fecha de pared `YYYY-MM-DD`. Se opera en UTC sobre la cadena:
+ * una fecha de pared no tiene zona, y así el servidor no la corre al cruzar
+ * medianoche en la suya.
+ */
+export function sumarDias(fecha: string, dias: number): string {
+  const d = new Date(`${fecha}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+/** El lunes de la semana de una fecha de pared: la agenda arranca en lunes (decisiones §44). */
+export function lunesDe(fecha: string): string {
+  const diaDeLaSemana = (new Date(`${fecha}T00:00:00Z`).getUTCDay() + 6) % 7;
+  return sumarDias(fecha, -diaDeLaSemana);
+}
+
+export const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"] as const;
+
+/**
+ * Dos fechas de pared en una frase corta: «28 sep – 4 oct 2026», «5 – 11 oct
+ * 2026», «28 dic 2026 – 3 ene 2027». Lo que coincide se dice una vez; un solo
+ * día se dice entero (decisiones §44, §45).
+ */
+export function etiquetaDeRango(desde: string, hasta: string): string {
+  const partes = (fecha: string) => {
+    const [a, m, d] = fecha.split("-").map(Number) as [number, number, number];
+    return { dia: d, mes: MES_CORTO[m - 1]!, anio: a };
+  };
+  const ini = partes(desde);
+  const fin = partes(hasta);
+  if (desde === hasta) return `${ini.dia} ${ini.mes} ${ini.anio}`;
+  if (ini.anio !== fin.anio) return `${ini.dia} ${ini.mes} ${ini.anio} – ${fin.dia} ${fin.mes} ${fin.anio}`;
+  if (ini.mes !== fin.mes) return `${ini.dia} ${ini.mes} – ${fin.dia} ${fin.mes} ${fin.anio}`;
+  return `${ini.dia} – ${fin.dia} ${fin.mes} ${fin.anio}`;
+}
+
 function minutosDe(hora: string): number {
   const [, hh, mm] = hora.match(HORA) ?? ["", "0", "0"];
   return Number(hh) * 60 + Number(mm);

@@ -106,11 +106,6 @@ export function EditarPersona({
 
       <Panel
         titulo={esAlta ? "Agregar contacto" : "Editar contacto"}
-        subtitulo={
-          esAlta
-            ? "Datos de contacto profesional de un representante de la empresa."
-            : persona?.name
-        }
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         pie={
@@ -142,7 +137,6 @@ export function EditarPersona({
               etiqueta="Empresa"
               htmlFor={`${idFormulario}-organizationId`}
               problema={problemaDe(resultado, "organizationId")}
-              ayuda="Solo las cuentas que alcanzas. Si la empresa no existe, créala primero en Organizaciones."
             >
               <Autocompletado
                 id={`${idFormulario}-organizationId`}
@@ -178,7 +172,6 @@ export function EditarPersona({
             <Campo
               etiqueta="Rol en el comité"
               htmlFor={`${idFormulario}-committeeRoleId`}
-              ayuda="Declararlo satisface el requisito de entrada a Descubrimiento."
             >
               <Seleccion
                 id={`${idFormulario}-committeeRoleId`}

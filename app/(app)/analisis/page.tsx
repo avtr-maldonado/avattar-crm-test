@@ -5,12 +5,13 @@ import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
 import {
   abiertasDelAnalisis,
-  actividadesHechasDelAnio,
+  actividadesHechas,
   ganadas,
   objetivosDelAnalisis,
 } from "@/lib/scope/analisis";
 import { hrefDeAnalisis, parseFiltrosDeAnalisis, type PestanaDeAnalisis } from "@/lib/filters/analisis";
-import { rangoDeAnioFiscal, trimestreDe } from "@/lib/filters";
+import { etiquetaDeLapso, rangoDeLapso } from "@/lib/filters/lapso";
+import { trimestreDe } from "@/lib/filters";
 import { iniciales, NOMBRE_PAIS } from "@/lib/etiquetas";
 import type { CountryCode } from "@/lib/dto";
 import { BarraSuperior } from "@/components/ui/BarraSuperior";
@@ -87,13 +88,15 @@ export default async function AnalisisPage({
   ]);
   const { fiscalYearStartMonth } = calendario;
   const enCurso = trimestreDe(ahora, fiscalYearStartMonth);
-  const filtros = parseFiltrosDeAnalisis(sp, session, { anioActual: enCurso.fiscalYear });
+  const filtros = parseFiltrosDeAnalisis(sp, session, { anioActual: enCurso.fiscalYear, fiscalYearStartMonth });
 
   const recorte = {
     pais: filtros.pais,
     vendedor: filtros.vendedor,
   };
-  const anioFiscal = { fiscalYear: filtros.anio, fiscalYearStartMonth };
+  // El lapso (§45) recorta lo que pasó: ventas por cierre real, cierres del
+  // ciclo y actividades hechas. Lo abierto y MEDDIC se miden hoy.
+  const rango = rangoDeLapso(filtros.lapso, fiscalYearStartMonth);
   const verCosto = can(session, "VER_COSTO");
 
   // Cada pestaña lee solo lo suyo, y todo lo suyo a la vez.
@@ -109,24 +112,23 @@ export default async function AnalisisPage({
             vendedor: filtros.vendedor,
           }),
         ]);
-        const rango = rangoDeAnioFiscal(filtros.anio, fiscalYearStartMonth);
         return {
           pestana: "ventas" as const,
           historico,
-          ventasDelAnio: historico.filter((v) => v.actualCloseDate >= rango.from && v.actualCloseDate <= rango.to),
+          ventasDelLapso: historico.filter((v) => v.actualCloseDate >= rango.from && v.actualCloseDate <= rango.to),
           cuotas,
         };
       }
       case "forecast": {
-        const [abiertas, ventasDelAnio] = await Promise.all([
+        const [abiertas, ventasDelLapso] = await Promise.all([
           abiertasDelAnalisis(session, recorte),
-          ganadas(session, recorte, anioFiscal),
+          ganadas(session, recorte, rango),
         ]);
-        return { pestana: "forecast" as const, abiertas, ventasDelAnio };
+        return { pestana: "forecast" as const, abiertas, ventasDelLapso };
       }
       case "actividad": {
         const [actividades, abiertas] = await Promise.all([
-          actividadesHechasDelAnio(session, { pais: filtros.pais, vendedor: filtros.vendedor }, anioFiscal),
+          actividadesHechas(session, { pais: filtros.pais, vendedor: filtros.vendedor }, rango),
           abiertasDelAnalisis(session, recorte),
         ]);
         return { pestana: "actividad" as const, actividades, abiertas };
@@ -155,7 +157,7 @@ export default async function AnalisisPage({
     filtros.pais.length === 0
       ? "Todos los países del alcance"
       : filtros.pais.map((c) => NOMBRE_PAIS[c]).join(", "),
-    `año fiscal ${filtros.anio}`,
+    etiquetaDeLapso(filtros.lapso),
     vendedoresFiltrados.length === 0
       ? null
       : vendedoresFiltrados.length <= 2
@@ -187,15 +189,16 @@ export default async function AnalisisPage({
             activos={{
               pais: filtros.pais,
               vendedor: filtros.vendedor,
-              anio: filtros.anio,
+              lapso: filtros.lapso,
             }}
             catalogos={{
               paises: session.countryCodes.map((c) => ({ valor: c, etiqueta: NOMBRE_PAIS[c] })),
               vendedores: vendedores.map((v) => ({ valor: v.id, etiqueta: v.name })),
-              // El año en curso y dos atrás, más el pedido en la URL si es otro.
+              // El año en curso y dos atrás, más el del lapso pedido si es otro.
               anios: [...new Set([enCurso.fiscalYear, enCurso.fiscalYear - 1, enCurso.fiscalYear - 2, filtros.anio])].sort(
                 (a, b) => b - a,
               ),
+              anioActual: enCurso.fiscalYear,
             }}
           />
         </div>
@@ -203,7 +206,7 @@ export default async function AnalisisPage({
         <div className="mt-6 space-y-6">
           {datos.pestana === "ventas" ? (
             <PestanaVentas
-              ventasDelAnio={datos.ventasDelAnio}
+              ventasDelLapso={datos.ventasDelLapso}
               historico={datos.historico}
               cuotas={datos.cuotas}
               filtros={filtros}
@@ -214,7 +217,7 @@ export default async function AnalisisPage({
           ) : datos.pestana === "forecast" ? (
             <PestanaForecast
               abiertas={datos.abiertas}
-              ventasDelAnio={datos.ventasDelAnio}
+              ventasDelLapso={datos.ventasDelLapso}
               filtros={filtros}
               hrefDe={hrefDe}
               fiscalYearStartMonth={fiscalYearStartMonth}
@@ -226,8 +229,8 @@ export default async function AnalisisPage({
               abiertas={datos.abiertas}
               ahora={ahora}
               minimoCierre={politica.meddicMinToClosing}
-              anio={filtros.anio}
-              fiscalYearStartMonth={fiscalYearStartMonth}
+              lapso={filtros.lapso}
+              rango={rango}
             />
           )}
         </div>

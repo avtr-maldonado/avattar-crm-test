@@ -1,5 +1,6 @@
 import type { CountryCode, ForecastCategory } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
+import { anioFiscalDeLapso, parseLapso, type Lapso } from "./lapso";
 
 /**
  * Los filtros de P-09 · Análisis, leídos de la URL (INV-10).
@@ -27,7 +28,9 @@ export type FiltrosDeAnalisis = {
   pais: CountryCode[];
   /** Vacío = todos. Uno o varios ids. */
   vendedor: string[];
-  /** Año fiscal. Producto y tipo de negocio dejaron de ser filtros (decisiones §36). */
+  /** El lapso que recorta lo que pasó: año fiscal, trimestre fiscal, mes o rango (decisiones §45). */
+  lapso: Lapso;
+  /** El año fiscal del inicio del lapso: el de la cuota que se compara. Producto y tipo dejaron de ser filtros (§36). */
   anio: number;
   /** Reporte 1 · avance contra objetivo. */
   g1: DimensionDeVenta;
@@ -84,15 +87,17 @@ function unEntero(valor: string | null, min: number, max: number): number | null
 export function parseFiltrosDeAnalisis(
   sp: URLSearchParams,
   session: Session,
-  opciones: { anioActual: number },
+  opciones: { anioActual: number; fiscalYearStartMonth: number },
 ): FiltrosDeAnalisis {
   const operados = new Set<string>(session.countryCodes);
+  const lapso = parseLapso(sp, opciones.anioActual);
   return {
     pestana: unEnum(sp.get("p"), PESTANAS) ?? "ventas",
     // Solo países donde la sesión opera: lo demás sería ampliar el alcance.
     pais: variosDeEnum(sp, "pais", PAISES).filter((c) => operados.has(c)),
     vendedor: varios(sp, "vendedor"),
-    anio: unEntero(sp.get("anio"), 2000, 2100) ?? opciones.anioActual,
+    lapso,
+    anio: anioFiscalDeLapso(lapso, opciones.fiscalYearStartMonth),
     g1: unEnum(sp.get("g1"), DIMENSIONES_DE_VENTA) ?? "trimestre",
     g2: unEnum(sp.get("g2"), AGRUPACIONES_HISTORICAS) ?? "trimestre",
     g3: unEnum(sp.get("g3"), DIMENSIONES_DE_RENTABILIDAD) ?? "producto",

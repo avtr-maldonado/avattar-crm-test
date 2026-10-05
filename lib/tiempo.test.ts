@@ -3,9 +3,12 @@ import {
   ciudadDe,
   duracionEnMinutos,
   etiquetaDeDuracion,
+  etiquetaDeRango,
   fechaEn,
   horaEn,
   instanteEn,
+  lunesDe,
+  sumarDias,
   sumarMinutos,
 } from "./tiempo";
 
@@ -87,5 +90,28 @@ describe("ciudadDe · el nombre que va en la etiqueta", () => {
   it("cualquier otra zona, su último tramo legible", () => {
     expect(ciudadDe("Europe/Buenos_Aires")).toBe("Buenos Aires");
     expect(ciudadDe("UTC")).toBe("UTC");
+  });
+});
+
+describe("sumarDias y lunesDe · aritmética de fechas de pared (decisiones §44)", () => {
+  it("sumarDias cruza mes y año sin pasar por la zona del servidor", () => {
+    expect(sumarDias("2026-09-28", 7)).toBe("2026-10-05");
+    expect(sumarDias("2026-10-05", -7)).toBe("2026-09-28");
+    expect(sumarDias("2026-12-29", 7)).toBe("2027-01-05");
+  });
+
+  it("lunesDe devuelve el lunes de la semana de cualquier día; un lunes es su propio lunes", () => {
+    expect(lunesDe("2026-10-02")).toBe("2026-09-28"); // viernes
+    expect(lunesDe("2026-10-04")).toBe("2026-09-28"); // domingo: la semana arranca en lunes
+    expect(lunesDe("2026-09-28")).toBe("2026-09-28");
+  });
+});
+
+describe("etiquetaDeRango · dos fechas de pared en una frase corta (§45)", () => {
+  it("dice una vez lo que coincide", () => {
+    expect(etiquetaDeRango("2026-09-28", "2026-10-04")).toBe("28 sep – 4 oct 2026");
+    expect(etiquetaDeRango("2026-10-05", "2026-10-11")).toBe("5 – 11 oct 2026");
+    expect(etiquetaDeRango("2026-12-28", "2027-01-03")).toBe("28 dic 2026 – 3 ene 2027");
+    expect(etiquetaDeRango("2026-09-15", "2026-09-15")).toBe("15 sep 2026");
   });
 });

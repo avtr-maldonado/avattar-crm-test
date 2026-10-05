@@ -294,8 +294,8 @@ export default async function ObjetivosPage({
             {desalineados > 0 && (
               <p className="mt-4 rounded-sm border border-borde-fuerte bg-superficie-tinte px-4 py-2.5 text-xs text-navy-700">
                 {desalineados === 1
-                  ? "Una persona tiene una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres (RN-32)."
-                  : `${desalineados} personas tienen una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres (RN-32).`}{" "}
+                  ? "Una persona tiene una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres."
+                  : `${desalineados} personas tienen una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres.`}{" "}
                 Para el año manda la anual; volver a guardar sus trimestres en Objetivos la retira.
               </p>
             )}

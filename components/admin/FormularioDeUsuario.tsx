@@ -120,13 +120,7 @@ export function FormularioDeUsuario(props: Props) {
 
       <Panel
         titulo={titulo}
-        subtitulo={
-          props.modo === "alta"
-            ? "El perfil queda listo para su primer ingreso con Microsoft."
-            : props.modo === "acceso"
-              ? `${pendiente?.email}. Ya entró con Microsoft; le falta rol y país.`
-              : usuario?.email
-        }
+        subtitulo={props.modo === "alta" ? undefined : props.modo === "acceso" ? pendiente?.email : usuario?.email}
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         pie={
@@ -170,7 +164,6 @@ export function FormularioDeUsuario(props: Props) {
                 etiqueta="Correo corporativo"
                 htmlFor={campo("email")}
                 problema={problemaDe(resultado, "email")}
-                ayuda="El mismo con el que entra a Microsoft."
               >
                 <Entrada
                   id={campo("email")}
@@ -202,11 +195,6 @@ export function FormularioDeUsuario(props: Props) {
               etiqueta="Rol"
               htmlFor={campo("role")}
               problema={problemaDe(resultado, "role")}
-              ayuda={
-                usuario?.esYo
-                  ? "Tu propio rol lo cambia otro administrador."
-                  : "Define qué ve y qué puede hacer, según la matriz de permisos."
-              }
             >
               <Seleccion
                 id={campo("role")}
@@ -229,7 +217,6 @@ export function FormularioDeUsuario(props: Props) {
               etiqueta="Países"
               htmlFor={campo("pais-MX")}
               problema={problemaDe(resultado, "countryCodes")}
-              ayuda="Las oficinas cuyos datos alcanza. Un gerente puede llevar más de una."
             >
               <div className="flex flex-wrap gap-4 py-2">
                 {PAISES.map((p) => (
@@ -251,11 +238,6 @@ export function FormularioDeUsuario(props: Props) {
               etiqueta="Estado"
               htmlFor={campo("active")}
               problema={problemaDe(resultado, "active")}
-              ayuda={
-                usuario.esYo
-                  ? "No puedes quitarte el acceso a ti mismo."
-                  : "Sin la casilla, la persona ya no entra. Su historial se conserva."
-              }
             >
               <div className="py-2">
                 <Casilla

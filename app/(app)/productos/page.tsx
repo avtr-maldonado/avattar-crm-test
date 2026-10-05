@@ -310,7 +310,7 @@ function Antiguedad({ dias, obsoleto }: { dias: number; obsoleto: boolean }) {
       className={obsoleto ? "font-medium text-coral" : "text-texto-cuerpo"}
       title={
         obsoleto
-          ? `Sin actualizar en ${dias} días. C-01: sin Defontana, el costo se mantiene a mano.`
+          ? `Sin actualizar en ${dias} días.`
           : undefined
       }
     >
@@ -338,13 +338,7 @@ function TabListas({
         </h2>
         <p className="mt-2 max-w-2xl text-sm text-texto-cuerpo">
           No hay lista por país ni por moneda: la operación de Avattar en los tres
-          países cotiza en dólares. Está registrada como decisión D-A.
-        </p>
-        <p className="mt-3 max-w-2xl text-sm text-texto-tenue">
-          RN-26 · se cotiza con la vigencia del día. Cambiar una lista no altera
-          cotizaciones ya congeladas, porque la cotización copia precio y costo a
-          la línea al crearse. Por eso ver el histórico de vigencias es lo que
-          permite explicar de dónde salió el precio de una cotización vieja.
+          países cotiza en dólares.
         </p>
       </div>
 

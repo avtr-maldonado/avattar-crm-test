@@ -66,7 +66,6 @@ export function AccesoDePersona({
 
       <Panel
         titulo={`Quién ve a ${persona.name}`}
-        subtitulo="El propietario edita, comparte y transfiere. Compartir da solo lectura."
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         pie={
@@ -93,7 +92,6 @@ export function AccesoDePersona({
             etiqueta="Propietario"
             htmlFor={`${idFormulario}-ownerId`}
             problema={problemaDe(resultado, "ownerId")}
-            ayuda="Cambiarlo transfiere el contacto: quien lo entrega deja de administrarlo y de verlo, salvo que tenga una oportunidad en la cuenta o se lo compartan."
           >
             <Seleccion
               id={`${idFormulario}-ownerId`}
@@ -113,7 +111,6 @@ export function AccesoDePersona({
             etiqueta="Compartir con"
             htmlFor={`${idFormulario}-compartirCon`}
             problema={problemaDe(resultado, "compartirCon")}
-            ayuda="Pueden consultarla; no editarla ni volver a compartirla."
           >
             <SelectorDeVarios
               id={`${idFormulario}-compartirCon`}

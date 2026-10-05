@@ -92,14 +92,15 @@ singular.
 lib/db.ts           PrismaClient · SOLO lib/scope y lib/domain pueden importarlo
 lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un lector por pantalla:
                     opportunities, opportunityDetail, organizations, people, productos,
-                    cotizaciones, documentos, agenda, contadores (acotados a la oficina activa),
+                    cotizaciones, documentos, agenda (bandeja, semana y tablero: pendientes + hechas en 14 días → §42),
+                    contadores (acotados a la oficina activa),
                     configuracion, pipelines, busqueda (buscador global: todo el alcance, no la oficina),
                     funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline),
                     usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS),
                     cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
                     bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta),
-                    analisis (P-09: ganadas con cotización vigente, abiertas con etapa y MEDDIC, actividades
-                    hechas, objetivos de varios países; costo solo con VER_COSTO),
+                    analisis (P-09: ganadas con cotización vigente y actividades hechas dentro de un rango de fechas
+                    —el lapso, §45—, abiertas con etapa y MEDDIC, objetivos de varios países; costo solo con VER_COSTO),
                     people (personScope: propietario, compartidas y cuentas con oportunidad → §29;
                     usuariosParaCompartir) · organizations (todas las cuentas para todos → §29)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
@@ -110,21 +111,29 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     corrigen desde la ficha; lista cerrada, el nombre del campo llega del cliente),
                     bitacora (fusiona y ordena las fuentes de la historia; sin VER_COSTO el costo se
                     nombra pero no se cifra),
-                    analisis (los ocho reportes de P-09 como agregaciones puras: agruparVentas,
+                    analisis (los ocho reportes de P-09 como agregaciones puras; cada fila dice qué ítems la suman:
+                    aportes, ids, cierres → §43: agruparVentas,
                     completarTrimestres, historicoDeVentas, rentabilidad, embudoDeForecast, cicloDeVenta,
                     antiguedadYEstancamiento, actividadPorVendedor, saludMeddic → decisiones §28),
-                    personAccess (administraPersona: quién edita, comparte y transfiere una persona → §29).
+                    personAccess (administraPersona: quién edita, comparte y transfiere una persona → §29),
+                    opportunityAccess (puedeEditarOportunidad: propietario u oficina, lo aplican los siete servicios que
+                    mutan una oportunidad; preventaDe: el responsable de preventa → §39),
+                    agenda (estadoDeAgenda y agruparPorEstado: realizada, vencida por día, en progreso, por realizar → §42;
+                    semanaElegida: el lunes que pide la URL, o el de hoy → §44).
                     Servicios con transacción:
                     opportunity, activity (registrar y editar; responsable, duración y calendario por
                     parámetro), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
                     product, quoteService, milestoneService, meddicService, document,
-                    usuario, objetivo (fijar cuota)
+                    usuario, objetivo (fijar cuota), permisos (cambiarPermiso: la matriz de §5.2 editable por
+                    Administración, nunca su propia columna → §40; la tabla se abre en lectura y la edición
+                    se enciende con un botón → §43)
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
 lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
                     permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission;
                     oficinaActiva y menuColapsado leen las cookies de preferencia) · permissions (can)
 lib/preferencias.ts nombres y valores de las cookies crm-oficina y crm-menu (puro; lo importa también el cliente)
-lib/tiempo.ts       horas de pared ↔ instantes por zona (instanteEn, horaEn, fechaEn), duración, ciudadDe. Puro;
+lib/tiempo.ts       horas de pared ↔ instantes por zona (instanteEn, horaEn, fechaEn), duración, ciudadDe, fechas de
+                    pared (sumarDias, lunesDe → §44). Puro;
                     lo importa también el cliente. La zona de una actividad es la del país de la oportunidad
 lib/graph/          calendario de Microsoft 365 (F-605): token de aplicación con caché de proceso, evento (puro,
                     con tests) y el adaptador Calendario. Apagado sin AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET.
@@ -132,10 +141,14 @@ lib/graph/          calendario de Microsoft 365 (F-605): token de aplicación co
 lib/policy/         lectura de CommercialPolicy y Country → INV-05
 lib/money/          Decimal y formateo → INV-03
 lib/filters/        definición y parseo de filtros → INV-10 · analisis.ts: los de P-09 (pestaña, filtros y la
-                    agrupación de cada reporte en la URL) y hrefDeAnalisis para los conmutadores
+                    agrupación de cada reporte en la URL) y hrefDeAnalisis para los conmutadores · lapso.ts (§45: el
+                    lapso de Análisis —año fiscal, trimestre fiscal, mes o rango— en la URL como anio=, q=, mes=,
+                    desde=/hasta=; rangoDeLapso, etiquetaDeLapso, enElLapso, anioFiscalDeLapso, trimestresDelLapso:
+                    la cuota solo se compara con un año o un trimestre fiscal completos)
 lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
-components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>; useEnvioQueConserva envía
+components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>; `cerrarAlFondo` solo en los
+                    paneles que muestran y no capturan → §44; useEnvioQueConserva envía
                     desde onSubmit para que React no reinicie el formulario cuando la acción devuelve VALIDACION;
                     useProblemas apaga el error de un campo al corregirlo) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
@@ -148,7 +161,11 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
                     contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo)
-components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,analisis}/   por pantalla
+components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,analisis,actividades}/   por pantalla
+                    actividades: VistaLista · VistaKanban (cuatro columnas de estado, sin arrastre) · VistaSemana (verde
+                    hecho, coral vencido, horas por día) · comun (ActividadDeTablero, formatos, PastillaDeEstado) → §42
+                    · NavegacionDeSemana (flechas y «Hoy» como enlaces; la semana en la URL `semana=YYYY-MM-DD`) ·
+                    formato (rangoDeSemana) → §44
                     pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
                     por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
                     BarraDeHerramientas (dos filas: vistas, botón de embudo que muestra los filtros —cerrados
@@ -180,8 +197,10 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     entrada de bitácora por cuota que cambia → §34) · TiraDeTrimestres · TablaDeEquipo
                     contactos: EditarOrganizacion · EditarPersona · AccesoDePersona (propietario y con quién se
                     comparte una persona; lo ve solo quien la administra → §29)
-                    analisis: FiltrosDeAnalisis (cliente; país, vendedor y año como pastillas Desplegable, una navegación
-                    por «Aplicar»; parte de la URL viva; producto y tipo dejaron de ser filtros → §36) · TablaDeAnalisis + Reporte (tabla de reporte con total, barras de proporción y
+                    analisis: FiltrosDeAnalisis (cliente; país, vendedor y lapso como pastillas Desplegable, una navegación
+                    por «Aplicar»; parte de la URL viva; producto y tipo dejaron de ser filtros → §36) · SelectorDeLapso
+                    (los cuatro modos del lapso en la pastilla: año, trimestre y mes aplican al pulsar; el rango con
+                    «Aplicar» → §45) · TablaDeAnalisis + Reporte (tabla de reporte con total, barras de proporción y
                     conmutador por enlaces; las usan Forecast y Actividad) · PestanaVentas · PestanaForecast ·
                     PestanaActividad (servidor; reciben datos acotados y llaman al dominio; sin costo no hay utilidad)
                     · graficas/ (§35: tipos, formato —$328.8K, puro—, datos —de filas con Decimal a puntos con número
@@ -192,7 +211,11 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     antigüedad; estadoDeEtapa con la banda del 75 %) · GraficaDeEmbudo · GraficaDeLinea ·
                     GraficaAgrupada (series como datos) · GraficaDeDispersion · TarjetasDeForecast (las cinco tarjetas; g4 y g5 en
                     la URL) · datosDeActividad (§38: tipos como series, doce meses del año fiscal, sin dividir entre
-                    cero, «sin datos» no es cero) · TarjetasDeActividad (cuatro tarjetas sin conmutadores))
+                    cero, «sin datos» no es cero) · TarjetasDeActividad (cuatro tarjetas sin conmutadores) ·
+                    §43: items (puro, servidor: itemDeVenta/itemDeAbierta/itemDeActividad, porId, resolver) ·
+                    seleccion (puro: SeleccionDeGrafica, seleccionDe, seleccionDeSerie, indiceActivo) ·
+                    PanelDeDetalle (<dialog>: los renglones del tooltip y los ítems con enlace) · useDetalle en comun;
+                    cada punto lleva `items` y las agrupadas `itemsPorSerie`, resueltos por id contra la lista acotada)
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
                     del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
@@ -220,7 +243,9 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
 - **Visibilidad del vendedor: por `ownerId`, no por `createdById`.** (`RN-31`. Pendiente de
   confirmar con el Director, `Q-01`.) Un vendedor solo ve sus oportunidades, sus actividades y su
   propio renglón de objetivos. Los indicadores de encabezado, para él, se calculan solo sobre su
-  conjunto: nunca ve el total de la oficina, ni por agregación.
+  conjunto: nunca ve el total de la oficina, ni por agregación. **Preventa** ve las oportunidades donde
+  es responsable de preventa (`OpportunitySupport`), les registra actividades y **no** las crea, edita,
+  mueve, cotiza ni califica (`CREAR_OPORTUNIDAD` y `puedeEditarOportunidad`, §39).
 - **MEDDIC gatea, no pondera.** El ponderado sigue siendo `amount × stage.probability` (`RN-01`).
   El puntaje MEDDIC bloquea el avance a cierre (≥70), el marcado como ganada (≥80, y `E`, `I`, `C`
   confirmados) y la categoría «Compromiso» (≥70). Mínimos configurables. **La evidencia solo
@@ -280,6 +305,9 @@ textualmente; no se sustituyen por la paleta por omisión de ninguna librería.
   la utilidad negativa va en coral, porque es una pérdida, no un umbral.
 - Los estados vacíos siempre proponen la acción siguiente. Los errores dicen qué falta con el dato
   concreto: «faltan $200,000 por asignar en hitos», no «datos inválidos».
+- **Sin textos descriptivos** (§41): ni ayuda bajo los campos, ni subtítulos que expliquen, ni
+  descripciones bajo los títulos de gráficas, ni códigos de regla (RN, §, INV) en pantalla. Las reglas
+  se citan en el código y en `docs/`; la pantalla muestra estados, errores y anotaciones de estado.
 
 ## Orden de construcción
 
@@ -305,7 +333,15 @@ dos líneas. **Análisis de ventas es un tablero de gráficas** desde el mismo d
 Recharts, «Agrupar por» inmediato y en la URL; sin filtros de producto ni tipo, e indicadores de dos
 líneas (§36). **Forecast en gráficas** desde el 30-sep (§37): embudo apilado, distribución, ciclo con
 mediana, estado por vendedor y dispersión edad × importe. **Actividad y MEDDIC en gráficas** el mismo día
-(§38), con las tablas originales como detalle. **Pendiente y visible:** las autorizaciones de
+(§38), con las tablas originales como detalle. **Responsable de preventa** desde el 1-oct-2026 (§39): se asigna
+en alta y edición; Preventa ve, registra actividades y no edita. **La matriz de permisos se edita** desde
+Administración (§40) y **la interfaz quedó sin textos descriptivos** (§41). **Actividades en tres vistas**
+(lista, kanban, semana · §42); la preventa se corrige también como dato rápido. **Las gráficas de Análisis se
+pulsan** desde el 2-oct-2026 (§43): un popup con la ponderación y los ítems que la suman, con enlace a la ficha;
+la matriz de permisos se abre en lectura y se edita con un botón. **Los popups informativos cierran al pulsar
+fuera y la semana de Actividades se navega** con flechas y «Hoy», en la URL (§44, 2-oct). **Análisis se recorta por
+lapso** desde el 5-oct-2026 (§45): año fiscal, trimestre, mes o rango en la URL; la cuota solo se compara con un año o
+un trimestre fiscal completos; los conmutadores de las tarjetas van sin «Agrupar por». **Pendiente y visible:** las autorizaciones de
 descuento, fuera de este alcance por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
 

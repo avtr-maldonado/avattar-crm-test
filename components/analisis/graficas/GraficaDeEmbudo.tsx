@@ -2,8 +2,10 @@
 
 import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatoCompacto, formatoDeEje } from "./formato";
-import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion } from "./comun";
+import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion, useDetalle } from "./comun";
+import { PanelDeDetalle } from "./PanelDeDetalle";
 import { ETIQUETA_DE_BARRA, PALETA, TIPOGRAFIA_DE_EJE } from "./paleta";
+import { seleccionDe } from "./seleccion";
 import type { PuntoDeEmbudo } from "./tipos";
 
 const ALTO = 272;
@@ -13,11 +15,14 @@ const ANCHO_POR_TRIMESTRE = 96;
  * Reporte 4 · lo abierto por trimestre de cierre estimado. La altura de cada
  * barra es el importe; el segmento de abajo, en verde, es el ponderado
  * (importe × probabilidad de etapa, RN-01). Una sola cifra encima, el
- * importe: el resto va en el tooltip.
+ * importe: el resto va en el tooltip. Pulsar cualquiera de los dos segmentos
+ * abre el detalle del trimestre (§43).
  */
 export function GraficaDeEmbudo({ puntos, vacio }: { puntos: PuntoDeEmbudo[]; vacio: string }) {
   const anima = useAnimacion();
+  const detalle = useDetalle();
   if (puntos.length === 0) return <SinDatos texto={vacio} alto={ALTO} />;
+  const abrir = (d: { payload?: unknown }) => detalle.elegir(seleccionDe(d.payload as PuntoDeEmbudo));
 
   return (
     <div>
@@ -29,7 +34,16 @@ export function GraficaDeEmbudo({ puntos, vacio }: { puntos: PuntoDeEmbudo[]; va
               <XAxis dataKey="etiqueta" interval={0} tickLine={false} axisLine={{ stroke: PALETA.rejilla }} tick={TIPOGRAFIA_DE_EJE} />
               <YAxis width={56} tickLine={false} axisLine={false} tick={TIPOGRAFIA_DE_EJE} tickFormatter={formatoDeEje} />
               <Tooltip cursor={{ fill: PALETA.cursor }} content={<TooltipDeGrafica />} />
-              <Bar dataKey="ponderado" name="Ponderado" stackId="embudo" fill={PALETA.ponderado} isAnimationActive={anima} animationDuration={350} />
+              <Bar
+                dataKey="ponderado"
+                name="Ponderado"
+                stackId="embudo"
+                fill={PALETA.ponderado}
+                cursor="pointer"
+                onClick={abrir}
+                isAnimationActive={anima}
+                animationDuration={350}
+              />
               <Bar
                 dataKey="resto"
                 name="Importe"
@@ -37,6 +51,8 @@ export function GraficaDeEmbudo({ puntos, vacio }: { puntos: PuntoDeEmbudo[]; va
                 fill={PALETA.ganado}
                 radius={[3, 3, 0, 0]}
                 minPointSize={1}
+                cursor="pointer"
+                onClick={abrir}
                 isAnimationActive={anima}
                 animationDuration={350}
               >
@@ -52,6 +68,7 @@ export function GraficaDeEmbudo({ puntos, vacio }: { puntos: PuntoDeEmbudo[]; va
           { etiqueta: "Ponderado", color: PALETA.ponderado },
         ]}
       />
+      <PanelDeDetalle seleccion={detalle.seleccion} abierto={detalle.abierto} alCerrar={detalle.cerrar} />
     </div>
   );
 }

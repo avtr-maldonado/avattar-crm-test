@@ -39,6 +39,8 @@ export type DatosEditables = {
   forecastCategory: string;
   sourceId: string | null;
   ownerId: string;
+  /** §39 · el responsable de preventa vigente, o ninguno. */
+  presalesUserId: string | null;
   /** Con cotización con líneas, el neto manda y el estimado deja de editarse (decisiones §21). */
   tieneCotizacion: boolean;
   meddicScore: number | null;
@@ -63,6 +65,7 @@ export function EditarOportunidad({
   personas,
   origenes,
   propietarios,
+  preventas,
   puedeReasignar,
   minimoParaCompromiso,
   accion,
@@ -72,6 +75,8 @@ export function EditarOportunidad({
   personas: { id: string; name: string; jobTitle: string | null }[];
   origenes: { id: string; name: string }[];
   propietarios: { id: string; name: string }[];
+  /** Quienes pueden ser responsables de preventa en el país (§39). Vacío oculta el campo. */
+  preventas: { id: string; name: string }[];
   puedeReasignar: boolean;
   minimoParaCompromiso: number;
   accion: (previo: ResultadoAccion | null, form: FormData) => Promise<ResultadoAccion>;
@@ -119,7 +124,6 @@ export function EditarOportunidad({
 
       <Panel
         titulo="Editar oportunidad"
-        subtitulo="La organización, el pipeline y la etapa no se editan aquí. La etapa se mueve desde la barra."
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         ancho="lg"
@@ -174,11 +178,6 @@ export function EditarOportunidad({
               etiqueta="Valor estimado"
               htmlFor="estimatedAmount"
               anotacion={datos.tieneCotizacion ? "manda la cotización" : undefined}
-              ayuda={
-                datos.tieneCotizacion
-                  ? "Hay cotización con líneas: el importe vigente sale de ella."
-                  : undefined
-              }
               problema={problemaDe(resultado, "estimatedAmount")}
             >
               <Entrada
@@ -237,11 +236,6 @@ export function EditarOportunidad({
               htmlFor="forecastCategory"
               ayudaEmergente={<AyudaEmergente titulo="Qué significa cada pronóstico" puntos={AYUDA_DE_PRONOSTICO} />}
               problema={problemaDe(resultado, "forecastCategory")}
-              ayuda={
-                alcanzaCompromiso
-                  ? undefined
-                  : `«Compromiso» exige puntaje MEDDIC de ${minimoParaCompromiso}; esta tiene ${datos.meddicScore ?? 0}.`
-              }
             >
               <Seleccion
                 id="forecastCategory"
@@ -268,10 +262,28 @@ export function EditarOportunidad({
                 etiqueta="Propietario"
                 htmlFor="ownerId"
                 problema={problemaDe(resultado, "ownerId")}
-                ayuda="Cambiarlo transfiere el acceso y queda en la bitácora (RN-31)."
               >
                 <Seleccion id="ownerId" name="ownerId" defaultValue={datos.ownerId}>
                   {propietarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </Seleccion>
+              </Campo>
+            </div>
+          )}
+
+          {preventas.length > 0 && (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <Campo
+                etiqueta="Responsable de preventa"
+                htmlFor="presalesUserId"
+                problema={problemaDe(resultado, "presalesUserId")}
+              >
+                <Seleccion id="presalesUserId" name="presalesUserId" defaultValue={datos.presalesUserId ?? ""}>
+                  <option value="">Sin preventa</option>
+                  {preventas.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}
                     </option>

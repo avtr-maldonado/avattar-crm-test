@@ -31,7 +31,7 @@ export async function getCotizacion(
       ...quoteSelect(session),
       // La oportunidad se necesita para saber si sigue abierta y para escribir
       // el espejo del neto; no es dato del cliente.
-      opportunity: { select: { id: true, status: true, countryCode: true } },
+      opportunity: { select: { id: true, status: true, countryCode: true, ownerId: true } },
     },
   });
 }
@@ -50,7 +50,7 @@ export async function cotizacionVigente(session: Session, opportunityId: string)
     where: { AND: [{ opportunityId }, { opportunity: opportunityScope(session) }] },
     select: {
       ...quoteSelect(session),
-      opportunity: { select: { id: true, status: true, countryCode: true } },
+      opportunity: { select: { id: true, status: true, countryCode: true, ownerId: true } },
     },
     orderBy: { version: "desc" },
   });

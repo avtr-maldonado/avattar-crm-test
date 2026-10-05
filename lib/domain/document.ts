@@ -1,5 +1,6 @@
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import type { Session } from "@/lib/auth/permissions";
+import { puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
 import { prisma } from "@/lib/db";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import type { DetalleOportunidad } from "@/lib/scope/opportunityDetail";
@@ -65,6 +66,8 @@ export async function subirDocumento(
   detalle: DetalleOportunidad,
   entrada: { typeId: string; archivo: File },
 ): Promise<ResultadoAccion<{ id: string; version: number }>> {
+  // §39 · Preventa descarga; subir y quitar es del propietario o Gerencia.
+  if (!puedeEditarOportunidad(session, detalle)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   const { archivo } = entrada;
 
   if (archivo.size === 0) {
@@ -173,10 +176,11 @@ export async function urlDeDescarga(storageKey: string): Promise<ResultadoAccion
  * `docs/decisiones-pendientes.md`.
  */
 export async function quitarDocumento(
-  _session: Session,
+  session: Session,
   detalle: DetalleOportunidad,
   documentId: string,
 ): Promise<ResultadoAccion> {
+  if (!puedeEditarOportunidad(session, detalle)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   await prisma.document.deleteMany({ where: { id: documentId, opportunityId: detalle.id } });
   return ok(null);
 }

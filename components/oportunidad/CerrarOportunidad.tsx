@@ -87,7 +87,6 @@ export function CerrarOportunidad({
       {/* ── Ganada ──────────────────────────────────────────────────────── */}
       <Panel
         titulo="Marcar como ganada"
-        subtitulo="Sella el cierre real de hoy y convierte los hitos en facturación firme (RN-23)."
         abierto={panel === "ganada"}
         alCerrar={cerrar}
         pie={
@@ -149,14 +148,10 @@ export function CerrarOportunidad({
       {/* ── Perdida ─────────────────────────────────────────────────────── */}
       <Panel
         titulo="Marcar como perdida"
-        subtitulo="El motivo es obligatorio: es lo que se aprende de una pérdida."
         abierto={panel === "perdida"}
         alCerrar={cerrar}
         pie={
           <>
-            <p className="max-w-xs text-xs leading-snug text-texto-tenue">
-              Se sella el cierre real de hoy. Reabrirla después es de Administración (RN-18).
-            </p>
             <div className="flex items-center gap-2">
               <Boton variante="fantasma" type="button" onClick={cerrar}>
                 Cancelar
@@ -227,7 +222,6 @@ function FormularioDePerdida({
           etiqueta="Competidor"
           htmlFor="lossCompetitor"
           problema={problemas.problema("lossCompetitor")}
-          ayuda="Este motivo pide saber contra quién se perdió (RN-16)."
         >
           <Entrada
             id="lossCompetitor"

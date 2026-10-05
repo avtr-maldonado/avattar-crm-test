@@ -178,8 +178,7 @@ export function PanelHitos({
       {/* ── Los hitos ──────────────────────────────────────────────────── */}
       {hitos.length === 0 ? (
         <p className="rounded-md border border-borde bg-superficie-tarjeta px-5 py-8 text-center text-sm text-texto-tenue">
-          Sin hitos de facturación. Sin ellos la oportunidad no se puede marcar como ganada
-          (RN-06).
+          Sin hitos de facturación. Sin ellos la oportunidad no se puede marcar como ganada.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -255,7 +254,6 @@ export function PanelHitos({
 
       <Panel
         titulo={editando ? "Editar hito" : "Agregar hito"}
-        subtitulo="Reparte el neto de la cotización. La suma de los hitos no lo supera."
         abierto={abierto}
         alCerrar={cerrar}
         pie={
@@ -399,7 +397,6 @@ function FormularioDeHito({
         etiqueta="Concepto"
         htmlFor="description"
         problema={problemas.problema("description")}
-        ayuda="Qué se factura: «Anticipo», «Entrega de la fase 1»."
       >
         <Entrada
           id="description"

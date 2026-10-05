@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
-import { requireSession } from "@/lib/auth/session";
+import { invalidarPermisosEnCache, requireSession } from "@/lib/auth/session";
 import { crearUsuario, darAcceso, editarUsuario } from "@/lib/domain/usuario";
+import { cambiarPermiso } from "@/lib/domain/permisos";
 import { getUsuario } from "@/lib/scope/usuarios";
 
 /**
@@ -114,4 +115,36 @@ export async function darAccesoAccion(
 
   revalidatePath("/admin");
   return ok(r.datos);
+}
+
+// ─────────────────────────────────────────────────── Roles y permisos · §40
+
+const esquemaPermiso = z.object({
+  role: z.enum(ROLES),
+  code: z.string().trim().min(1),
+  granted: z.enum(["true", "false"]),
+  limite: z.string().trim().optional(),
+});
+
+/**
+ * Una celda de la matriz. El dominio decide (solo Administración, nunca su
+ * propia columna) y escribe la bitácora; aquí se invalida la caché de permisos
+ * del proceso, que es cosa de este servidor y no del dominio.
+ */
+export async function cambiarPermisoAccion(_previo: ResultadoAccion | null, form: FormData): Promise<ResultadoAccion> {
+  const datos = esquemaPermiso.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+
+  const session = await requireSession();
+  const r = await cambiarPermiso(session, {
+    role: datos.data.role,
+    code: datos.data.code,
+    granted: datos.data.granted === "true",
+    limite: datos.data.limite === undefined ? undefined : datos.data.limite || null,
+  });
+  if (r.ok) {
+    invalidarPermisosEnCache();
+    revalidatePath("/admin");
+  }
+  return r;
 }

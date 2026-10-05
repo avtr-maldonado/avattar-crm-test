@@ -1,17 +1,22 @@
 import { formatPercent, formatUSD, type Money } from "@/lib/money";
 import type {
   AntiguedadPorVendedor,
+  CierreDeCiclo,
   DetalleDeAntiguedad,
+  OportunidadAbierta,
   PromedioDeCiclo,
   SubgrupoDeEmbudo,
   TrimestreDeEmbudo,
+  VentaGanada,
 } from "@/lib/domain/analisis";
 import { formatoCompacto } from "./formato";
+import { fechaDeItem, itemDeAbierta, itemDeVenta, porId, resolver } from "./items";
 import type {
   DetalleDePunto,
   EstadoDeEtapa,
   FilaDeGrupos,
   FilaHorizontal,
+  ItemDePunto,
   PuntoDeAntiguedad,
   PuntoDeEmbudo,
   PuntoDeLinea,
@@ -25,6 +30,9 @@ import type {
  * Forecast (decisiones §37). Corre en el servidor: recibe `Decimal` y entrega
  * números para la geometría y textos formateados para el tooltip. Las gráficas
  * no calculan nada.
+ *
+ * Cada punto lleva sus ítems (§43): las abiertas o las ganadas que lo suman,
+ * resueltas por id contra la lista acotada que llegó de `lib/scope`.
  */
 const numero = (m: Money): number => m.toNumber();
 
@@ -64,8 +72,19 @@ function peso(parte: Money, total: Money): string {
 
 // ─────────────────────────────────────────────── 4 · Embudo por trimestre
 
-export function puntosDeEmbudo(e: { trimestres: readonly TrimestreDeEmbudo[]; total: SubgrupoDeEmbudo }): PuntoDeEmbudo[] {
+/** Una abierta en el embudo: importe, etapa con su probabilidad y lo que pondera (RN-01). */
+function itemDeEmbudo(o: OportunidadAbierta): ItemDePunto {
+  return itemDeAbierta(o, {
+    nota: `${o.stage.name} · ${formatPercent(o.stage.probability, 0)} · ponderado ${formatUSD(o.amount.times(o.stage.probability))}`,
+  });
+}
+
+export function puntosDeEmbudo(
+  e: { trimestres: readonly TrimestreDeEmbudo[]; total: SubgrupoDeEmbudo },
+  abiertas: readonly OportunidadAbierta[],
+): PuntoDeEmbudo[] {
   if (e.total.cuantas === 0) return [];
+  const indice = porId(abiertas);
   return e.trimestres.map((t) => ({
     clave: t.clave,
     etiqueta: t.etiqueta,
@@ -79,11 +98,16 @@ export function puntosDeEmbudo(e: { trimestres: readonly TrimestreDeEmbudo[]; to
       { etiqueta: "Ponderado", texto: formatUSD(t.ponderado) },
       { etiqueta: "Peso en el pipeline", texto: peso(t.total, e.total.total) },
     ],
+    items: resolver(t.ids, indice, itemDeEmbudo),
   }));
 }
 
 /** Lo abierto por cliente o por vendedor, sumando los subgrupos de todos los trimestres. */
-export function distribucionDelPipeline(e: { trimestres: readonly TrimestreDeEmbudo[]; total: SubgrupoDeEmbudo }): FilaHorizontal[] {
+export function distribucionDelPipeline(
+  e: { trimestres: readonly TrimestreDeEmbudo[]; total: SubgrupoDeEmbudo },
+  abiertas: readonly OportunidadAbierta[],
+): FilaHorizontal[] {
+  const indice = porId(abiertas);
   const mapa = new Map<string, SubgrupoDeEmbudo>();
   for (const t of e.trimestres) {
     for (const s of t.subgrupos) {
@@ -91,7 +115,13 @@ export function distribucionDelPipeline(e: { trimestres: readonly TrimestreDeEmb
       mapa.set(
         s.clave,
         previo
-          ? { ...previo, total: previo.total.plus(s.total), ponderado: previo.ponderado.plus(s.ponderado), cuantas: previo.cuantas + s.cuantas }
+          ? {
+              ...previo,
+              total: previo.total.plus(s.total),
+              ponderado: previo.ponderado.plus(s.ponderado),
+              cuantas: previo.cuantas + s.cuantas,
+              ids: [...previo.ids, ...s.ids],
+            }
           : { ...s },
       );
     }
@@ -109,6 +139,7 @@ export function distribucionDelPipeline(e: { trimestres: readonly TrimestreDeEmb
         { etiqueta: "Oportunidades", texto: String(s.cuantas) },
         { etiqueta: "Peso en el pipeline", texto: peso(s.total, e.total.total) },
       ],
+      items: resolver(s.ids, indice, itemDeEmbudo),
     }));
 }
 
@@ -122,7 +153,16 @@ type Ciclo = {
   porTrimestre: readonly PromedioDeCiclo[];
 };
 
-export function barrasDeCiclo(c: Ciclo): { filas: FilaHorizontal[]; referencia: ReferenciaDeGrafica | null } {
+/** Cada cierre que entra al promedio: sus días, y la venta con su fecha. */
+function itemsDeCierres(cierres: readonly CierreDeCiclo[], indice: ReadonlyMap<string, VentaGanada>): ItemDePunto[] {
+  return cierres.flatMap((c) => {
+    const v = indice.get(c.id);
+    return v ? [itemDeVenta(v, dias(c.dias), { nota: `${formatUSD(v.amount)} · cerrada ${fechaDeItem(v.actualCloseDate)}` })] : [];
+  });
+}
+
+export function barrasDeCiclo(c: Ciclo, ventas: readonly VentaGanada[]): { filas: FilaHorizontal[]; referencia: ReferenciaDeGrafica | null } {
+  const indice = porId(ventas);
   return {
     filas: c.porVendedor.map((v) => ({
       clave: v.clave,
@@ -134,12 +174,14 @@ export function barrasDeCiclo(c: Ciclo): { filas: FilaHorizontal[]; referencia: 
         { etiqueta: "Días promedio", texto: dias(v.promedioDias) },
         { etiqueta: "Mediana", texto: dias(c.medianaDias) },
       ],
+      items: itemsDeCierres(v.cierres, indice),
     })),
     referencia: c.medianaDias === null ? null : { valor: c.medianaDias, etiqueta: `Mediana: ${dias(c.medianaDias)}` },
   };
 }
 
-export function serieDeCiclo(c: Ciclo): PuntoDeLinea[] {
+export function serieDeCiclo(c: Ciclo, ventas: readonly VentaGanada[]): PuntoDeLinea[] {
+  const indice = porId(ventas);
   return c.porTrimestre.map((t) => ({
     clave: t.clave,
     etiqueta: t.etiqueta,
@@ -148,6 +190,7 @@ export function serieDeCiclo(c: Ciclo): PuntoDeLinea[] {
       { etiqueta: "Cierres", texto: String(t.cuantas) },
       { etiqueta: "Días promedio", texto: dias(t.promedioDias) },
     ],
+    items: itemsDeCierres(t.cierres, indice),
   }));
 }
 
@@ -163,7 +206,17 @@ function cuenta(etiqueta: string, n: number): DetalleDePunto {
   return { etiqueta, texto: String(n), ...(n > 0 && etiqueta !== "Abiertas" ? { tono: "peligro" as const } : {}) };
 }
 
-export function estadoPorVendedor(a: Antiguedad): { series: SerieDeGrupos[]; filas: FilaDeGrupos[] } {
+/** Cada serie de la gráfica de estado dice lo que le importa de la oportunidad. */
+const ITEM_DE_ESTADO: Record<keyof AntiguedadPorVendedor["ids"], (o: OportunidadAbierta) => ItemDePunto> = {
+  abiertas: (o) => itemDeAbierta(o),
+  estancadas: (o) => itemDeAbierta(o, { nota: `${o.stage.name} · en etapa desde ${fechaDeItem(o.stageEnteredAt)}` }),
+  sinActividad: (o) =>
+    itemDeAbierta(o, { nota: o.lastActivityAt ? `Última actividad ${fechaDeItem(o.lastActivityAt)}` : "Sin actividad registrada" }),
+  vencidas: (o) => itemDeAbierta(o, { nota: `Cierre estimado ${fechaDeItem(o.expectedCloseDate)}`, tono: "peligro" }),
+};
+
+export function estadoPorVendedor(a: Antiguedad, abiertas: readonly OportunidadAbierta[]): { series: SerieDeGrupos[]; filas: FilaDeGrupos[] } {
+  const indice = porId(abiertas);
   return {
     series: [
       { clave: "abiertas", etiqueta: "Abiertas" },
@@ -182,6 +235,9 @@ export function estadoPorVendedor(a: Antiguedad): { series: SerieDeGrupos[]; fil
         cuenta("Vencidas", v.vencidas),
         { etiqueta: "Edad promedio", texto: dias(v.edadPromedioDias) },
       ],
+      itemsPorSerie: Object.fromEntries(
+        (Object.keys(ITEM_DE_ESTADO) as (keyof typeof ITEM_DE_ESTADO)[]).map((serie) => [serie, resolver(v.ids[serie], indice, ITEM_DE_ESTADO[serie])]),
+      ),
     })),
   };
 }
@@ -208,6 +264,18 @@ export function puntosDeAntiguedad(a: Antiguedad): { puntos: PuntoDeAntiguedad[]
           { etiqueta: "Importe", texto: formatUSD(d.importe) },
           { etiqueta: "Vendedor", texto: d.vendedor },
           estadoDetalle(estado),
+        ],
+        // El punto es una oportunidad: el popup es su ficha, con el enlace.
+        items: [
+          {
+            clave: d.id,
+            href: `/oportunidades/${d.id}`,
+            titulo: `${d.folio} · ${d.nombre}`,
+            subtitulo: `${d.cliente} · ${d.vendedor}`,
+            cifra: formatUSD(d.importe),
+            nota: `${d.etapa} · ${d.diasEnEtapa} / ${d.limite} días en etapa`,
+            ...(estado === "estancada" ? { tono: "peligro" as const } : {}),
+          },
         ],
       };
     }),

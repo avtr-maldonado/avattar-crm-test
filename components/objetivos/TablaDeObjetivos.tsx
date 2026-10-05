@@ -171,10 +171,6 @@ export function TablaDeObjetivos({
       <div className="flex flex-wrap items-center gap-3 border-b border-borde px-5 py-3.5">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-texto-titulo">Objetivos por vendedor y trimestre</h2>
-          <p className="text-xs text-texto-tenue">
-            {metrica === "VENTA" ? "Venta" : "Utilidad de venta"} objetivo en USD para {anio}. El total
-            anual es la suma de los cuatro trimestres; el avance se mide acumulado.
-          </p>
         </div>
         {puedeFijar && elegibles.length > 0 && (
           <div className="flex items-center gap-2">
@@ -301,9 +297,7 @@ export function TablaDeObjetivos({
       {puedeFijar && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-borde bg-superficie-sutil px-5 py-3">
           <p className="text-xs text-texto-tenue">
-            {sucio
-              ? `${cambiadas.length + eliminados.length} ${cambiadas.length + eliminados.length === 1 ? "fila" : "filas"} con cambios sin guardar. Cada cuota que cambie queda en la bitácora.`
-              : "Teclea en las celdas y guarda una sola vez. Quitar a alguien borra sus cuotas del año, de venta y de utilidad."}
+            {sucio ? `${cambiadas.length + eliminados.length} ${cambiadas.length + eliminados.length === 1 ? "fila" : "filas"} con cambios sin guardar.` : ""}
           </p>
           <div className="flex items-center gap-2">
             <Boton variante="fantasma" type="button" onClick={descartar} disabled={!sucio || enviando}>

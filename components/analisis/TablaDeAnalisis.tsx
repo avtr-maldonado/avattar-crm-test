@@ -1,6 +1,5 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { ControlSegmentado } from "@/components/ui/primitivas";
 
 export type CeldaDeAnalisis =
   | string
@@ -145,49 +144,5 @@ function Celda({ celda, derecha, sangria = false }: { celda: CeldaDeAnalisis; de
         contenido
       )}
     </td>
-  );
-}
-
-/**
- * Un reporte: título, qué fecha manda, y su conmutador de agrupación cuando
- * lo tiene. El conmutador son enlaces: la agrupación vive en la URL.
- */
-export function Reporte({
-  titulo,
-  fechaQueManda,
-  agrupacion,
-  children,
-}: {
-  titulo: string;
-  /** Cada rango de fechas dice sobre qué campo aplica; aquí se dice cuál. */
-  fechaQueManda: string;
-  agrupacion?: {
-    etiqueta: string;
-    opciones: readonly { valor: string; etiqueta: string }[];
-    activa: string;
-    hrefDe: (valor: string) => string;
-  };
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-md border border-borde bg-superficie-tarjeta p-5">
-      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-texto-titulo">{titulo}</h2>
-          <p className="mt-0.5 text-xs text-texto-tenue">{fechaQueManda}</p>
-        </div>
-        {agrupacion ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-texto-tenue">{agrupacion.etiqueta}</span>
-            <ControlSegmentado
-              opciones={agrupacion.opciones}
-              activa={agrupacion.activa}
-              hrefDe={agrupacion.hrefDe}
-            />
-          </div>
-        ) : null}
-      </div>
-      {children}
-    </section>
   );
 }

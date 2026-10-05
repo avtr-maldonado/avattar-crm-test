@@ -15,7 +15,9 @@ import { BarraSuperior } from "@/components/ui/BarraSuperior";
 import { Avatar, Pastilla } from "@/components/ui/primitivas";
 import { Pestanas, type Pestana } from "@/components/oportunidad/Pestanas";
 import { FormularioDeUsuario } from "@/components/admin/FormularioDeUsuario";
-import { crearUsuarioAccion, darAccesoAccion, editarUsuarioAccion } from "./acciones";
+import { MatrizDePermisos } from "@/components/admin/MatrizDePermisos";
+import { PERMISOS_CON_TOPE } from "@/lib/domain/permisos";
+import { cambiarPermisoAccion, crearUsuarioAccion, darAccesoAccion, editarUsuarioAccion } from "./acciones";
 
 /**
  * P-11 · Administración.
@@ -86,7 +88,7 @@ export default async function AdminPage({
     <>
       <BarraSuperior
         titulo="Administración"
-        subtitulo="Configuración del sistema · sin código (INV-05)"
+        subtitulo="Configuración del sistema"
         usuario={{
           nombre: session.name,
           correo: session.email,
@@ -117,7 +119,7 @@ export default async function AdminPage({
         <div className="mt-6">
           {activa === "pipelines" && <TabPipelines />}
           {activa === "catalogos" && <TabCatalogos />}
-          {activa === "permisos" && <TabPermisos />}
+          {activa === "permisos" && <TabPermisos session={session} />}
           {activa === "usuarios" && <TabUsuarios session={session} />}
           {activa === "politica" && <TabPolitica />}
         </div>
@@ -257,7 +259,7 @@ async function TabCatalogos() {
       />
       <Catalogo
         titulo="Motivos de pérdida"
-        nota="Los marcados exigen además nombrar al competidor (RN-16)."
+        nota="Los marcados exigen nombrar al competidor."
         filas={c.motivosPerdida.map((m) => ({
           id: m.id,
           nombre: m.name,
@@ -335,63 +337,21 @@ function Catalogo({
 
 // ─────────────────────────────────────────────────────── Roles y permisos
 
-async function TabPermisos() {
-  const [permisos, porRol] = await Promise.all([
-    configuracionDePermisos(),
-    usuariosPorRol(),
-  ]);
+async function TabPermisos({ session }: { session: Session }) {
+  const [permisos, porRol] = await Promise.all([configuracionDePermisos(), usuariosPorRol()]);
 
   return (
-    <section className="overflow-x-auto rounded-md border border-borde bg-superficie-tarjeta">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-superficie-sutil">
-          <tr>
-            <Th>Permiso</Th>
-            {ROLES.map((r) => (
-              <th key={r} className="eyebrow px-3 py-2 text-center font-medium">
-                {ETIQUETA_ROL[r]}
-                <span className="tabular block text-xs font-normal normal-case tracking-normal text-texto-tenue">
-                  {porRol[r] ?? 0} usuarios
-                </span>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {permisos.map((p) => (
-            <tr key={p.code} className="border-t border-borde">
-              <td className="px-3 py-2.5">
-                <p className="font-medium text-texto-titulo">{p.name}</p>
-                <p className="font-mono text-xs text-texto-tenue">{p.code}</p>
-                {p.description && (
-                  <p className="mt-0.5 max-w-md text-xs text-texto-tenue">{p.description}</p>
-                )}
-              </td>
-              {ROLES.map((r) => {
-                const v = p.porRol[r];
-                return (
-                  <td key={r} className="px-3 py-2.5 text-center">
-                    {!v?.granted ? (
-                      <span className="text-texto-tenue" title="No concedido">
-                        —
-                      </span>
-                    ) : v.limite ? (
-                      <span className="tabular text-xs font-semibold text-exito">
-                        hasta {formatPercent(v.limite, 0)}
-                      </span>
-                    ) : (
-                      <span className="font-semibold text-exito" title="Concedido, sin tope">
-                        ✓
-                      </span>
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+    <MatrizDePermisos
+      permisos={permisos}
+      roles={ROLES}
+      etiquetas={ETIQUETA_ROL}
+      usuariosPorRol={porRol}
+      conTope={[...PERMISOS_CON_TOPE]}
+      // §40 · por rol, no por permiso: un permiso para editar permisos se
+      // podría quitar a sí mismo. La edición se enciende con un botón (§43).
+      puedeEditar={session.role === "ADMINISTRADOR"}
+      accion={cambiarPermisoAccion}
+    />
   );
 }
 
@@ -555,10 +515,6 @@ async function TabPolitica() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-texto-cuerpo">
-        Aquí vive <strong>todo umbral del sistema</strong>. Si alguno no aparece en
-        esta pantalla, quedó escrito en el código, que es lo que INV-05 prohíbe.
-      </p>
 
       {paises.map((pais) => (
         <section
@@ -581,52 +537,52 @@ async function TabPolitica() {
               <Umbral
                 etiqueta="Autoriza Gerencia"
                 valor={formatPercent(toClient(pais.commercialPolicy.discountThresholdMgmt))}
-                nota="RN-04 · descuento sobre este umbral"
+                nota="Descuento sobre este umbral"
               />
               <Umbral
                 etiqueta="Autoriza Dirección"
                 valor={formatPercent(toClient(pais.commercialPolicy.discountThresholdDir))}
-                nota="RN-04 · sin tope superior"
+                nota="Sin tope superior"
               />
               <Umbral
                 etiqueta="MEDDIC para cierre"
                 valor={String(pais.commercialPolicy.meddicMinToClosing)}
-                nota="RN-27"
+               
               />
               <Umbral
                 etiqueta="MEDDIC para ganar"
                 valor={String(pais.commercialPolicy.meddicMinToWin)}
-                nota="RN-28 · más E, I y C confirmados"
+                nota="Más E, I y C confirmados"
               />
               <Umbral
                 etiqueta="MEDDIC para compromiso"
                 valor={String(pais.commercialPolicy.meddicMinToCommit)}
-                nota="RN-29"
+               
               />
               <Umbral
                 etiqueta="Cobertura sana"
                 valor={`${pais.commercialPolicy.healthyCoverageMin.toString()}×`}
-                nota="RN-25 · sobre la brecha de cuota"
+                nota="Sobre la brecha de cuota"
               />
               <Umbral
                 etiqueta="SLA de autorización"
                 valor={`${pais.commercialPolicy.approvalSlaHours} h`}
-                nota="RN-21 · horas hábiles"
+                nota="Horas hábiles"
                 pendiente="Q-09"
               />
               <Umbral
                 etiqueta={pais.taxLabel}
                 valor={formatPercent(toClient(pais.taxRate))}
-                nota="RN-24 · se copia a la cotización al crearla"
+                nota="Se copia a la cotización al crearla"
                 pendiente={pais.code === "MX" ? undefined : "Q-04"}
               />
               <Umbral
                 etiqueta="Inicio de año fiscal"
                 valor={MES[pais.fiscalYearStartMonth - 1]}
-                nota="§10.1 · resuelve los preajustes de fecha"
+                nota="Resuelve los preajustes de fecha"
                 pendiente="Q-02"
               />
-              <Umbral etiqueta="Zona horaria" valor={pais.timezone} nota="§4.3" />
+              <Umbral etiqueta="Zona horaria" valor={pais.timezone} />
             </dl>
           )}
         </section>

@@ -104,6 +104,7 @@ const esquemaEdicion = z.object({
   forecastCategory: z.enum(["PIPELINE", "MEJOR_CASO", "COMPROMISO", "OMITIDA"]),
   sourceId: z.string().optional(),
   ownerId: z.string().optional(),
+  presalesUserId: z.string().optional(),
 });
 
 export async function editarOportunidadAccion(
@@ -131,6 +132,8 @@ export async function editarOportunidadAccion(
       forecastCategory: d.forecastCategory,
       sourceId: d.sourceId === undefined ? undefined : d.sourceId || null,
       ownerId: d.ownerId || undefined,
+      // Ausente, no se toca; vacío, se retira (§39).
+      presalesUserId: d.presalesUserId === undefined ? undefined : d.presalesUserId || null,
     },
     umbrales,
   );

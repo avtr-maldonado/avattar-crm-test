@@ -1,5 +1,6 @@
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import type { Session } from "@/lib/auth/permissions";
+import { puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
 import { prisma } from "@/lib/db";
 import { money } from "@/lib/money";
 import { cotizacionConLineas, type DetalleOportunidad } from "@/lib/scope/opportunityDetail";
@@ -29,7 +30,9 @@ export type EntradaDeHito = {
   modo?: "monto" | "porcentaje";
 };
 
-function editable(detalle: DetalleOportunidad): ResultadoAccion | null {
+function editable(detalle: DetalleOportunidad, session: Session): ResultadoAccion | null {
+  // §39 · Preventa ve los hitos; no los captura.
+  if (!puedeEditarOportunidad(session, detalle)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   if (detalle.status === "ABIERTA") return null;
   return falla(
     "AUTORIZACION",
@@ -38,11 +41,11 @@ function editable(detalle: DetalleOportunidad): ResultadoAccion | null {
 }
 
 export async function guardarHito(
-  _session: Session,
+  session: Session,
   detalle: DetalleOportunidad,
   entrada: EntradaDeHito,
 ): Promise<ResultadoAccion> {
-  const bloqueada = editable(detalle);
+  const bloqueada = editable(detalle, session);
   if (bloqueada) return bloqueada;
 
   const description = entrada.description.trim();
@@ -115,11 +118,11 @@ export async function guardarHito(
 }
 
 export async function quitarHito(
-  _session: Session,
+  session: Session,
   detalle: DetalleOportunidad,
   milestoneId: string,
 ): Promise<ResultadoAccion> {
-  const bloqueada = editable(detalle);
+  const bloqueada = editable(detalle, session);
   if (bloqueada) return bloqueada;
 
   await prisma.milestone.deleteMany({ where: { id: milestoneId, opportunityId: detalle.id } });
@@ -133,7 +136,7 @@ export async function quitarHito(
  * pestaña dice qué se va a facturar, pero no qué ya se facturó.
  */
 export async function marcarHito(
-  _session: Session,
+  session: Session,
   detalle: DetalleOportunidad,
   milestoneId: string,
   cumplido: boolean,

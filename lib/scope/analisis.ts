@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { money } from "@/lib/money";
 import { calcularLinea } from "@/lib/domain/quote";
 import type { ActividadHecha, OportunidadAbierta, VentaGanada } from "@/lib/domain/analisis";
-import { rangoDeAnioFiscal } from "@/lib/filters/dates";
+
 import { withScope } from "./opportunities";
 import { actividadEnOficina, withActivityScope } from "./activities";
 import { avanceDeObjetivos, type RenglonDeObjetivo } from "./objetivos";
@@ -37,19 +37,17 @@ function recorte(r: RecorteDeAnalisis): Prisma.OpportunityWhereInput {
   };
 }
 
+/** Primer y último día, incluidos: lo que resuelve `rangoDeLapso` (§45). */
+export type RangoDeFechas = { from: Date; to: Date };
+
 /**
- * Las ganadas del alcance, con su cotización vigente. Sin `anio`, toda la
+ * Las ganadas del alcance, con su cotización vigente. Sin `rango`, toda la
  * historia: el histórico de venta (reporte 2) compara años entre sí y no se
- * puede recortar al año elegido. Con `anio`, las de ese año fiscal por
+ * puede recortar al lapso elegido. Con `rango`, las de ese lapso por
  * `actualCloseDate` (§10.2): es la fecha que mide el avance de cuota.
  */
-export async function ganadas(
-  session: Session,
-  r: RecorteDeAnalisis,
-  anio: { fiscalYear: number; fiscalYearStartMonth: number } | null,
-): Promise<VentaGanada[]> {
+export async function ganadas(session: Session, r: RecorteDeAnalisis, rango: RangoDeFechas | null): Promise<VentaGanada[]> {
   const verCosto = can(session, "VER_COSTO");
-  const rango = anio ? rangoDeAnioFiscal(anio.fiscalYear, anio.fiscalYearStartMonth) : null;
 
   const filas = await prisma.opportunity.findMany({
     where: withScope(session, {
@@ -59,6 +57,8 @@ export async function ganadas(
     }),
     select: {
       id: true,
+      folio: true,
+      name: true,
       amount: true,
       actualCloseDate: true,
       createdAt: true,
@@ -118,6 +118,8 @@ export async function ganadas(
     return [
       {
         id: o.id,
+        folio: o.folio,
+        name: o.name,
         amount: o.amount,
         actualCloseDate: o.actualCloseDate,
         createdAt: o.createdAt,
@@ -170,13 +172,12 @@ export async function abiertasDelAnalisis(
   }));
 }
 
-/** Las actividades hechas en el año fiscal, dentro del alcance y, si se pide, de una oficina o un vendedor. */
-export async function actividadesHechasDelAnio(
+/** Las actividades hechas en el lapso, dentro del alcance y, si se pide, de una oficina o un vendedor. */
+export async function actividadesHechas(
   session: Session,
   r: { pais: CountryCode[]; vendedor: string[] },
-  anio: { fiscalYear: number; fiscalYearStartMonth: number },
+  rango: RangoDeFechas,
 ): Promise<ActividadHecha[]> {
-  const rango = rangoDeAnioFiscal(anio.fiscalYear, anio.fiscalYearStartMonth);
   const filas = await prisma.activity.findMany({
     where: withActivityScope(session, {
       AND: [
@@ -187,14 +188,20 @@ export async function actividadesHechasDelAnio(
       ],
     }),
     select: {
+      id: true,
+      subject: true,
       completedAt: true,
       type: { select: { name: true } },
       user: { select: { id: true, name: true } },
+      // Para listar la actividad al pulsar la barra (§43): folio y nombre, con enlace.
+      opportunity: { select: { id: true, folio: true, name: true } },
     },
   });
 
   return filas.flatMap((a) =>
-    a.completedAt ? [{ completedAt: a.completedAt, tipo: a.type.name, usuario: a.user }] : [],
+    a.completedAt
+      ? [{ id: a.id, subject: a.subject, completedAt: a.completedAt, tipo: a.type.name, usuario: a.user, opportunity: a.opportunity }]
+      : [],
   );
 }
 

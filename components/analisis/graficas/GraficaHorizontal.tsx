@@ -2,8 +2,10 @@
 
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { acortar } from "./formato";
-import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion } from "./comun";
+import { Leyenda, SinDatos, TooltipDeGrafica, useAnimacion, useDetalle } from "./comun";
+import { PanelDeDetalle } from "./PanelDeDetalle";
 import { ETIQUETA_DE_BARRA, PALETA, TIPOGRAFIA_DE_EJE } from "./paleta";
+import { seleccionDe } from "./seleccion";
 import type { FilaHorizontal, ReferenciaDeGrafica } from "./tipos";
 
 const ALTO_POR_FILA = 36;
@@ -16,7 +18,8 @@ const COLOR_DE_TONO = { exito: PALETA.utilidad, peligro: PALETA.peligro, tenue: 
  * margen por producto, pipeline por cliente o vendedor, ciclo de venta por
  * vendedor, salud MEDDIC por etapa. Una `referencia` traza una línea vertical
  * punteada (la mediana, el mínimo); el `tono` de una fila la pinta verde, coral
- * o gris (§33: solo la pérdida y lo bajo el mínimo van en coral).
+ * o gris (§33: solo la pérdida y lo bajo el mínimo van en coral). Pulsar una
+ * barra abre el detalle de la fila (§43).
  *
  * La altura crece con las filas; pasadas trece, el contenedor hace scroll.
  */
@@ -40,6 +43,7 @@ export function GraficaHorizontal({
   vacio: string;
 }) {
   const anima = useAnimacion();
+  const detalle = useDetalle();
   if (filas.length === 0) return <SinDatos texto={vacio} alto={ALTO_MINIMO} />;
   const alto = Math.max(ALTO_MINIMO, filas.length * ALTO_POR_FILA + (referencia ? 56 : 40));
 
@@ -76,7 +80,16 @@ export function GraficaHorizontal({
                 label={{ value: referencia.etiqueta, position: "top", fill: PALETA.texto, fontSize: 11 }}
               />
             ) : null}
-            <Bar dataKey="valor" fill={color} radius={[0, 3, 3, 0]} minPointSize={2} isAnimationActive={anima} animationDuration={350}>
+            <Bar
+              dataKey="valor"
+              fill={color}
+              radius={[0, 3, 3, 0]}
+              minPointSize={2}
+              cursor="pointer"
+              onClick={(d) => detalle.elegir(seleccionDe(d.payload as FilaHorizontal))}
+              isAnimationActive={anima}
+              animationDuration={350}
+            >
               {filas.map((f) => (
                 <Cell key={f.clave} fill={f.tono ? COLOR_DE_TONO[f.tono] : color} />
               ))}
@@ -86,6 +99,7 @@ export function GraficaHorizontal({
         </ResponsiveContainer>
       </div>
       {leyenda ? <Leyenda series={leyenda} /> : null}
+      <PanelDeDetalle seleccion={detalle.seleccion} abierto={detalle.abierto} alCerrar={detalle.cerrar} />
     </div>
   );
 }

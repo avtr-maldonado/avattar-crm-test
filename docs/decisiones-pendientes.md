@@ -20,7 +20,7 @@ invisible.
 |---|---|---|---|---|
 | **Q-01** | El Director dijo «los vendedores solo ven las que crean». ¿Propietario o creador? | **Propietario** (`ownerId`). Tomado literal, un gerente no podría dar de alta una oportunidad y asignarla, y una reasignación dejaría al vendedor nuevo sin acceso | `lib/scope/opportunities.ts` | Una línea. Cambiar `ownerId` por `createdById` en el caso `VENDEDOR` |
 | **Q-02** | ¿El año fiscal de Avattar es el año calendario? | **Sí.** T1 = ene–mar. Inferido del prototipo, que muestra septiembre dentro de T3 | `Country.fiscalYearStartMonth = 1` | Una fila por país |
-| **Q-03** | ¿Preventa es rol propio? ¿Ve costo? ¿Edita la cotización? | **Rol propio.** Ve las oportunidades donde está asignado como apoyo. **Sin** `VER_COSTO`. No edita cotización | `RolePermission` | Filas en la matriz, editable desde P-11 |
+| **Q-03** | ¿Preventa es rol propio? ¿Ve costo? ¿Edita la cotización? | **Rol propio.** Ve las oportunidades donde es responsable de preventa (se asigna al dar de alta o al editar, §39), les registra actividades, no las edita ni las crea. **Sin** `VER_COSTO`. No edita cotización | `RolePermission` | Filas en la matriz, editable desde P-11 |
 | **Q-04** | Tasa de impuesto real de Colombia y Chile | **MX 16 %, CO 19 %, CL 19 %.** Los de CO y CL vienen del catálogo de funcionalidades v2, sin confirmar con contabilidad local | `Country.taxRate` | Una fila. No afecta cotizaciones ya creadas: RN-24 copia la tasa al crear |
 | **Q-05** | ¿Quién mantiene el costo estándar mientras Defontana esté fuera? | **Administración, por carga masiva.** Sin responsable asignado todavía | `Product.costSource = CARGA_MASIVA`, `Product.costUpdatedAt` | Es una decisión de proceso, no de código. P-06 marca en ámbar los SKU con costo de más de 60 días |
 | **Q-06** | ¿Se carga un resumen histórico agregado de 24 meses? | **No.** P-09 muestra «sin datos suficientes» durante los primeros trimestres, nunca un cero | — | Si se decide que sí, es un módulo de importación nuevo |
@@ -1960,3 +1960,258 @@ Dónde vive: `components/analisis/graficas/{datosDeActividad,TarjetasDeActividad
 GraficaDeBarras,GraficaHorizontal}.tsx`, `components/analisis/PestanaActividad.tsx`. Pruebas:
 `components/analisis/graficas/datosDeActividad.test.ts` (6).
 
+## 39. El responsable de preventa (1 de octubre de 2026)
+
+**Decisión del negocio:** una oportunidad puede tener un **responsable de preventa** (un usuario
+con rol `PREVENTA`), que se asigna desde el alta y desde «Editar oportunidad» en la ficha. Ese
+usuario **ve** las oportunidades que le asignaron y **les agrega actividades**; **no** crea
+oportunidades ni las edita.
+
+**Lo que ya existía y se reutiliza.** `OpportunitySupport` (oportunidad × usuario de apoyo) estaba
+en el esquema desde E0 y el alcance de `PREVENTA` ya se recortaba por él (`opportunityScope`,
+`activityScope`); lo que faltaba era la forma de asignarlo y el candado de edición. **No hay
+migración de esquema.** La tabla admite varios apoyos; la pantalla asigna **uno** y el servicio
+reemplaza las filas al cambiarlo. Si el negocio pide varios preventas por oportunidad, es un
+selector de varios sobre la misma tabla.
+
+**Permiso nuevo: `CREAR_OPORTUNIDAD`.** Entra a la matriz de §5.2 como dato (migración
+`20261001090000_permiso_crear_oportunidad`, aplicada con `prisma db execute` y fila manual en el
+historial, como §29 y §33): todos los roles comerciales lo tienen; `PREVENTA` no. Gatea el alta
+(`crearOportunidad`) y el arrastre en el tablero. La caché de permisos del servidor dura un minuto:
+no hace falta reiniciar `pnpm dev`.
+
+**El candado de edición, en un solo lugar.** `puedeEditarOportunidad(session, oportunidad)` en
+`lib/domain/opportunityAccess.ts`: su propietario o quien tenga `VER_OPORTUNIDADES_OFICINA`. Antes
+solo lo comprobaban editar, ganar/perder y reabrir; **cambiar de etapa, cotizar, calificar MEDDIC,
+capturar hitos y subir o quitar documentos** confiaban en que la pantalla hubiera ocultado el botón.
+Ahora los siete servicios lo aplican. Para quien ya podía hacerlo nada cambia; Preventa, que alcanza
+la oportunidad por la fila de apoyo, recibe `AUTORIZACION`. Las actividades **no** llevan el candado:
+registrarlas es exactamente lo que se le pide a preventa, y el responsable de una actividad ya era
+cualquier activo del país (§20).
+
+**Quién asigna.** Quien puede editar la oportunidad: el propietario o Gerencia. Solo un usuario
+activo con rol `PREVENTA` que opere en el país de la oportunidad (`preventasValidos`), con la misma
+lógica de país que el propietario (AC-05). Asignar, cambiar o retirar queda en la bitácora
+(`CAMBIAR_PREVENTA`, con los nombres), porque cambia quién ve la oportunidad (INV-09).
+
+**Lo que ve preventa.** El tablero y la tabla con las asignadas; la ficha completa en solo lectura
+(los controles de editar, mover, cerrar, cotizar, MEDDIC, hitos y documentos no se ofrecen, y el
+servidor los rechaza igual); el composer de actividades; su bandeja y su semana con sus actividades.
+Sin `VER_COSTO` (Q-03): la cotización le llega sin costo ni utilidad.
+
+**Edición rápida (1-oct, tarde):** el responsable de preventa también se corrige desde «Datos de la
+oportunidad» como los otros cinco datos rápidos: entró a `CAMPOS_RAPIDOS` y `cambioDeCampo`
+(`presalesUserId`, vacío = retirar); el dominio sigue validando rol y país.
+
+**Costo de volver:** quitar el permiso del parser y de la matriz, y el candado de
+`opportunityAccess`; el campo de los formularios y la fila de la ficha están en el historial del
+1-oct.
+
+Dónde vive: `lib/domain/opportunityAccess.ts`, `lib/domain/opportunity.ts` (`preventasValidos`,
+`presalesUserId` en alta y edición, candado en `cambiarEtapa`), `lib/domain/{quoteService,
+meddicService,milestoneService,document}.ts`, `lib/scope/opportunityDetail.ts` (`supportUsers`),
+`lib/scope/cotizaciones.ts` (`ownerId`), `lib/auth/permissions.ts`, `prisma/seed/permisos.ts`,
+`components/pipeline/{CamposComerciales,NuevaOportunidad}.tsx`,
+`components/oportunidad/EditarOportunidad.tsx`, `app/(app)/oportunidades/**`. Pruebas:
+`tests/integracion/preventa.test.ts` (5), `configuracion.test.ts` (trece permisos).
+
+## 40. La matriz de roles y permisos se edita desde Administración (1 de octubre de 2026)
+
+**Decisión del negocio:** la pestaña «Roles y permisos» de Administración deja de ser solo lectura.
+Un usuario con rol **Administrador** concede o revoca cada celda y, en los permisos con tope
+(autorizar descuento, RN-04), fija el porcentaje. La matriz ya era dato (§5.2, `RolePermission`);
+ahora también se captura como dato.
+
+**Quién: por rol, no por permiso.** Es la única puerta del sistema decidida por `session.role` y no
+por una fila de la matriz: un permiso «editar permisos» se podría quitar a sí mismo y nadie podría
+devolverlo. Por lo mismo, **la columna de Administración no se edita desde la pantalla**: se queda en
+solo lectura y, si hiciera falta, se cambia en la base con intención.
+
+**Qué pasa al cambiar.** `cambiarPermiso` valida (rol existente, permiso existente, tope solo en los
+que lo admiten y entre 1 % y 100 %), escribe la celda y la bitácora en la misma transacción
+(`EDITAR_PERMISO`, INV-09) y la acción invalida la caché de permisos del proceso: el cambio aplica en
+la siguiente petición, sin reiniciar. La lista de permisos sale de la base, así que lo que entre
+después (como `CREAR_OPORTUNIDAD`, §39) aparece solo.
+
+**Costo de volver:** quitar `editable` en `TabPermisos`; la tabla de lectura es la misma.
+
+Dónde vive: `lib/domain/permisos.ts`, `app/(app)/admin/acciones.ts` (`cambiarPermisoAccion`),
+`components/admin/MatrizDePermisos.tsx`, `app/(app)/admin/page.tsx`. Pruebas:
+`tests/integracion/permisos.test.ts` (3).
+
+## 41. La interfaz no explica las reglas: sin textos de ayuda bajo los campos ni bajo los títulos (1 de octubre de 2026)
+
+**Decisión del negocio:** quitar los textos descriptivos de toda la aplicación: los de ayuda bajo los
+campos de los formularios («“Compromiso” exige el puntaje MEDDIC mínimo (RN-29)»), los subtítulos
+descriptivos de los paneles, las descripciones bajo los títulos de las gráficas de Análisis y las
+notas que citaban reglas del spec en pantalla (RN-xx, §x, INV-xx).
+
+**Lo que se quitó:** las 31 `ayuda` de `Campo`; los subtítulos de panel que explicaban en vez de
+nombrar (se conservan los que identifican al objeto: el correo del usuario, el nombre de la cuenta,
+el SKU); las `descripcion` de las tarjetas de Análisis (ahora opcional en `Tarjeta`) y el componente
+`Reporte`, que ya no se usaba; los párrafos de contexto bajo tablas y gráficas (totales, leyendas del
+forecast, «las N de mayor importe», la nota del reparto por producto…); las citas de regla en
+Administración, Productos, Objetivos y Actividades, dejando el texto en lenguaje llano donde el
+texto sí explicaba el dato (los umbrales de la política comercial).
+
+**Lo que se conserva, a propósito:** los estados vacíos (proponen la acción siguiente), los mensajes
+de validación y de compuerta (dicen qué falta con el dato), las anotaciones de estado junto a un
+campo («existente», «sugerido», «manda la cotización»), la ayuda emergente del pronóstico (es un
+icono que se abre a petición), los tooltips y leyendas de las gráficas, y el aviso de cambios sin
+guardar en la cuadrícula de objetivos. Las reglas siguen citadas en el código y en estos documentos:
+es ahí donde se rastrean, no en la pantalla.
+
+**Costo de volver:** `Campo.ayuda`, `Panel.subtitulo` y `Tarjeta.descripcion` siguen existiendo como
+props; los textos están en el historial del 30-sep.
+
+## 42. Actividades en tres vistas: lista, kanban y semana (1 de octubre de 2026)
+
+**Decisión del negocio:** la pantalla de Actividades deja la bandeja en tres grupos y pasa a tres
+vistas más condensadas sobre los mismos datos, elegidas en la URL (`vista=lista|kanban|semana`,
+INV-10): una **lista** (una fila por actividad: qué, estado, tipo, cuándo, quién), un **kanban**
+con cuatro columnas de estado y una **semana** de lunes a domingo con bloques por hora, en verde lo
+hecho y en coral lo vencido.
+
+**El estado se calcula, no se captura** (como las banderas, INV-11), en `lib/domain/agenda.ts`:
+*realizada* (tiene `completedAt`), *vencida* (pendiente y de un día anterior a hoy, medida por día,
+igual que la bandeja y el contador del menú), *en progreso* (pendiente, ya empezó y no ha terminado;
+sin duración, la misma media hora que da el calendario) y *por realizar* (lo demás). Por eso el
+kanban no se arrastra: una actividad cambia de columna al marcarla hecha o reprogramarla desde su
+lápiz, que es el mismo de siempre.
+
+**Qué trae el tablero** (`tableroDeActividades`): todo lo pendiente, de cualquier fecha —la deuda no
+caduca— más lo hecho en los últimos **catorce días**. Es lo bastante para ver qué se cerró sin
+convertir la pantalla en un archivo; el número es un literal de presentación, no un umbral de
+negocio. La semana sigue leyendo `agendaSemanal`.
+
+**Lo que se conserva de la bandeja:** los tres indicadores (vencidas, hoy, sin próximo paso) y la
+lista de **oportunidades sin próximo paso** (RN-10), que va debajo de la lista porque no son
+actividades pero sí pendientes, y es la que hace que la regla exista en la práctica.
+
+**Costo de volver:** la bandeja en tres grupos está en el historial del 1-oct; los lectores
+`bandejaDeTrabajo` y `agendaSemanal` no cambiaron.
+
+Dónde vive: `lib/domain/agenda.ts`, `lib/scope/agenda.ts` (`tableroDeActividades`,
+`SELECCION_DE_AGENDA`), `components/actividades/{comun,VistaLista,VistaKanban,VistaSemana}.tsx`,
+`app/(app)/actividades/page.tsx`. Pruebas: `lib/domain/agenda.test.ts` (5),
+`tests/integracion/agenda.test.ts` (tablero).
+
+
+## 43. Las gráficas de Análisis se pulsan: qué hay detrás de cada barra, y la matriz se edita con un botón (2 de octubre de 2026)
+
+**Decisión del negocio:** el tooltip de cada gráfica de Análisis se queda tal cual, y además **pulsar
+una barra, un segmento, un punto de la línea o de la dispersión abre un popup** con la ponderación de
+ese punto —los mismos renglones del tooltip— y **la lista de los ítems que la suman**: oportunidades
+con folio, nombre, cuenta, vendedor, cifra y una nota, con enlace a la ficha; en las gráficas de
+actividad, las actividades con su asunto, su oportunidad y su fecha. Aplica a las tres pestañas y a
+las once gráficas. El tooltip invita: «Clic para ver el detalle».
+
+**Qué suma cada ítem.** La cifra de cada ítem es **lo que puso en esa barra**, no su total: por
+producto, la línea de la cotización y no la venta entera (`AporteDeVenta`); en rentabilidad y margen,
+importe, costo y utilidad de esa venta en esa fila (`AporteDeRentabilidad`); en el ciclo, los días del
+alta al cierre de ese negocio; en salud MEDDIC, el puntaje de cada abierta con el mismo semáforo que la
+barra. En las barras **agrupadas** la que se pulsa es una serie, así que los ítems van por serie
+(`itemsPorSerie`): «Miguel Maldonado · Estancadas» lista solo las estancadas, con desde cuándo están
+en la etapa; «Vencidas», con su cierre estimado; «Sin siguiente paso», con qué falta agendar. En la
+dispersión el punto es una oportunidad: el popup es su ficha con el enlace.
+
+**Dónde se resuelve.** El dominio (`lib/domain/analisis.ts`) ya sabía qué ids sumaban cada fila
+—contaba `cuantas` con un `Set`—; ahora lo devuelve: `aportes` en ventas y rentabilidad, `ids` en
+embudo, estado por vendedor, salud y actividad, `cierres` en el ciclo. Las transformaciones de
+`components/analisis/graficas/datos*.ts` reciben además la lista acotada que llegó de `lib/scope`
+y resuelven los ids contra ella (`items.ts`: `porId`, `resolver`, `itemDeVenta`, `itemDeAbierta`,
+`itemDeActividad`). Un id que no esté en la lista se omite: nada se inventa. `VentaGanada` gana
+`folio` y `name`; `ActividadHecha` gana `id`, `subject` y su oportunidad. **INV-02 se conserva:** el
+costo solo se escribe en los ítems de rentabilidad y margen, que ya solo existen con `VER_COSTO`.
+
+**Costo de la decisión:** cada punto viaja con su lista al cliente, y por eso una venta aparece una
+vez por agrupación (cuatro en el avance). Con el volumen de la operación son decenas de kilobytes;
+si algún día pesa, la alternativa es una acción que lea los ítems al pulsar, con los mismos filtros.
+
+**La matriz de permisos (§40) se abre en lectura.** La tabla de siempre —«—», «✓», «hasta 30 %»— y,
+solo para el rol Administrador, un botón «Editar permisos» arriba a la derecha que enciende las
+casillas y los topes; «Terminar edición» devuelve la lectura. El guardado por celda, la bitácora y la
+caché no cambian. El borde de la tabla se pinta en azul mientras se edita.
+
+Dónde vive: `lib/domain/analisis.ts`, `lib/scope/analisis.ts`, `components/analisis/graficas/{tipos,items,seleccion}.ts`,
+`PanelDeDetalle.tsx`, `comun.tsx` (`useDetalle`, la invitación del tooltip), las ocho `Grafica*.tsx`,
+`datos*.ts`, las tres pestañas; `components/admin/MatrizDePermisos.tsx` (`puedeEditar`).
+Pruebas: `lib/domain/analisis.test.ts` (+10), `graficas/datos*.test.ts` (+13).
+
+## 44. Los popups informativos cierran al pulsar fuera, y la semana de Actividades se navega (2 de octubre de 2026)
+
+**Decisión del negocio:** los popups que solo **muestran** —el detalle de una barra del embudo del
+pipeline, el detalle de las gráficas de Análisis (§43) y el aviso «No entra a…» del kanban— se
+cierran también al pulsar fuera del cuadro. Los que **capturan** —alta y edición de oportunidad,
+cotización, cierre y reapertura, actividades, usuarios, contactos, productos, acceso de persona—
+siguen como estaban: un clic desviado no borra lo tecleado; Escape, la ✕ y «Cancelar» siguen ahí.
+La diferencia es una opción del `Panel` (`cerrarAlFondo`), apagada por omisión, que cada popup
+enciende a sabiendas. El fondo de un `<dialog>` modal no es un elemento: un clic ahí llega al propio
+`<dialog>` como destino, y así se distingue de un clic dentro del contenido.
+
+**La vista semanal se navega.** Flechas a la semana anterior y a la siguiente, la etiqueta del
+rango («28 sep – 4 oct 2026»; «5 – 11 oct 2026» si cae en un mes) y «Hoy» para volver, que solo
+aparece cuando no se está en la semana en curso. Sin parámetro se ve la semana de hoy. La semana
+vive en la URL como `semana=YYYY-MM-DD` (INV-10): cualquier día de la semana vale y se normaliza a
+su lunes; un valor que no es fecha vuelve a la semana de hoy sin romper. Las flechas son enlaces:
+el servidor lee esa semana, en la zona de la oficina (§20), y «hoy» sigue marcándose solo si cae
+dentro. Los indicadores de arriba no cambian con la semana: son los de la bandeja de hoy.
+
+**Costo de volver:** quitar la opción del `Panel` y los tres usos; para la semana, quitar el
+parámetro de `agendaSemanal` y la tira. Lo demás no cambió.
+
+Dónde vive: `components/ui/formulario.tsx` (`Panel.cerrarAlFondo`), `components/pipeline/DetalleDeEtapa.tsx`,
+`components/pipeline/TableroKanban.tsx`, `components/analisis/graficas/PanelDeDetalle.tsx`;
+`lib/tiempo.ts` (`sumarDias`, `lunesDe`), `lib/domain/agenda.ts` (`semanaElegida`), `lib/scope/agenda.ts`
+(`agendaSemanal` con el lunes por parámetro), `components/actividades/NavegacionDeSemana.tsx`,
+`components/actividades/formato.ts` (`rangoDeSemana`), `app/(app)/actividades/page.tsx`.
+Pruebas: `lib/tiempo.test.ts` (+2), `lib/domain/agenda.test.ts` (+3), `components/actividades/formato.test.ts` (3).
+
+## 45. Análisis se recorta por lapso: año fiscal, trimestre, mes o rango; y los conmutadores sin «Agrupar por» (5 de octubre de 2026)
+
+**Decisión del negocio:** el filtro «Año fiscal» de Análisis pasa a ser **«Lapso»**, con cuatro modos
+en la misma pastilla: **Año** (fiscal, como hasta ahora y por omisión el en curso), **Trimestre** (Q1 a
+Q4 del calendario fiscal del país, de un año elegido), **Mes** (calendario) y **Rango** (del… al…, con
+«Aplicar» cuando las dos fechas existen y van en orden). Año, trimestre y mes aplican al pulsar.
+
+**En la URL** (INV-10) cada modo tiene su parámetro: `anio=2026` (los enlaces viejos siguen valiendo),
+`q=2026-Q3`, `mes=2026-09`, `desde=2026-07-01&hasta=2026-09-30`. Si llegan varios, manda el más
+específico (rango > mes > trimestre > año). Lo inválido —un trimestre 5, un mes 13, una fecha que no
+existe, un rango al revés o a medias— cae al año fiscal en curso sin romper.
+
+**Qué recorta el lapso:** lo mismo que recortaba el año, y nada más. Las ventas ganadas por cierre
+real (avance, rentabilidad, margen), los cierres que miden el ciclo de venta, y las actividades
+hechas. Lo abierto —embudo, distribución, estado, antigüedad, salud MEDDIC— se mide hoy, como
+siempre; el histórico sigue mirando toda la historia. La gráfica de actividad por mes dibuja los
+meses que abarca el lapso (doce en un año, tres en un trimestre, uno en un mes), no siempre doce.
+
+**Regla nueva que no está en el spec:** la cuota existe por trimestre fiscal, así que **solo se
+compara cuando el lapso es un año fiscal o un trimestre fiscal completos**. Con un año, la gráfica de
+avance por trimestre dibuja los cuatro con su cuota y el indicador compara con la anual (RN-32); con
+un trimestre, dibuja solo ese con su cuota. Con un mes o un rango no hay barra de cuota, la gráfica
+dibuja solo los trimestres que tuvieron ventas, y los indicadores de cuota y cumplimiento dicen «—»
+con «sin cuota comparable en este lapso»: una proporción de un mes contra la cuota de un trimestre
+sería inventada. Candidata a entrar al spec (§10.3) o a pregunta para el negocio si quisieran una
+cuota mensual prorrateada.
+
+**El año fiscal del lapso** —el de la cuota que se consulta en objetivos— es el del **inicio** del
+lapso según el calendario fiscal del país: febrero de 2026 con año fiscal desde abril pertenece al
+2025.
+
+**Sin «Agrupar por».** El conmutador de cada tarjeta de gráfica ya no lleva el texto delante: las
+opciones («Trimestre · Cliente · Producto · Tipo de negocio») se explican solas y el título de la
+tarjeta dice qué se agrupa. Es la misma línea de §41.
+
+**Costo de volver:** el parámetro `anio` nunca dejó de leerse; quitar los otros tres modos es quitar
+`parseLapso` y la pastilla. La cuota prorrateada por mes sería un cambio de dominio en `objetivos`, no
+de esta capa.
+
+Dónde vive: `lib/filters/lapso.ts` (`Lapso`, `parseLapso`, `parametrosDeLapso`, `rangoDeLapso`,
+`etiquetaDeLapso`, `enElLapso`, `anioFiscalDeLapso`, `trimestresDelLapso`, `esFechaDePared`),
+`lib/filters/analisis.ts` (`FiltrosDeAnalisis.lapso`; `anio` pasa a ser el año fiscal del lapso),
+`lib/tiempo.ts` (`MES_CORTO`, `etiquetaDeRango`), `lib/scope/analisis.ts` (`ganadas` y
+`actividadesHechas` reciben un rango de fechas), `components/analisis/{SelectorDeLapso,FiltrosDeAnalisis}.tsx`,
+`graficas/datos.ts` (`puntosDeAvance` con `trimestres`), `graficas/datosDeActividad.ts`
+(`actividadPorMes` por rango), `graficas/comun.tsx` (sin «Agrupar por»), las tres pestañas y
+`app/(app)/analisis/page.tsx`. Pruebas: `lib/filters/lapso.test.ts` (10), `lib/filters/analisis.test.ts`
+(+2), `lib/tiempo.test.ts` (+1), `graficas/datos.test.ts` (+2), `graficas/datosDeActividad.test.ts` (+1).

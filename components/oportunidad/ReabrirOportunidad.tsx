@@ -19,13 +19,11 @@ type Accion = (previo: ResultadoAccion | null, form: FormData) => Promise<Result
  */
 export function ReabrirOportunidad({
   opportunityId,
-  estatus,
   etapa,
   accion,
 }: {
   opportunityId: string;
   /** «Ganada» o «Perdida», ya en español. */
-  estatus: string;
   etapa: string;
   accion: Accion;
 }) {
@@ -54,14 +52,10 @@ export function ReabrirOportunidad({
 
       <Panel
         titulo="Reabrir la oportunidad"
-        subtitulo={`Está ${estatus.toLowerCase()}. Volverá a estar abierta en ${etapa}, con el mismo folio.`}
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
         pie={
           <>
-            <p className="max-w-xs text-xs leading-snug text-texto-tenue">
-              Queda en la bitácora quién la reabrió y desde qué estatus (RN-18).
-            </p>
             <div className="flex items-center gap-2">
               <Boton variante="fantasma" type="button" onClick={() => setAbierto(false)}>
                 Cancelar

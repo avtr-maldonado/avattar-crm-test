@@ -28,6 +28,8 @@ export type LineaVendida = {
 
 export type VentaGanada = {
   id: string;
+  folio: string;
+  name: string;
   amount: Money;
   actualCloseDate: Date;
   createdAt: Date;
@@ -64,10 +66,21 @@ export type OportunidadAbierta = {
 };
 
 export type ActividadHecha = {
+  id: string;
+  subject: string;
   completedAt: Date;
   tipo: string;
   usuario: { id: string; name: string };
+  /** Nula en una actividad suelta: la bandeja las admite. */
+  opportunity: { id: string; folio: string; name: string } | null;
 };
+
+/**
+ * Lo que una venta puso en una fila (decisiones §43). Por trimestre, cliente o
+ * tipo es la venta entera; por producto, solo sus líneas de ese producto. Es lo
+ * que se lista al pulsar la barra: la cifra de cada ítem suma la de la barra.
+ */
+export type AporteDeVenta = { id: string; importe: Money; utilidad: Money | null };
 
 export type FilaAgrupada = {
   clave: string;
@@ -75,10 +88,12 @@ export type FilaAgrupada = {
   importe: Money;
   /** Nula donde no llegó costo (INV-02) o no hay cotización. */
   utilidad: Money | null;
-  /** Oportunidades distintas. */
+  /** Oportunidades distintas: `aportes.length`. */
   cuantas: number;
   /** Fracción del total. */
   participacion: Money;
+  /** De qué ventas sale la fila, en el orden en que entraron. */
+  aportes: AporteDeVenta[];
 };
 
 /** Una fila del histórico: además, cuánto cambió contra el periodo anterior (fracción; nula en el primero o si el anterior fue cero). */
@@ -112,7 +127,8 @@ type Acumulado = {
   orden: number;
   importe: Money;
   utilidad: Money | null;
-  ids: Set<string>;
+  /** Por venta: dos líneas del mismo producto en una cotización son un solo aporte. */
+  aportes: Map<string, AporteDeVenta>;
 };
 
 function acumular(
@@ -124,12 +140,17 @@ function acumular(
 ) {
   let a = mapa.get(llave.clave);
   if (!a) {
-    a = { clave: llave.clave, etiqueta: llave.etiqueta, orden: llave.orden ?? 0, importe: CERO, utilidad: null, ids: new Set() };
+    a = { clave: llave.clave, etiqueta: llave.etiqueta, orden: llave.orden ?? 0, importe: CERO, utilidad: null, aportes: new Map() };
     mapa.set(llave.clave, a);
   }
   a.importe = a.importe.plus(importe);
   if (utilidad != null) a.utilidad = (a.utilidad ?? CERO).plus(utilidad);
-  a.ids.add(id);
+  const previo = a.aportes.get(id);
+  a.aportes.set(id, {
+    id,
+    importe: (previo?.importe ?? CERO).plus(importe),
+    utilidad: utilidad == null ? (previo?.utilidad ?? null) : (previo?.utilidad ?? CERO).plus(utilidad),
+  });
 }
 
 function cerrar(
@@ -144,8 +165,9 @@ function cerrar(
       etiqueta: a.etiqueta,
       importe: a.importe,
       utilidad: a.utilidad,
-      cuantas: a.ids.size,
+      cuantas: a.aportes.size,
       participacion: total.importe.isZero() ? CERO : a.importe.div(total.importe),
+      aportes: [...a.aportes.values()],
     }));
 }
 
@@ -241,6 +263,7 @@ export function completarTrimestres(
       utilidad: null,
       cuantas: 0,
       participacion: CERO,
+      aportes: [],
     };
     const cuota = cuotasPorTrimestre[q - 1] ?? CERO;
     const orden = fiscalYear * 4 + q;
@@ -281,6 +304,9 @@ export function historicoDeVentas(
 
 // ═══════════════════════════════════════════════════ 3 · Rentabilidad
 
+/** Lo que una venta puso en una fila de rentabilidad: su importe y su costo ahí (§43). */
+export type AporteDeRentabilidad = { id: string; importe: Money; costo: Money };
+
 export type FilaDeRentabilidad = {
   clave: string;
   etiqueta: string;
@@ -290,6 +316,7 @@ export type FilaDeRentabilidad = {
   /** Fracción. Un importe en cero da margen cero, no una división por cero. */
   margen: Money;
   cuantas: number;
+  aportes: AporteDeRentabilidad[];
 };
 
 /**
@@ -304,8 +331,8 @@ export function rentabilidad(
   ventas: readonly VentaGanada[],
   dimension: "producto" | "tipo" | "cliente",
   etiquetaDeTipo: Record<string, string>,
-): { filas: FilaDeRentabilidad[]; total: Omit<FilaDeRentabilidad, "clave" | "etiqueta"> } {
-  type Parcial = { clave: string; etiqueta: string; importe: Money; costo: Money; ids: Set<string> };
+): { filas: FilaDeRentabilidad[]; total: Omit<FilaDeRentabilidad, "clave" | "etiqueta" | "aportes"> } {
+  type Parcial = { clave: string; etiqueta: string; importe: Money; costo: Money; aportes: Map<string, AporteDeRentabilidad> };
   const mapa = new Map<string, Parcial>();
   let importeTotal = CERO;
   let costoTotal = CERO;
@@ -314,12 +341,13 @@ export function rentabilidad(
   const sumar = (llave: { clave: string; etiqueta: string }, importe: Money, costo: Money, id: string) => {
     let p = mapa.get(llave.clave);
     if (!p) {
-      p = { ...llave, importe: CERO, costo: CERO, ids: new Set() };
+      p = { ...llave, importe: CERO, costo: CERO, aportes: new Map() };
       mapa.set(llave.clave, p);
     }
     p.importe = p.importe.plus(importe);
     p.costo = p.costo.plus(costo);
-    p.ids.add(id);
+    const previo = p.aportes.get(id);
+    p.aportes.set(id, { id, importe: (previo?.importe ?? CERO).plus(importe), costo: (previo?.costo ?? CERO).plus(costo) });
     importeTotal = importeTotal.plus(importe);
     costoTotal = costoTotal.plus(costo);
     idsTotal.add(id);
@@ -344,7 +372,16 @@ export function rentabilidad(
   const filas = [...mapa.values()]
     .map((p) => {
       const utilidad = p.importe.minus(p.costo);
-      return { clave: p.clave, etiqueta: p.etiqueta, importe: p.importe, costo: p.costo, utilidad, margen: margenDe(p.importe, utilidad), cuantas: p.ids.size };
+      return {
+        clave: p.clave,
+        etiqueta: p.etiqueta,
+        importe: p.importe,
+        costo: p.costo,
+        utilidad,
+        margen: margenDe(p.importe, utilidad),
+        cuantas: p.aportes.size,
+        aportes: [...p.aportes.values()],
+      };
     })
     .sort((x, y) => y.importe.minus(x.importe).toNumber());
   const utilidadTotal = importeTotal.minus(costoTotal);
@@ -357,7 +394,15 @@ export function rentabilidad(
 
 // ═══════════════════════════════════════════════ 4 · Embudo de forecast
 
-export type SubgrupoDeEmbudo = { clave: string; etiqueta: string; total: Money; ponderado: Money; cuantas: number };
+export type SubgrupoDeEmbudo = {
+  clave: string;
+  etiqueta: string;
+  total: Money;
+  ponderado: Money;
+  cuantas: number;
+  /** Las abiertas que suman el grupo, en el orden en que entraron (§43). */
+  ids: string[];
+};
 export type TrimestreDeEmbudo = SubgrupoDeEmbudo & { subgrupos: SubgrupoDeEmbudo[] };
 
 /**
@@ -376,7 +421,7 @@ export function embudoDeForecast(
 ): { trimestres: TrimestreDeEmbudo[]; total: SubgrupoDeEmbudo } {
   type Parcial = SubgrupoDeEmbudo & { orden: number; hijos: Map<string, SubgrupoDeEmbudo> };
   const mapa = new Map<string, Parcial>();
-  const total: SubgrupoDeEmbudo = { clave: "total", etiqueta: "Total", total: CERO, ponderado: CERO, cuantas: 0 };
+  const total: SubgrupoDeEmbudo = { clave: "total", etiqueta: "Total", total: CERO, ponderado: CERO, cuantas: 0, ids: [] };
 
   for (const o of abiertas) {
     if (opciones.probabilidadMinima !== null && o.stage.probability.lt(opciones.probabilidadMinima)) continue;
@@ -385,20 +430,21 @@ export function embudoDeForecast(
     const t = trimestreEtiquetado(o.expectedCloseDate, opciones.fiscalYearStartMonth);
     let p = mapa.get(t.clave);
     if (!p) {
-      p = { ...t, total: CERO, ponderado: CERO, cuantas: 0, hijos: new Map() };
+      p = { ...t, total: CERO, ponderado: CERO, cuantas: 0, ids: [], hijos: new Map() };
       mapa.set(t.clave, p);
     }
     const ponderado = o.amount.times(o.stage.probability);
     const llave = opciones.segunda === "cliente" ? o.organization : o.owner;
     let h = p.hijos.get(llave.id);
     if (!h) {
-      h = { clave: llave.id, etiqueta: llave.name, total: CERO, ponderado: CERO, cuantas: 0 };
+      h = { clave: llave.id, etiqueta: llave.name, total: CERO, ponderado: CERO, cuantas: 0, ids: [] };
       p.hijos.set(llave.id, h);
     }
     for (const g of [p, h, total]) {
       g.total = g.total.plus(o.amount);
       g.ponderado = g.ponderado.plus(ponderado);
       g.cuantas += 1;
+      g.ids.push(o.id);
     }
   }
 
@@ -410,6 +456,7 @@ export function embudoDeForecast(
       total: p.total,
       ponderado: p.ponderado,
       cuantas: p.cuantas,
+      ids: p.ids,
       subgrupos: [...p.hijos.values()].sort((x, y) => y.total.minus(x.total).toNumber()),
     }));
   return { trimestres, total };
@@ -417,7 +464,9 @@ export function embudoDeForecast(
 
 // ═══════════════════════════════════════════════════ 5 · Ciclo de venta
 
-export type PromedioDeCiclo = { clave: string; etiqueta: string; promedioDias: number; cuantas: number };
+/** Un cierre que entra al promedio: la venta y sus días del alta al cierre (§43). */
+export type CierreDeCiclo = { id: string; dias: number };
+export type PromedioDeCiclo = { clave: string; etiqueta: string; promedioDias: number; cuantas: number; cierres: CierreDeCiclo[] };
 
 function promedio(valores: number[]): number | null {
   if (valores.length === 0) return null;
@@ -443,29 +492,35 @@ export function cicloDeVenta(
   porTrimestre: PromedioDeCiclo[];
 } {
   const dias = ventas.map((v) => diasEntre(v.createdAt, v.actualCloseDate));
-  type Parcial = { clave: string; etiqueta: string; orden: number; dias: number[] };
+  type Parcial = { clave: string; etiqueta: string; orden: number; cierres: CierreDeCiclo[] };
   const porVendedor = new Map<string, Parcial>();
   const porTrimestre = new Map<string, Parcial>();
 
   ventas.forEach((v, i) => {
-    const d = dias[i]!;
+    const cierre = { id: v.id, dias: dias[i]! };
     let pv = porVendedor.get(v.owner.id);
-    if (!pv) porVendedor.set(v.owner.id, (pv = { clave: v.owner.id, etiqueta: v.owner.name, orden: 0, dias: [] }));
-    pv.dias.push(d);
+    if (!pv) porVendedor.set(v.owner.id, (pv = { clave: v.owner.id, etiqueta: v.owner.name, orden: 0, cierres: [] }));
+    pv.cierres.push(cierre);
     const t = trimestreEtiquetado(v.actualCloseDate, fiscalYearStartMonth);
     let pt = porTrimestre.get(t.clave);
-    if (!pt) porTrimestre.set(t.clave, (pt = { ...t, dias: [] }));
-    pt.dias.push(d);
+    if (!pt) porTrimestre.set(t.clave, (pt = { ...t, cierres: [] }));
+    pt.cierres.push(cierre);
   });
 
-  const aFila = (p: Parcial): PromedioDeCiclo => ({ clave: p.clave, etiqueta: p.etiqueta, promedioDias: promedio(p.dias)!, cuantas: p.dias.length });
+  const aFila = (p: Parcial): PromedioDeCiclo => ({
+    clave: p.clave,
+    etiqueta: p.etiqueta,
+    promedioDias: promedio(p.cierres.map((c) => c.dias))!,
+    cuantas: p.cierres.length,
+    cierres: p.cierres,
+  });
 
   return {
     promedioDias: promedio(dias),
     medianaDias: mediana(dias),
     cuantas: ventas.length,
     porVendedor: [...porVendedor.values()]
-      .sort((x, y) => y.dias.length - x.dias.length || x.etiqueta.localeCompare(y.etiqueta))
+      .sort((x, y) => y.cierres.length - x.cierres.length || x.etiqueta.localeCompare(y.etiqueta))
       .map(aFila),
     porTrimestre: [...porTrimestre.values()].sort((x, y) => x.orden - y.orden).map(aFila),
   };
@@ -489,6 +544,9 @@ export type DetalleDeAntiguedad = {
   vencida: boolean;
 };
 
+/** Qué abiertas hay detrás de cada cuenta del vendedor; las tres últimas son subconjuntos de `abiertas` (§43). */
+export type IdsDeAntiguedad = { abiertas: string[]; estancadas: string[]; sinActividad: string[]; vencidas: string[] };
+
 export type AntiguedadPorVendedor = {
   clave: string;
   etiqueta: string;
@@ -497,6 +555,7 @@ export type AntiguedadPorVendedor = {
   sinActividad: number;
   vencidas: number;
   edadPromedioDias: number | null;
+  ids: IdsDeAntiguedad;
 };
 
 /**
@@ -541,7 +600,17 @@ export function antiguedadYEstancamiento(
     const d = detalle[i]!;
     let p = porVendedor.get(o.owner.id);
     if (!p) {
-      p = { clave: o.owner.id, etiqueta: o.owner.name, cuantas: 0, estancadas: 0, sinActividad: 0, vencidas: 0, edadPromedioDias: null, edades: [] };
+      p = {
+        clave: o.owner.id,
+        etiqueta: o.owner.name,
+        cuantas: 0,
+        estancadas: 0,
+        sinActividad: 0,
+        vencidas: 0,
+        edadPromedioDias: null,
+        ids: { abiertas: [], estancadas: [], sinActividad: [], vencidas: [] },
+        edades: [],
+      };
       porVendedor.set(o.owner.id, p);
     }
     for (const g of [p, resumen]) {
@@ -550,6 +619,10 @@ export function antiguedadYEstancamiento(
       if (d.sinActividad) g.sinActividad += 1;
       if (d.vencida) g.vencidas += 1;
     }
+    p.ids.abiertas.push(o.id);
+    if (d.estancada) p.ids.estancadas.push(o.id);
+    if (d.sinActividad) p.ids.sinActividad.push(o.id);
+    if (d.vencida) p.ids.vencidas.push(o.id);
     p.edades.push(d.edadDias);
     if (d.estancada) importeEstancado = importeEstancado.plus(o.amount);
   });
@@ -565,6 +638,9 @@ export function antiguedadYEstancamiento(
 
 // ═══════════════════════════════════════════ 8 · Actividad por vendedor
 
+/** Qué hay detrás de cada cuenta del vendedor: actividades por tipo, y oportunidades (§43). */
+export type IdsDeActividad = { porTipo: Record<string, string[]>; abiertas: string[]; sinSiguientePaso: string[] };
+
 export type ActividadDeVendedor = {
   clave: string;
   etiqueta: string;
@@ -573,7 +649,10 @@ export type ActividadDeVendedor = {
   abiertas: number;
   /** Abiertas sin siguiente actividad, o con la siguiente ya vencida (RN-10). */
   sinSiguientePaso: number;
+  ids: IdsDeActividad;
 };
+
+export type MesDeActividad = { clave: string; etiqueta: string; hechas: number; ids: string[] };
 
 const MES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
@@ -581,34 +660,40 @@ export function actividadPorVendedor(
   actividades: readonly ActividadHecha[],
   abiertas: readonly OportunidadAbierta[],
   ahora: Date,
-): { tipos: string[]; porVendedor: ActividadDeVendedor[]; porMes: { clave: string; etiqueta: string; hechas: number }[] } {
+): { tipos: string[]; porVendedor: ActividadDeVendedor[]; porMes: MesDeActividad[] } {
   const tipos = [...new Set(actividades.map((a) => a.tipo))].sort((a, b) => a.localeCompare(b));
   const porVendedor = new Map<string, ActividadDeVendedor>();
   const de = (u: { id: string; name: string }) => {
     let p = porVendedor.get(u.id);
     if (!p) {
-      p = { clave: u.id, etiqueta: u.name, hechas: 0, porTipo: {}, abiertas: 0, sinSiguientePaso: 0 };
+      p = { clave: u.id, etiqueta: u.name, hechas: 0, porTipo: {}, abiertas: 0, sinSiguientePaso: 0, ids: { porTipo: {}, abiertas: [], sinSiguientePaso: [] } };
       porVendedor.set(u.id, p);
     }
     return p;
   };
 
-  const porMes = new Map<string, { clave: string; etiqueta: string; hechas: number }>();
+  const porMes = new Map<string, MesDeActividad>();
   for (const a of actividades) {
     const p = de(a.usuario);
     p.hechas += 1;
     p.porTipo[a.tipo] = (p.porTipo[a.tipo] ?? 0) + 1;
+    (p.ids.porTipo[a.tipo] ??= []).push(a.id);
     const anio = a.completedAt.getUTCFullYear();
     const mes = a.completedAt.getUTCMonth();
     const clave = `${anio}-${String(mes + 1).padStart(2, "0")}`;
     let m = porMes.get(clave);
-    if (!m) porMes.set(clave, (m = { clave, etiqueta: `${MES_CORTO[mes]} ${anio}`, hechas: 0 }));
+    if (!m) porMes.set(clave, (m = { clave, etiqueta: `${MES_CORTO[mes]} ${anio}`, hechas: 0, ids: [] }));
     m.hechas += 1;
+    m.ids.push(a.id);
   }
   for (const o of abiertas) {
     const p = de(o.owner);
     p.abiertas += 1;
-    if (o.nextActivityAt === null || o.nextActivityAt <= ahora) p.sinSiguientePaso += 1;
+    p.ids.abiertas.push(o.id);
+    if (o.nextActivityAt === null || o.nextActivityAt <= ahora) {
+      p.sinSiguientePaso += 1;
+      p.ids.sinSiguientePaso.push(o.id);
+    }
   }
 
   return {
@@ -627,6 +712,8 @@ export type SaludPorEtapa = {
   promedio: number | null;
   bajoMinimo: number;
   sinCalificar: number;
+  /** Las abiertas de la etapa, calificadas o no (§43). */
+  ids: string[];
 };
 
 export function saludMeddic(
@@ -648,10 +735,11 @@ export function saludMeddic(
     const puntaje = o.meddicScore;
     let p = porEtapa.get(etapa.name);
     if (!p) {
-      p = { clave: etapa.name, etiqueta: etapa.name, orden: etapa.position, cuantas: 0, promedio: null, bajoMinimo: 0, sinCalificar: 0, puntajes: [] };
+      p = { clave: etapa.name, etiqueta: etapa.name, orden: etapa.position, cuantas: 0, promedio: null, bajoMinimo: 0, sinCalificar: 0, ids: [], puntajes: [] };
       porEtapa.set(etapa.name, p);
     }
     p.cuantas += 1;
+    p.ids.push(o.id);
     if (puntaje === null) p.sinCalificar += 1;
     else {
       p.puntajes.push(puntaje);
@@ -675,6 +763,7 @@ export function saludMeddic(
         promedio: promedio(e.puntajes),
         bajoMinimo: e.bajoMinimo,
         sinCalificar: e.sinCalificar,
+        ids: e.ids,
       })),
     sinEvidencia,
     enCierreBajoMinimo,

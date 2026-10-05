@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
+import { puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
 import { prisma } from "@/lib/db";
 import { money, type Money } from "@/lib/money";
 import type { CotizacionConLineas } from "@/lib/scope/cotizaciones";
@@ -37,7 +38,9 @@ import { calcularTotales, type LineaParaCalcular } from "./quote";
  */
 
 /** Una cerrada no se cotiza: su cifra es la que se ganó o se perdió. */
-function editable(cotizacion: CotizacionConLineas): ResultadoAccion<never> | null {
+function editable(cotizacion: CotizacionConLineas, session: Session): ResultadoAccion<never> | null {
+  // §39 · Preventa consulta la cotización; no la toca.
+  if (!puedeEditarOportunidad(session, cotizacion.opportunity)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   return cotizacion.opportunity.status === "ABIERTA"
     ? null
     : falla("AUTORIZACION", "Una oportunidad cerrada no se cotiza.");
@@ -140,7 +143,7 @@ export async function abrirCotizacion(
   detalle: DetalleOportunidad,
   taxRate: Money,
 ): Promise<ResultadoAccion<{ id: string }>> {
-  void session;
+  if (!puedeEditarOportunidad(session, detalle)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   if (detalle.status !== "ABIERTA") {
     return falla("AUTORIZACION", "Una oportunidad cerrada no se cotiza.");
   }
@@ -224,7 +227,7 @@ export async function guardarLinea(
   cotizacion: CotizacionConLineas,
   entrada: EntradaDeLinea,
 ): Promise<ResultadoAccion> {
-  const bloqueada = editable(cotizacion);
+  const bloqueada = editable(cotizacion, session);
   if (bloqueada) return bloqueada;
 
   const quantity = money(entrada.quantity);
@@ -366,7 +369,7 @@ export async function guardarCambiosDeCotizacion(
   cotizacion: CotizacionConLineas,
   cambios: CambioPorLinea[],
 ): Promise<ResultadoAccion<{ cambios: number; total: { antes: string; despues: string } | null }>> {
-  const bloqueada = editable(cotizacion);
+  const bloqueada = editable(cotizacion, session);
   if (bloqueada) return bloqueada;
 
   const propias = new Set(cotizacion.lines.map((l) => l.id));
@@ -465,11 +468,11 @@ function pintar(campo: (typeof CAMPOS_EDITABLES)[number], v: Money): string {
 }
 
 export async function quitarLinea(
-  _session: Session,
+  session: Session,
   cotizacion: CotizacionConLineas,
   lineId: string,
 ): Promise<ResultadoAccion> {
-  const bloqueada = editable(cotizacion);
+  const bloqueada = editable(cotizacion, session);
   if (bloqueada) return bloqueada;
 
   const linea = cotizacion.lines.find((l) => l.id === lineId);

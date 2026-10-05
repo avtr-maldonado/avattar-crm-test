@@ -192,13 +192,6 @@ export function TablaDeCotizacion({
     <section className="rounded-md border border-borde bg-superficie-tarjeta">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-borde px-5 py-4">
         <h2 className="text-sm font-semibold text-texto-titulo">Cotización</h2>
-        <p className="text-xs text-texto-tenue">
-          {editando
-            ? "Las cifras se recalculan al teclear. Nada se guarda hasta «Guardar cambios»."
-            : puedeEditar
-              ? "Se corrige en su lugar. Cada guardado con cambios queda en la bitácora."
-              : "Solo lectura."}
-        </p>
         {puedeEditar && !editando && (
           <div className="ml-auto">
             <Boton variante="secundario" onClick={() => despacharEdicion({ tipo: "editar" })}>
@@ -563,7 +556,6 @@ function AgregarLinea({
   const [elegido, setElegido] = useState(productos[0]?.id ?? "");
   const producto = productos.find((p) => p.id === elegido) ?? productos[0];
   // Sin lista vigente, precio y costo se fijan para esta oportunidad (§22).
-  const sinLista = !libre && producto !== undefined && producto.listPrice === null;
   // Desde onSubmit y no con action=: así un rechazo del servidor no reinicia
   // lo capturado. Lo que la acción necesita además de los campos va oculto.
   const alEnviar = useEnvioQueConserva(enviar);
@@ -571,13 +563,6 @@ function AgregarLinea({
   return (
     <Panel
       titulo="Agregar línea"
-      subtitulo={
-        libre
-          ? "Un concepto fuera del catálogo necesita su costo: sin él no hay margen."
-          : sinLista
-            ? "Este producto no tiene lista: precio y costo se fijan para esta oportunidad."
-            : "Del catálogo: precio y costo llegan de la lista vigente y se pueden corregir."
-      }
       abierto={abierto}
       alCerrar={alCerrar}
       pie={
@@ -678,7 +663,6 @@ function AgregarLinea({
             etiqueta="Descuento %"
             htmlFor="discountPct"
             problema={problemaDe(resultado, "discountPct") ?? problemaDe(resultado, "discountRate")}
-            ayuda="Sobre el precio unitario; sin tope por SKU (§33)."
           >
             <Entrada id="discountPct" name="discountPct" inputMode="decimal" defaultValue="0" className="tabular" />
           </Campo>

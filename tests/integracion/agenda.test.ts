@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { agendaSemanal, bandejaDeTrabajo } from "@/lib/scope/agenda";
+import { agendaSemanal, bandejaDeTrabajo, tableroDeActividades } from "@/lib/scope/agenda";
 
 /**
  * P-07 contra los datos reales.
@@ -189,3 +189,17 @@ describe("actividades del seed · consistencia con las fechas", () => {
     expect(r.oportunidades).toBe(6);
   });
 });
+
+describe("tablero de actividades · §42", () => {
+  it("trae lo pendiente de cualquier fecha y lo hecho en las últimas dos semanas, nada más", async () => {
+    const admin = await sesionDe("as@avattar.com");
+    const t = await tableroDeActividades(admin, AHORA);
+    const desde = new Date(AHORA.getTime() - 14 * 24 * 60 * 60 * 1000);
+    expect(t.desde.getTime()).toBe(desde.getTime());
+    for (const a of t.actividades) {
+      expect(a.completedAt === null || a.completedAt >= desde).toBe(true);
+    }
+    expect(t.inicioDeHoy.getTime()).toBeLessThanOrEqual(AHORA.getTime());
+  });
+});
+

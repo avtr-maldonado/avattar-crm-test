@@ -250,6 +250,7 @@ export function TableroKanban({
         subtitulo={detenida?.tarjeta.nombre}
         abierto={faltantes.length > 0 && detenida != null}
         alCerrar={() => setDetenida(null)}
+        cerrarAlFondo
         pie={
           <>
             <p className="max-w-xs text-xs leading-snug text-texto-tenue">
