@@ -141,6 +141,8 @@ export function CamposDeContacto({
             alElegir={alElegirOrganizacion}
             etiquetaCrear="Crear organización"
             problema={problema("organizacionNombre")}
+            // Con la cuenta puesta desde su ficha (§46) el campo se monta con su nombre.
+            textoInicial={organizacion.tipo === "VACIA" ? undefined : organizacion.nombre}
           />
         </Campo>
 

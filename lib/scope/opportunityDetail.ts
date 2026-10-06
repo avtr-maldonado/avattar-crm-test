@@ -70,6 +70,10 @@ export async function getOpportunityDetail(session: Session, id: string) {
               jobTitle: true,
               email: true,
               committeeRole: { select: { id: true, name: true } },
+              // De quién es y de qué país es su propietario: lo que decide quién
+              // la edita (`administraPersona`, §29). Compartida es solo lectura (§47).
+              ownerId: true,
+              owner: { select: { id: true, name: true, countryCodes: true } },
             },
             orderBy: { name: "asc" },
           },

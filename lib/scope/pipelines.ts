@@ -1,6 +1,7 @@
 import type { CountryCode } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
+import { toClient } from "@/lib/money";
 
 /**
  * Pipelines y etapas.
@@ -47,6 +48,28 @@ export async function listPipelines(session: Session) {
 
 export type PipelineConEtapas = Awaited<ReturnType<typeof listPipelines>>[number];
 export type EtapaDePipeline = PipelineConEtapas["stages"][number];
+
+/**
+ * Lo que el alta de oportunidad necesita de cada pipeline: las etapas con su
+ * cuenta de requisitos, para decir «2 requisitos de entrada» ANTES de enviar.
+ * Enterarse al guardar es enterarse tarde. Sin `Decimal`: cruza a un
+ * componente de cliente. Lo usan el pipeline y la ficha de cuenta (§46).
+ */
+export function pipelinesParaAlta(pipelines: readonly PipelineConEtapas[]) {
+  return pipelines.map((p) => ({
+    id: p.id,
+    name: p.name,
+    countryCode: p.countryCode,
+    stages: p.stages.map((e) => ({
+      id: e.id,
+      name: e.name,
+      position: e.position,
+      probability: toClient(e.probability),
+      requisitos: e.gateRequires.length,
+      gateMode: e.gateMode,
+    })),
+  }));
+}
 
 /**
  * El pipeline que la pantalla debe mostrar por omisión: **el del país activo**.

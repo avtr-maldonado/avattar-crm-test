@@ -2215,3 +2215,76 @@ Dónde vive: `lib/filters/lapso.ts` (`Lapso`, `parseLapso`, `parametrosDeLapso`,
 (`actividadPorMes` por rango), `graficas/comun.tsx` (sin «Agrupar por»), las tres pestañas y
 `app/(app)/analisis/page.tsx`. Pruebas: `lib/filters/lapso.test.ts` (10), `lib/filters/analisis.test.ts`
 (+2), `lib/tiempo.test.ts` (+1), `graficas/datos.test.ts` (+2), `graficas/datosDeActividad.test.ts` (+1).
+
+## 46. Cinco correcciones de uso: alta desde la ficha de cuenta, vacíos del pipeline, el menú y la agenda sin acceso (5 de octubre de 2026)
+
+**El botón «Nueva oportunidad» de la ficha de cuenta daba 404.** Apuntaba a `/oportunidades/nueva`,
+una ruta que nunca existió: el alta es un modal del pipeline. Ahora la ficha monta **el mismo modal**
+(`NuevaOportunidad`) con la cuenta ya puesta (`organizacionInicial`): el campo de organización llega
+lleno y marcado «existente», sus contactos se cargan al abrir y el nombre arranca con el prefijo
+«Cuenta · », como si se hubiera elegido a mano. «Cancelar» vuelve a la cuenta puesta, no a vacío.
+El estado inicial con cuenta es puro (`estadoInicialCon`) y `LIMPIAR` admite la cuenta a la que volver.
+Los pipelines, propietarios y preventas son los de la oficina activa, como en el pipeline; el mapeo de
+pipelines para el alta (`pipelinesParaAlta`) salió a `lib/scope/pipelines` para no repetirlo.
+**Preventa no ve el botón** (§39: no crea): en el vacío de la ficha se le ofrece «Ir al pipeline».
+
+**Dos vacíos distintos en el pipeline.** Antes las cuatro vistas decían «No hay oportunidades con
+estos filtros» con «Limpiar filtros» aunque no hubiera filtro alguno. Ahora la página cuenta, sin
+filtros, lo que hay al alcance en la oficina (`countOpportunities`): si es cero, las vistas muestran
+«Todavía no hay oportunidades en esta oficina» con el alta —o «Ir a actividades» para quien no
+crea— y sin «Limpiar filtros», que no arreglaría nada; si hay pero los filtros lo dejaron fuera, cada
+vista conserva su texto y ofrece limpiar. Vive en `VacioDePipeline` y lo usan kanban, embudo y forecast.
+
+**El menú de usuario** ya no explica que «Sales del CRM. Tu cuenta de Microsoft sigue abierta en este
+navegador»: es la línea de §41, un texto que explicaba en vez de hacer. El comportamiento no cambió.
+
+**La agenda no enlaza a lo que ya no se alcanza.** El alcance de actividades es más ancho que el de
+oportunidades: quien fue responsable de una actividad la conserva en su historial aunque ya no vea la
+oportunidad —a Preventa se le quita el apoyo, un vendedor deja de ser propietario—. Los lectores de
+agenda marcan en cada actividad si su oportunidad sigue al alcance (`accesible`, una consulta por
+lectura con `opportunityScope`, INV-01). Sin acceso, el nombre se queda apagado con la ficha
+«Sin acceso» y «Ya no tienes acceso a esta oportunidad» al pasar el cursor, sin enlace; y no hay lápiz,
+porque la acción de editar autoriza cargando la oportunidad y la rechazaría. El detalle sigue
+respondiendo 404 a quien no alcanza (como siempre: no revela que existe); lo que cambia es que la
+agenda ya no lleva ahí.
+
+**Costo de volver:** quitar `organizacionInicial` y el modal de la ficha (volvería el botón roto o
+habría que crear la ruta); quitar `countOpportunities` y `VacioDePipeline`; quitar `conAccesoAOportunidad`
+y la ficha «Sin acceso».
+
+Dónde vive: `components/pipeline/{estadoDeAlta,NuevaOportunidad,VacioDePipeline}.tsx`, `TableroKanban`,
+`Embudo`, `Forecast`, `lib/scope/pipelines.ts` (`pipelinesParaAlta`), `app/(app)/contactos/organizaciones/[id]/page.tsx`,
+`app/(app)/oportunidades/page.tsx`, `components/ui/MenuDeUsuario.tsx`, `lib/scope/agenda.ts`
+(`conAccesoAOportunidad`), `components/actividades/{formato,comun,VistaLista}.tsx`, `app/(app)/actividades/page.tsx`.
+Pruebas: `components/pipeline/estadoDeAlta.test.ts` (+2), `tests/integracion/agenda.test.ts` (+2, con un usuario Preventa).
+
+## 47. En el comité de la oportunidad, «Editar» solo para quien administra a la persona (5 de octubre de 2026)
+
+**Decisión del negocio:** en el detalle de una oportunidad, la tarjeta «Comité de compra» ofrecía
+«Editar» en todas las personas de la cuenta, incluidas las que se ven solo porque alguien las compartió
+o porque se alcanza la cuenta por tener negocio ahí (§29). El servidor ya rechazaba la edición
+(`editarPersona` exige `administraPersona`), así que el botón prometía algo que terminaba en un aviso
+de autorización. Ahora el detalle pregunta persona por persona con la misma regla de §29
+—`administraPersona`: el propietario, el gerente de su país, Dirección y Administración— y solo a quien
+administra le muestra el lápiz. Compartida es solo lectura, también aquí.
+
+**Lo que cambia en la pantalla:** sin el botón, la fila dice de quién es la persona cuando no es de
+quien mira («· de Paulina Estrada»), igual que la ficha de cuenta. «Agregar» al comité sigue para quien
+alcanza la cuenta (Q-15): capturar al contacto que se acaba de conocer es trabajar la oportunidad.
+
+**Dónde se resuelve:** el lector del detalle (`getOpportunityDetail`) trae de cada persona `ownerId` y
+`owner { id, name, countryCodes }` —lo que `administraPersona` necesita— y la página decide con eso.
+La misma regla en los tres lugares donde se edita una persona: Personas, ficha de cuenta y detalle de
+oportunidad.
+
+**Costo de volver:** una condición en la página; el lector puede seguir trayendo al propietario.
+
+Dónde vive: `lib/scope/opportunityDetail.ts`, `app/(app)/oportunidades/[id]/page.tsx` (`TabResumen`
+recibe la sesión). Prueba: `tests/integracion/contactos-acceso.test.ts` (+1: el detalle trae propietario y
+países de cada persona, y con esos campos la regla de §29 da «sí» a su propietaria y a Dirección y «no» a
+Preventa, que puede ver la oportunidad sin que la persona sea suya).
+
+**Nota sobre la base de pruebas:** el 5-oct-2026 la base ya no tiene el escenario §15: las oportunidades
+son de dos usuarios administradores y los vendedores sembrados no tienen ninguna. Las pruebas de
+integración nuevas se escriben contra lo que seguro existe (una oportunidad cualquiera, Dirección,
+Paulina para crear personas, Iván como Preventa), no contra un vendedor con oportunidades.

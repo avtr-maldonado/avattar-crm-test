@@ -48,6 +48,45 @@ const SELECCION_DE_AGENDA = {
 
 export type BandejaDeTrabajo = Awaited<ReturnType<typeof bandejaDeTrabajo>>;
 
+type ConOportunidad = { opportunity: { id: string } | null };
+
+/** La misma actividad, con `accesible` en su oportunidad. */
+type ConAcceso<A extends ConOportunidad> = Omit<A, "opportunity"> & {
+  opportunity: (NonNullable<A["opportunity"]> & { accesible: boolean }) | null;
+};
+
+/**
+ * Marca en cada actividad si su oportunidad **sigue** al alcance de la sesión
+ * (decisiones §46). El alcance de actividades es más ancho que el de
+ * oportunidades: quien fue responsable de una actividad la conserva en su
+ * historial aunque ya no vea la oportunidad —a Preventa se le quita el apoyo,
+ * un vendedor deja de ser propietario—. La pantalla no debe ofrecer un enlace
+ * que termine en 404 ni un lápiz que el servidor vaya a rechazar.
+ *
+ * Una sola consulta por lectura, por los ids que aparecen; el alcance lo pone
+ * `opportunityScope`, igual que en todas partes (INV-01).
+ */
+async function conAccesoAOportunidad<A extends ConOportunidad>(session: Session, actividades: A[]): Promise<ConAcceso<A>[]> {
+  const ids = [...new Set(actividades.flatMap((a) => (a.opportunity ? [a.opportunity.id] : [])))];
+  const alcanzables = new Set(
+    ids.length === 0
+      ? []
+      : (
+          await prisma.opportunity.findMany({
+            where: { AND: [opportunityScope(session), { id: { in: ids } }] },
+            select: { id: true },
+          })
+        ).map((o) => o.id),
+  );
+  return actividades.map(
+    (a) =>
+      ({
+        ...a,
+        opportunity: a.opportunity ? { ...a.opportunity, accesible: alcanzables.has(a.opportunity.id) } : null,
+      }) as ConAcceso<A>,
+  );
+}
+
 export async function bandejaDeTrabajo(
   session: Session,
   ahora = new Date(),
@@ -115,7 +154,11 @@ export async function bandejaDeTrabajo(
     }),
   ]);
 
-  return { vencidas, hoy, sinProxima, inicioDeHoy };
+  const [vencidasConAcceso, hoyConAcceso] = await Promise.all([
+    conAccesoAOportunidad(session, vencidas),
+    conAccesoAOportunidad(session, hoy),
+  ]);
+  return { vencidas: vencidasConAcceso, hoy: hoyConAcceso, sinProxima, inicioDeHoy };
 }
 
 const DIAS_DE_HISTORIA = 14;
@@ -146,7 +189,7 @@ export async function tableroDeActividades(
     orderBy: { startsAt: "asc" },
   });
 
-  return { actividades, inicioDeHoy, desde };
+  return { actividades: await conAccesoAOportunidad(session, actividades), inicioDeHoy, desde };
 }
 
 /**
@@ -199,6 +242,7 @@ export async function agendaSemanal(
     },
     orderBy: { startsAt: "asc" },
   });
+  const conAcceso = await conAccesoAOportunidad(session, actividades);
 
   // Siete cubetas siempre, aunque un día quede vacío: un calendario al que le
   // faltan días deja de leerse como semana.
@@ -207,7 +251,7 @@ export async function agendaSemanal(
     /** El día del mes, ya en la zona: la pantalla no tiene que volver a calcularlo. */
     dia: Number(clave.slice(8)),
     esHoy: clave === hoy,
-    actividades: actividades.filter((a) => fechaEn(a.startsAt, zona) === clave),
+    actividades: conAcceso.filter((a) => fechaEn(a.startsAt, zona) === clave),
   }));
 
   return { lunes, domingo, dias, total: actividades.length };

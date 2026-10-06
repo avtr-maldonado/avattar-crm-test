@@ -91,8 +91,10 @@ singular.
 ```
 lib/db.ts           PrismaClient · SOLO lib/scope y lib/domain pueden importarlo
 lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un lector por pantalla:
-                    opportunities, opportunityDetail, organizations, people, productos,
-                    cotizaciones, documentos, agenda (bandeja, semana y tablero: pendientes + hechas en 14 días → §42),
+                    opportunities, opportunityDetail (el comité trae de cada persona su propietario y los países
+                    de este: la página decide «Editar» con administraPersona → §47), organizations, people, productos,
+                    cotizaciones, documentos, agenda (bandeja, semana y tablero: pendientes + hechas en 14 días → §42;
+                    cada actividad dice si su oportunidad sigue al alcance: `accesible` → §46),
                     contadores (acotados a la oficina activa),
                     configuracion, pipelines, busqueda (buscador global: todo el alcance, no la oficina),
                     funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline),
@@ -165,7 +167,8 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     actividades: VistaLista · VistaKanban (cuatro columnas de estado, sin arrastre) · VistaSemana (verde
                     hecho, coral vencido, horas por día) · comun (ActividadDeTablero, formatos, PastillaDeEstado) → §42
                     · NavegacionDeSemana (flechas y «Hoy» como enlaces; la semana en la URL `semana=YYYY-MM-DD`) ·
-                    formato (rangoDeSemana) → §44
+                    formato (rangoDeSemana) → §44 · EnlaceAOportunidad: sin `accesible` no enlaza ni hay lápiz, ficha
+                    «Sin acceso» → §46
                     pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
                     por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
                     BarraDeHerramientas (dos filas: vistas, botón de embudo que muestra los filtros —cerrados
@@ -173,7 +176,10 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     desplegables de varios, solo abiertas por omisión → §25, §27; `conservar` mantiene vista y
                     agrupación al aplicar → §31) · DetalleDeEtapa (clic en la barra del embudo: qué
                     oportunidades la suman y cómo pondera) ·
-                    TarjetaOportunidad (ganada verde, perdida coral; solo las abiertas se arrastran)
+                    TarjetaOportunidad (ganada verde, perdida coral; solo las abiertas se arrastran) ·
+                    VacioDePipeline (§46: dos vacíos; sin nada al alcance no se ofrece «Limpiar filtros») ·
+                    NuevaOportunidad (`organizacionInicial`: el mismo modal abre desde la ficha de cuenta con la
+                    cuenta puesta → §46; estadoDeAlta.estadoInicialCon)
                     oportunidad: ComposerDeActividad (nueva o edición; agendar por omisión, «marcar como hecha»
                     en el pie, tipos en botones con icono y el resto en «Otro…», fecha + inicio + fin en la zona
                     de la oportunidad, responsable; estadoDeActividad es su reductor puro) ·
@@ -341,7 +347,11 @@ pulsan** desde el 2-oct-2026 (§43): un popup con la ponderación y los ítems q
 la matriz de permisos se abre en lectura y se edita con un botón. **Los popups informativos cierran al pulsar
 fuera y la semana de Actividades se navega** con flechas y «Hoy», en la URL (§44, 2-oct). **Análisis se recorta por
 lapso** desde el 5-oct-2026 (§45): año fiscal, trimestre, mes o rango en la URL; la cuota solo se compara con un año o
-un trimestre fiscal completos; los conmutadores de las tarjetas van sin «Agrupar por». **Pendiente y visible:** las autorizaciones de
+un trimestre fiscal completos; los conmutadores de las tarjetas van sin «Agrupar por». **Cinco correcciones de uso**
+el mismo día (§46): el alta abre desde la ficha de cuenta con la cuenta puesta (antes 404), Preventa no ve ese botón, el
+pipeline distingue «sin nada al alcance» de «los filtros dejaron fuera todo», el menú de usuario sin texto, y la agenda
+marca «Sin acceso» en vez de enlazar a lo que ya no se alcanza. **En el comité de la oportunidad, «Editar» solo para
+quien administra a la persona** (§47, 5-oct): compartida es solo lectura también ahí. **Pendiente y visible:** las autorizaciones de
 descuento, fuera de este alcance por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
 

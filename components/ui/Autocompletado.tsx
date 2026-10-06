@@ -38,6 +38,7 @@ export function Autocompletado({
   etiquetaCrear = "Crear",
   deshabilitado,
   problema,
+  textoInicial,
 }: {
   id: string;
   placeholder?: string;
@@ -47,18 +48,22 @@ export function Autocompletado({
   etiquetaCrear?: string;
   deshabilitado?: boolean;
   problema?: string;
+  /** Lo que ya está elegido al montar (la cuenta puesta desde su ficha, §46): se muestra sin buscarlo. */
+  textoInicial?: string;
 }) {
-  const [texto, setTexto] = useState("");
+  const [texto, setTexto] = useState(() => textoInicial ?? "");
   const [sugerencias, setSugerencias] = useState<Sugerencia[]>([]);
   const [abierto, setAbierto] = useState(false);
   const [resaltada, setResaltada] = useState(0);
   const [buscando, setBuscando] = useState(false);
   const contenedor = useRef<HTMLDivElement>(null);
   const listaId = useId();
+  /** El texto de lo último elegido: con él en el campo no hay nada que buscar. */
+  const elegido = useRef(textoInicial ?? "");
 
   useEffect(() => {
     const termino = texto.trim();
-    if (termino.length < 2) {
+    if (termino.length < 2 || termino === elegido.current) {
       setSugerencias([]);
       return;
     }
@@ -113,9 +118,11 @@ export function Autocompletado({
     if (!opcion) return;
 
     if ("crear" in opcion) {
+      elegido.current = texto.trim();
       setTexto(texto.trim());
       alElegir({ tipo: "NUEVA", nombre: texto.trim() });
     } else {
+      elegido.current = opcion.nombre;
       setTexto(opcion.nombre);
       alElegir({ tipo: "EXISTENTE", id: opcion.id, nombre: opcion.nombre });
     }

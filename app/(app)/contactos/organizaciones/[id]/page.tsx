@@ -1,9 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireSession } from "@/lib/auth/session";
+import { oficinaActiva, requireSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
-import { destinatariosValidos } from "@/lib/domain/opportunity";
+import { listPipelines, pipelinesParaAlta } from "@/lib/scope/pipelines";
+import { destinatariosValidos, preventasValidos } from "@/lib/domain/opportunity";
+import { NuevaOportunidad } from "@/components/pipeline/NuevaOportunidad";
+import {
+  buscarOrganizacionesAccion,
+  crearOportunidadAccion,
+  personasDeOrganizacionAccion,
+} from "@/app/(app)/oportunidades/acciones";
 import { usuariosParaCompartir, type UsuarioParaCompartir } from "@/lib/scope/people";
 import type { Session } from "@/lib/auth/permissions";
 import { administraPersona } from "@/lib/domain/personAccess";
@@ -67,18 +74,44 @@ export default async function FichaDeOrganizacionPage({
   // oportunidad ahí (§5.3) da lectura, no edición. La pantalla lo pregunta para
   // no ofrecer un botón que el servidor va a rechazar.
   const puedeEditarFicha = cuenta.owner.id === session.userId || puedeReasignar;
+  // §39 · Preventa no crea; §46 · aquí tampoco se le ofrece el botón.
+  const puedeCrear = can(session, "CREAR_OPORTUNIDAD");
+  const paisActivo = await oficinaActiva(session);
 
-  const [indicadores, oportunidades, actividades, catalogos, propietarios] = await Promise.all([
-    indicadoresDeCuenta(session, cuenta.id),
-    oportunidadesDeCuenta(session, cuenta.id),
-    listActivities(session, { where: { organizationId: cuenta.id }, take: 25 }),
-    catalogosParaAlta(),
-    // Cualquier usuario activo: las cuentas no son de un país (decisiones §18).
-    puedeReasignar ? destinatariosValidos() : Promise.resolve([]),
-  ]);
+  const [indicadores, oportunidades, actividades, catalogos, propietarios, pipelines, propietariosDeAlta, preventas] =
+    await Promise.all([
+      indicadoresDeCuenta(session, cuenta.id),
+      oportunidadesDeCuenta(session, cuenta.id),
+      listActivities(session, { where: { organizationId: cuenta.id }, take: 25 }),
+      catalogosParaAlta(),
+      // Cualquier usuario activo: las cuentas no son de un país (decisiones §18).
+      puedeReasignar ? destinatariosValidos() : Promise.resolve([]),
+      // El alta desde la ficha (§46) es la misma del pipeline: mismos
+      // pipelines, mismos responsables de la oficina activa.
+      puedeCrear ? listPipelines(session) : Promise.resolve([]),
+      puedeCrear && puedeReasignar ? destinatariosValidos(paisActivo) : Promise.resolve([]),
+      puedeCrear ? preventasValidos(paisActivo) : Promise.resolve([]),
+    ]);
 
   const abiertas = oportunidades.filter((o) => o.status === "ABIERTA");
   const cerradas = oportunidades.filter((o) => o.status !== "ABIERTA");
+
+  // El mismo modal del pipeline, con esta cuenta ya puesta. Preventa no lo ve.
+  const altaDeOportunidad = puedeCrear ? (
+    <NuevaOportunidad
+      pipelines={pipelinesParaAlta(pipelines)}
+      origenes={catalogos.origenes}
+      rolesDeComite={catalogos.rolesComite}
+      propietarios={propietariosDeAlta.map((u) => ({ id: u.id, name: u.name }))}
+      preventas={preventas.map((u) => ({ id: u.id, name: u.name }))}
+      usuarioActual={{ id: session.userId, name: session.name }}
+      puedeAsignar={puedeReasignar}
+      buscarOrganizaciones={buscarOrganizacionesAccion}
+      cargarPersonas={personasDeOrganizacionAccion}
+      accion={crearOportunidadAccion}
+      organizacionInicial={{ id: cuenta.id, nombre: cuenta.name }}
+    />
+  ) : null;
 
   return (
     <>
@@ -179,13 +212,17 @@ export default async function FichaDeOrganizacionPage({
 
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           <div className="space-y-6 lg:col-span-2">
-            <Tarjeta titulo={`Oportunidades abiertas (${abiertas.length})`}>
+            <Tarjeta titulo={`Oportunidades abiertas (${abiertas.length})`} accion={abiertas.length > 0 ? altaDeOportunidad : undefined}>
               {abiertas.length === 0 ? (
                 <EstadoVacio
                   titulo="Sin oportunidades abiertas tuyas en esta cuenta"
                   explicacion="Puede que la cuenta tenga negocio activo de otro vendedor: esta pantalla solo muestra lo que tú puedes ver."
                   accion={
-                    <Boton href="/oportunidades/nueva">Nueva oportunidad</Boton>
+                    altaDeOportunidad ?? (
+                      <Boton href="/oportunidades" variante="secundario">
+                        Ir al pipeline
+                      </Boton>
+                    )
                   }
                 />
               ) : (

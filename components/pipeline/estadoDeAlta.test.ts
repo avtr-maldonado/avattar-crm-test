@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ESTADO_INICIAL,
+  estadoInicialCon,
   nombreEsSugerido,
   reducir,
   type EstadoDeAlta,
@@ -126,5 +127,24 @@ describe("limpiar", () => {
     const una = reducir(ESTADO_INICIAL, { tipo: "LIMPIAR" });
     const dos = reducir(una, { tipo: "LIMPIAR" });
     expect(dos.generacion).toBe(una.generacion + 1);
+  });
+});
+
+describe("el alta desde la ficha de una cuenta arranca con la cuenta puesta (decisiones §46)", () => {
+  it("estadoInicialCon pone la organización y sugiere el nombre; sin cuenta, es el estado inicial", () => {
+    const e = estadoInicialCon({ id: "o1", nombre: "Aceros del Norte" });
+    expect(e.organizacion).toEqual(ACEROS);
+    expect(e.nombre).toBe("Aceros del Norte · ");
+    expect(e.contactos).toBeNull();
+    expect(estadoInicialCon(undefined)).toEqual(ESTADO_INICIAL);
+  });
+
+  it("LIMPIAR con cuenta vuelve a la cuenta puesta, con la generación avanzada", () => {
+    const sucio = reducir(reducir(estadoInicialCon({ id: "o1", nombre: "Aceros del Norte" }), { tipo: "ELEGIR_ORGANIZACION", eleccion: HIDRO }), { tipo: "ESCRIBIR_NOMBRE", nombre: "x" });
+    const e = reducir(sucio, { tipo: "LIMPIAR", organizacion: { id: "o1", nombre: "Aceros del Norte" } });
+    expect(e.organizacion).toEqual(ACEROS);
+    expect(e.nombre).toBe("Aceros del Norte · ");
+    expect(e.generacion).toBe(1);
+    expect(e.nombreTocado).toBe(false);
   });
 });

@@ -19,12 +19,16 @@ export type EstadoDeAlta = {
   generacion: number;
 };
 
+/** La cuenta con la que arranca el alta cuando se abre desde su ficha (decisiones §46). */
+export type OrganizacionPuesta = { id: string; nombre: string };
+
 export type AccionDeAlta =
   | { tipo: "ELEGIR_ORGANIZACION"; eleccion: Eleccion }
   | { tipo: "ELEGIR_PERSONA"; eleccion: Eleccion }
   | { tipo: "RECIBIR_CONTACTOS"; de: string; lista: Sugerencia[] }
   | { tipo: "ESCRIBIR_NOMBRE"; nombre: string }
-  | { tipo: "LIMPIAR" };
+  /** Vuelve al arranque; con `organizacion`, al arranque con esa cuenta puesta. */
+  | { tipo: "LIMPIAR"; organizacion?: OrganizacionPuesta };
 
 export const ESTADO_INICIAL: EstadoDeAlta = {
   organizacion: { tipo: "VACIA" },
@@ -34,6 +38,16 @@ export const ESTADO_INICIAL: EstadoDeAlta = {
   nombreTocado: false,
   generacion: 0,
 };
+
+/**
+ * El estado con el que abre el formulario. Desde el pipeline, vacío; desde la
+ * ficha de una cuenta, con esa cuenta ya elegida y el nombre sugerido, como si
+ * se hubiera tecleado (§46).
+ */
+export function estadoInicialCon(organizacion: OrganizacionPuesta | undefined): EstadoDeAlta {
+  if (!organizacion) return ESTADO_INICIAL;
+  return reducir(ESTADO_INICIAL, { tipo: "ELEGIR_ORGANIZACION", eleccion: { tipo: "EXISTENTE", id: organizacion.id, nombre: organizacion.nombre } });
+}
 
 export function prefijoDe(organizacion: Eleccion): string {
   return organizacion.tipo === "VACIA" ? "" : organizacion.nombre + SEPARADOR;
@@ -99,6 +113,6 @@ export function reducir(estado: EstadoDeAlta, accion: AccionDeAlta): EstadoDeAlt
       return { ...estado, nombre: accion.nombre, nombreTocado: true };
 
     case "LIMPIAR":
-      return { ...ESTADO_INICIAL, generacion: estado.generacion + 1 };
+      return { ...estadoInicialCon(accion.organizacion), generacion: estado.generacion + 1 };
   }
 }

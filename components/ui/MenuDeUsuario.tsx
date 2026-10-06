@@ -151,9 +151,6 @@ export function MenuDeUsuario({ usuario }: { usuario: UsuarioDeBarra }) {
             <Boton type="submit" variante="secundario" className="w-full">
               Cerrar sesión
             </Boton>
-            <p className="mt-2 text-xs leading-snug text-texto-tenue">
-              Sales del CRM. Tu cuenta de Microsoft sigue abierta en este navegador.
-            </p>
           </form>
       </dialog>
     </div>

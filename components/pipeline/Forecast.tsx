@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { clsx } from "clsx";
-import { ControlSegmentado, EstadoVacio } from "@/components/ui/primitivas";
+import { ControlSegmentado } from "@/components/ui/primitivas";
+import { EstadoVacioDePipeline, type VacioDePipeline } from "./VacioDePipeline";
 import { TarjetaOportunidad, type DatosTarjeta } from "./TarjetaOportunidad";
 
 /**
@@ -60,24 +61,26 @@ export function Forecast({
   desplazamiento,
   fueraDeVentana,
   hrefDe,
-  accionVacio,
+  vacio,
 }: {
   columnas: ColumnaVisible[];
   agrupar: Agrupacion;
   desplazamiento: number;
   fueraDeVentana: { antes: number; despues: number };
   hrefDe: (cambio: { agrupar?: Agrupacion; desde?: number }) => string;
-  accionVacio: React.ReactNode;
+  vacio: VacioDePipeline;
 }) {
   const enColumnas = columnas.reduce((n, c) => n + c.cuantas, 0);
   const total = enColumnas + fueraDeVentana.antes + fueraDeVentana.despues;
 
   if (total === 0) {
     return (
-      <EstadoVacio
-        titulo="No hay nada abierto que pronosticar"
-        explicacion="Con los filtros actuales no queda ninguna oportunidad abierta, así que no hay cierre estimado que acomodar en el calendario."
-        accion={accionVacio}
+      <EstadoVacioDePipeline
+        vacio={vacio}
+        filtrado={{
+          titulo: "No hay nada abierto que pronosticar",
+          explicacion: "Con los filtros actuales no queda ninguna oportunidad abierta, así que no hay cierre estimado que acomodar en el calendario.",
+        }}
       />
     );
   }

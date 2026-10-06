@@ -17,7 +17,8 @@ export type ActividadDeTablero = {
   externalEventId: string | null;
   type: { id: string; name: string };
   user: { id: string; name: string; initials: string };
-  opportunity: { id: string; folio: string; name: string; countryCode: CountryCode } | null;
+  /** `accesible`: si la oportunidad sigue al alcance de quien mira (§46); sin él no hay enlace ni lápiz. */
+  opportunity: { id: string; folio: string; name: string; countryCode: CountryCode; accesible: boolean } | null;
 };
 
 /** El lápiz de una fila, o nada: lo decide la página, que conoce la acción. */
