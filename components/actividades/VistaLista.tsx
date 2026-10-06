@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { formatUSD, type Money } from "@/lib/money";
 import { estadoDeAgenda, ORDEN_DE_ESTADOS, type RelojDeAgenda } from "@/lib/domain/agenda";
 import { Avatar, Boton, EstadoVacio } from "@/components/ui/primitivas";
-import { PastillaDeEstado } from "./comun";
+import { EnlaceAOportunidad, PastillaDeEstado } from "./comun";
 import { rangoDeHoras, type ActividadDeTablero, type EditorDe, type Formatos } from "./formato";
 
 export type OportunidadSinPaso = {
@@ -81,11 +81,7 @@ export function VistaLista({
                 <tr key={a.id} className={clsx("border-t border-borde", estado === "realizada" && "text-texto-tenue")}>
                   <td className="px-3 py-2">
                     <p className={clsx("font-medium", estado === "realizada" ? "text-texto-tenue" : "text-texto-titulo")}>{a.subject}</p>
-                    {a.opportunity ? (
-                      <Link href={`/oportunidades/${a.opportunity.id}`} className="block truncate text-xs text-texto-tenue hover:text-acento">
-                        {a.opportunity.name}
-                      </Link>
-                    ) : null}
+                    <EnlaceAOportunidad a={a} className="block truncate text-xs text-texto-tenue hover:text-acento" />
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <PastillaDeEstado estado={estado} />

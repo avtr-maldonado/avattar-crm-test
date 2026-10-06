@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { clsx } from "clsx";
-import { EstadoVacio } from "@/components/ui/primitivas";
+import { EstadoVacioDePipeline, type VacioDePipeline } from "./VacioDePipeline";
 import { DetalleDeEtapa, type OportunidadDeEtapa } from "./DetalleDeEtapa";
 
 /**
@@ -63,11 +63,11 @@ const PORCENTAJE = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
 export function Embudo({
   etapas,
   riesgos,
-  accionVacio,
+  vacio,
 }: {
   etapas: EtapaVisible[];
   riesgos: RiesgoVisible[];
-  accionVacio: React.ReactNode;
+  vacio: VacioDePipeline;
 }) {
   const hayValor = etapas.some((e) => e.cuantas > 0);
 
@@ -121,10 +121,12 @@ export function Embudo({
           </ol>
         ) : (
           <div className="mt-5">
-            <EstadoVacio
-              titulo="No hay nada abierto en este pipeline"
-              explicacion="Con los filtros actuales no queda ninguna oportunidad abierta, así que no hay embudo que medir."
-              accion={accionVacio}
+            <EstadoVacioDePipeline
+              vacio={vacio}
+              filtrado={{
+                titulo: "No hay nada abierto en este pipeline",
+                explicacion: "Con los filtros actuales no queda ninguna oportunidad abierta, así que no hay embudo que medir.",
+              }}
             />
           </div>
         )}

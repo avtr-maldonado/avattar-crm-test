@@ -17,7 +17,7 @@ import type { Eleccion, Sugerencia } from "@/components/ui/Autocompletado";
 import { CamposDeContacto } from "./CamposDeContacto";
 import { CamposComerciales } from "./CamposComerciales";
 import type { EtapaElegible } from "./SelectorDeEtapa";
-import { ESTADO_INICIAL, nombreEsSugerido, prefijoDe, reducir } from "./estadoDeAlta";
+import { estadoInicialCon, nombreEsSugerido, prefijoDe, reducir, type OrganizacionPuesta } from "./estadoDeAlta";
 
 export type PipelineElegible = {
   id: string;
@@ -58,6 +58,7 @@ export function NuevaOportunidad({
   buscarOrganizaciones,
   cargarPersonas,
   accion,
+  organizacionInicial,
 }: {
   pipelines: PipelineElegible[];
   origenes: { id: string; name: string }[];
@@ -69,11 +70,13 @@ export function NuevaOportunidad({
   buscarOrganizaciones: (texto: string) => Promise<Sugerencia[]>;
   cargarPersonas: (organizationId: string) => Promise<Sugerencia[]>;
   accion: (previo: Resultado | null, form: FormData) => Promise<Resultado>;
+  /** Desde la ficha de una cuenta (§46): el alta abre con esa cuenta puesta y sus contactos cargados. */
+  organizacionInicial?: OrganizacionPuesta;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [resultado, enviar, enviando] = useActionState(accion, null);
-  const [estado, despachar] = useReducer(reducir, ESTADO_INICIAL);
+  const [estado, despachar] = useReducer(reducir, organizacionInicial, estadoInicialCon);
   const yaAtendido = useRef<Resultado | null>(null);
 
   const problemas = useProblemas(resultado);
@@ -157,12 +160,24 @@ export function NuevaOportunidad({
   }, [resultado, router]);
 
   function limpiar() {
-    despachar({ tipo: "LIMPIAR" });
+    despachar({ tipo: "LIMPIAR", organizacion: organizacionInicial });
     setCierre("");
     setPipelineId(pipelines[0]?.id ?? "");
     setStageId(primeraEtapaDe(pipelines[0]));
     problemas.reiniciar();
     setAbierto(false);
+  }
+
+  /** Abrir con una cuenta puesta trae sus contactos, igual que si se hubiera elegido a mano. */
+  function abrir() {
+    setAbierto(true);
+    if (organizacionInicial && estado.contactos === null) {
+      const de = organizacionInicial.id;
+      iniciarCarga(async () => {
+        const lista = await cargarPersonas(de);
+        despachar({ tipo: "RECIBIR_CONTACTOS", de, lista });
+      });
+    }
   }
 
   const nombreDeOrganizacion =
@@ -179,7 +194,7 @@ export function NuevaOportunidad({
 
   return (
     <>
-      <Boton onClick={() => setAbierto(true)}>Nueva oportunidad</Boton>
+      <Boton onClick={abrir}>Nueva oportunidad</Boton>
 
       <Panel
         titulo="Nueva oportunidad"

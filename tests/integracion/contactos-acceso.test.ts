@@ -210,3 +210,34 @@ describe("reasignar una oportunidad comparte la gente de la cuenta", () => {
     }
   });
 });
+
+describe("el comité en el detalle de oportunidad dice de quién es cada persona (decisiones §47)", () => {
+  it("cada persona trae propietario y países del propietario: lo que `administraPersona` necesita para decidir el botón «Editar»", async () => {
+    // Cualquier oportunidad de la base; en su cuenta, Paulina da de alta a una
+    // persona (las cuentas se ven todas, §18). Dirección la ve en el detalle y
+    // el detalle debe decir de quién es: con eso la pantalla decide el botón.
+    const cualquiera = await prisma.opportunity.findFirstOrThrow({
+      where: { deletedAt: null },
+      select: { id: true, organizationId: true },
+    });
+    const cuenta = await getOrganization(paulina, cualquiera.organizationId);
+    const creada = await crearPersona(paulina, cuenta!, { name: "Prueba Acceso Siete" });
+    if (!creada.ok) throw new Error("no se pudo preparar la persona");
+    creadas.push(creada.datos.id);
+
+    const detalle = await getOpportunityDetail(direccion, cualquiera.id);
+    const persona = detalle!.organization.people.find((p) => p.id === creada.datos.id);
+    expect(persona).toBeDefined();
+    // Lo que el detalle debe traer para que la pantalla decida sin adivinar.
+    expect(persona!.ownerId).toBe(paulina.userId);
+    expect(persona!.owner.name).toBe(paulina.name);
+    expect(persona!.owner.countryCodes).toContain("MX");
+    // Con esos campos, la regla de §29 decide: su propietaria y Dirección la
+    // administran; Preventa, que puede ver la oportunidad sin que la persona
+    // sea suya, no: sin botón «Editar» (§47).
+    const ivan = await sesionDe("ic@avattar.com");
+    expect(administraPersona(paulina, persona!)).toBe(true);
+    expect(administraPersona(direccion, persona!)).toBe(true);
+    expect(administraPersona(ivan, persona!)).toBe(false);
+  });
+});

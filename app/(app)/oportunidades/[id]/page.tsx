@@ -71,6 +71,7 @@ import { catalogosParaAlta, motivosDePerdida, tiposDeActividad } from "@/lib/sco
 import { destinatariosValidos, preventasValidos, requisitosParaGanar } from "@/lib/domain/opportunity";
 import { preventaDe } from "@/lib/domain/opportunityAccess";
 import { can, type Session } from "@/lib/auth/permissions";
+import { administraPersona } from "@/lib/domain/personAccess";
 import {
   cambiarEtapaAccion,
   editarCampoAccion,
@@ -262,6 +263,7 @@ export default async function DetalleOportunidadPage({
               preventas={preventas.map((u) => ({ id: u.id, name: u.name }))}
               puedeEditar={puedeEditarDetalle}
               puedeReasignar={puedeReasignar}
+              sesion={session}
             />
           )}
         </div>
@@ -418,6 +420,7 @@ function TabResumen({
   preventas,
   puedeEditar,
   puedeReasignar,
+  sesion,
 }: {
   o: DetalleOportunidad;
   politica: Politica;
@@ -428,6 +431,8 @@ function TabResumen({
   preventas: { id: string; name: string }[];
   puedeEditar: boolean;
   puedeReasignar: boolean;
+  /** Para decidir, persona por persona, quién la administra (§29, §47). */
+  sesion: Session;
 }) {
   const preventa = preventaDe(o);
   // La oportunidad viaja atada a la acción una sola vez, aquí: cada dato
@@ -590,23 +595,28 @@ function TabResumen({
                     <p className="truncate text-xs text-texto-tenue">
                       {[p.jobTitle, p.committeeRole?.name].filter(Boolean).join(" · ") ||
                         "Sin rol declarado"}
+                      {p.ownerId !== sesion.userId ? ` · de ${p.owner.name}` : ""}
                     </p>
                   </div>
                   {/* Aquí es donde se descubre que el cargo cambió, así que
-                      aquí tiene que poder corregirse. */}
-                  <EditarPersona
-                    persona={{
-                      id: p.id,
-                      name: p.name,
-                      jobTitle: p.jobTitle,
-                      email: p.email ?? null,
-                      phone: null,
-                      committeeRoleId: p.committeeRole?.id ?? null,
-                    }}
-                    rolesDeComite={rolesDeComite}
-                    accion={editarPersonaAccion}
-                    variante="fantasma"
-                  />
+                      aquí tiene que poder corregirse, pero solo quien administra
+                      a la persona (§29): compartida es solo lectura, y un botón
+                      que el servidor va a rechazar no se ofrece (§47). */}
+                  {administraPersona(sesion, p) ? (
+                    <EditarPersona
+                      persona={{
+                        id: p.id,
+                        name: p.name,
+                        jobTitle: p.jobTitle,
+                        email: p.email ?? null,
+                        phone: null,
+                        committeeRoleId: p.committeeRole?.id ?? null,
+                      }}
+                      rolesDeComite={rolesDeComite}
+                      accion={editarPersonaAccion}
+                      variante="fantasma"
+                    />
+                  ) : null}
                 </li>
               ))}
             </ul>

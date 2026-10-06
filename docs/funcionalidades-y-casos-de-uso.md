@@ -68,7 +68,7 @@ que Administración haya creado su perfil o le haya dado acceso (diseño §3.2).
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-02.1 Cerrar sesión | Cualquier rol | Pulsa su nombre en la barra superior y «Cerrar sesión» | Se cierra la sesión **del CRM**. La de Microsoft sigue abierta en el navegador |
+| CU-02.1 Cerrar sesión | Cualquier rol | Pulsa su nombre en la barra superior y «Cerrar sesión» | Se cierra la sesión **del CRM**. La de Microsoft sigue abierta en el navegador; el panel ya no lo explica con un texto (§41, §46) |
 
 ### F-03 · Elegir la oficina activa
 
@@ -124,7 +124,8 @@ no vuelve a la base. La vista, los filtros y el pipeline viven en la URL.
 | CU-07.6 Forecast | Cualquier rol | Pulsa «Forecast» y elige meses o trimestres fiscales | Un tablero de columnas como el kanban, pero la columna es **cuándo**: cada oportunidad mostrada va en la columna de su cierre estimado, con la misma tarjeta; los trimestres se nombran **Q1–Q4** del año fiscal. La cabecera de cada columna trae cuántas, el total abierto, el ponderado por etapa (`RN-01`) y una barra con la mezcla por categoría de pronóstico (el juicio del vendedor · `RN-15`), cuyo desglose sale al pasar el cursor —la leyenda de colores de abajo se quitó el 29-sep-2026—; lo omitido cuenta en el total y no en la barra; las cerradas se ven pero no suman (`RN-12`) y van debajo de las abiertas |
 | CU-07.7 Forecast · mover la ventana | Cualquier rol | Pulsa «‹ Anteriores», «Hoy» o «Siguientes ›» | La ventana es de seis meses o cuatro trimestres y avanza de periodo en periodo, nunca hacia atrás del periodo en curso. Las flechas dicen cuántas oportunidades quedan fuera hacia cada lado, para que nada se pierda sin aviso |
 | CU-07.8 Forecast con cierres vencidos | Cualquier rol | Hay abiertas con cierre estimado en el pasado | Van en una columna «Vencidas» al principio, en coral: son fechas que hay que corregir, no dinero de un mes que ya pasó. Al mover la ventana hacia adelante, cuentan entre las que quedan atrás |
-| CU-07.9 Nada con los filtros | Cualquier rol | Los filtros dejan el tablero vacío | Estado vacío con «Limpiar filtros» y «Nueva oportunidad» |
+| CU-07.9 Nada con los filtros | Cualquier rol | Hay oportunidades al alcance, pero los filtros dejan la vista vacía | Estado vacío de la vista con «Limpiar filtros» y «Nueva oportunidad» |
+| CU-07.10 Nada que ver (§46) | Cualquier rol | No hay ninguna oportunidad al alcance en la oficina, con o sin filtros | «Todavía no hay oportunidades en esta oficina» con «Nueva oportunidad»; Preventa, que no crea, ve «Ir a actividades». Sin «Limpiar filtros»: no arreglaría nada. Igual en kanban, embudo y forecast |
 
 ### F-08 · Indicadores del encabezado
 
@@ -335,7 +336,7 @@ sistema avisa que el calendario dejó de cuadrar en vez de recalcular en silenci
 | CU-44.2 Asignar, cambiar o retirar | Propietario, Gerencia | «Editar oportunidad» › Responsable de preventa, o «Sin preventa» | Una fila de apoyo por oportunidad; cada cambio queda en la bitácora con los nombres (`INV-09`). Al retirarlo deja de verla |
 | CU-44.3 Quién puede serlo | Propietario, Gerencia | Elige a alguien | Solo usuarios activos con rol Preventa que operen en el país de la oportunidad (`AC-05`); otro rol se rechaza |
 | CU-44.4 Lo que ve preventa | Preventa | Entra al CRM | Tablero y tabla con las asignadas; la ficha completa en solo lectura, con «Responsable de preventa» en los datos; su bandeja y su semana |
-| CU-44.5 Lo que hace preventa | Preventa | Pestaña Actividades | Registra y edita actividades de la oportunidad (`§20`): es su trabajo. Sin botón «Nueva oportunidad» |
+| CU-44.5 Lo que hace preventa | Preventa | Pestaña Actividades | Registra y edita actividades de la oportunidad (`§20`): es su trabajo. Sin botón «Nueva oportunidad», ni en el pipeline ni en la ficha de cuenta (§46) |
 | CU-44.6 Lo que no hace preventa | Preventa | Intenta editar, mover de etapa, cotizar, calificar MEDDIC, capturar hitos o subir documentos | La pantalla no lo ofrece y el servidor lo rechaza: «Solo su propietario o Gerencia pueden modificarla» (`puedeEditarOportunidad`) |
 ---
 
@@ -394,13 +395,15 @@ oficina. Lo que tiene propietario y se recorta son las personas.
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-24.1 Editar la cuenta | Propietario, o Gerencia con alcance de oficina (`Q-15`) | Desde su ficha | Mismo formulario del alta con los datos cargados, sede incluida. Reasignar la cuenta admite cualquier usuario activo: no hay país que lo limite (§18) |
-| CU-24.2 Editar una persona | Quien la administra: su propietario, el gerente de su país, Dirección, Administración (§29) | Desde Personas o desde el comité de la ficha | Ídem. A quien se la compartieron le aparece «Solo lectura» y el servidor rechaza la edición |
+| CU-24.2 Editar una persona | Quien la administra: su propietario, el gerente de su país, Dirección, Administración (§29) | Desde Personas, desde el comité de la ficha de cuenta o desde el comité en el detalle de oportunidad (§47) | Ídem. A quien se la compartieron, o la ve por tener negocio en la cuenta, no se le ofrece «Editar»: en Personas aparece «Solo lectura» y en el detalle de oportunidad la fila dice «de quién es» sin lápiz. El servidor rechaza la edición de todos modos |
 
 ### F-25 · Ficha de la cuenta
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-25.1 Abrir | Cualquier rol | Pulsa la cuenta | Encabezado con jerarquía matriz-filial si la hay; indicadores de pipeline abierto, ponderado, cerradas y personas; oportunidades abiertas (para un vendedor, solo las suyas) y cerradas; bitácora cronológica; comité de compra con roles (solo las personas que alcanza, con su propietario); datos de la cuenta (razón social, propietario, empleados, días de crédito, alta) |
+| CU-25.2 Nueva oportunidad desde la ficha (§46) | Quien crea oportunidades (`CREAR_OPORTUNIDAD`) | Pulsa «Nueva oportunidad» en la tarjeta de abiertas (o en su vacío) | Se abre **el mismo modal del pipeline** con la cuenta ya puesta y marcada «existente», sus contactos cargados y el nombre sugerido «Cuenta · ». «Cancelar» vuelve a la cuenta puesta. Al crear, lleva al detalle. Antes el botón daba 404 |
+| CU-25.3 Preventa en la ficha | Preventa | — | No ve «Nueva oportunidad» (§39). El vacío de abiertas le ofrece «Ir al pipeline» |
 
 ### F-42 · Compartir y transferir personas
 
@@ -460,6 +463,7 @@ y no termina) o por realizar.
 |---|---|---|---|
 | CU-29.1 Lista | Cualquier rol | Entra a Actividades | Una fila por actividad pendiente o hecha en las últimas dos semanas: qué, estado, tipo, fecha y hora, responsable y el lápiz. Primero las vencidas, al final las hechas. Debajo, las oportunidades sin próximo paso (`RN-10`) con «Agendar» |
 | CU-29.2 Editar en el sitio | Cualquier rol que alcance la oportunidad | Pulsa el lápiz | El mismo composer de la ficha, en la zona del país de la oportunidad (§20): marcar hecha, reprogramar, cambiar responsable. Al guardar, la actividad cambia de estado y de columna |
+| CU-29.7 Oportunidad que ya no se alcanza (§46) | Preventa al que le quitaron el apoyo; vendedor que dejó de ser propietario | Mira su historial | La actividad sigue ahí, pero el nombre de la oportunidad va apagado con «Sin acceso» y «Ya no tienes acceso a esta oportunidad» al pasar el cursor; sin enlace y sin lápiz. Igual en lista, kanban y semana |
 | CU-29.3 Kanban | Cualquier rol | Pulsa «Kanban» | Cuatro columnas: por realizar, en progreso, realizadas (verde) y vencidas (coral), con su cuenta. No se arrastra: el estado se calcula, se cambia desde el lápiz |
 | CU-29.4 Semana | Cualquier rol | Pulsa «Semana» | Lunes a domingo, hoy marcado; cada actividad como bloque con su rango de horas, verde lo hecho y coral lo vencido; la cabecera suma las horas del día |
 | CU-29.5 Vendedor | Vendedor | — | Solo sus actividades y las de sus oportunidades (§2.3); las oportunidades sin próximo paso son las suyas |

@@ -4,7 +4,8 @@ import { startTransition, useActionState, useState } from "react";
 import clsx from "clsx";
 import type { ResultadoAccion } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
-import { Boton, EstadoVacio } from "@/components/ui/primitivas";
+import { Boton } from "@/components/ui/primitivas";
+import { EstadoVacioDePipeline, type VacioDePipeline } from "./VacioDePipeline";
 import { Panel } from "@/components/ui/formulario";
 import { TarjetaOportunidad, type DatosTarjeta } from "./TarjetaOportunidad";
 import { envioDeMovimiento, type TarjetaArrastrada } from "./arrastre";
@@ -52,12 +53,12 @@ type Resultado = ResultadoAccion<{ etapa: string; gateOverride: boolean }>;
 
 export function TableroKanban({
   columnas,
-  accionVacio,
+  vacio,
   puedeMover,
   accion,
 }: {
   columnas: ColumnaKanban[];
-  accionVacio: React.ReactNode;
+  vacio: VacioDePipeline;
   puedeMover: boolean;
   accion?: (previo: Resultado | null, form: FormData) => Promise<Resultado>;
 }) {
@@ -98,10 +99,12 @@ export function TableroKanban({
 
   if (totalTarjetas === 0) {
     return (
-      <EstadoVacio
-        titulo="No hay oportunidades con estos filtros"
-        explicacion="Puede que el filtro esté demasiado cerrado, o que todavía no tengas oportunidades asignadas. Recuerda que la visibilidad sigue al propietario, no a quien las creó."
-        accion={accionVacio}
+      <EstadoVacioDePipeline
+        vacio={vacio}
+        filtrado={{
+          titulo: "No hay oportunidades con estos filtros",
+          explicacion: "El filtro dejó fuera todo lo que puedes ver. Recuerda que la visibilidad sigue al propietario, no a quien las creó.",
+        }}
       />
     );
   }

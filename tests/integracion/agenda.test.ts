@@ -203,3 +203,29 @@ describe("tablero de actividades · §42", () => {
   });
 });
 
+
+describe("acceso a la oportunidad desde la agenda · decisiones §46", () => {
+  it("cada actividad con oportunidad dice si se puede abrir, y Dirección las abre todas", async () => {
+    const direccion = await sesionDe("dc@avattar.com");
+    const [t, s] = await Promise.all([tableroDeActividades(direccion, AHORA), agendaSemanal(direccion, AHORA)]);
+    const todas = [...t.actividades, ...s.dias.flatMap((d) => d.actividades)];
+    for (const a of todas) {
+      if (a.opportunity) expect(a.opportunity.accesible).toBe(true);
+    }
+  });
+
+  it("para Preventa, `accesible` sigue al apoyo vigente: sin apoyo en la oportunidad, no hay acceso", async () => {
+    // El alcance de actividades es más ancho que el de oportunidades: Preventa
+    // conserva en su historial lo que hizo en oportunidades que ya no apoya
+    // (§39, §46). Lo que se comprueba es el criterio de dominio, no la consulta.
+    const ivan = await sesionDe("ic@avattar.com");
+    expect(ivan.role).toBe("PREVENTA");
+    const t = await tableroDeActividades(ivan, AHORA);
+    const conOportunidad = t.actividades.filter((a) => a.opportunity !== null);
+    const apoyos = await prisma.opportunitySupport.findMany({ where: { userId: ivan.userId }, select: { opportunityId: true } });
+    const apoyadas = new Set(apoyos.map((s) => s.opportunityId));
+    for (const a of conOportunidad) {
+      expect(a.opportunity!.accesible).toBe(apoyadas.has(a.opportunity!.id));
+    }
+  });
+});

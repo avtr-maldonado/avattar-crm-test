@@ -1,6 +1,7 @@
 import { oficinaActiva, requireSession } from "@/lib/auth/session";
-import { listOpportunities, listOrganizations } from "@/lib/scope";
-import { listPipelines, pipelinePorOmision } from "@/lib/scope/pipelines";
+import { countOpportunities, listOpportunities, listOrganizations } from "@/lib/scope";
+import { listPipelines, pipelinePorOmision, pipelinesParaAlta } from "@/lib/scope/pipelines";
+import type { VacioDePipeline } from "@/components/pipeline/VacioDePipeline";
 import { catalogosParaAlta } from "@/lib/scope/configuracion";
 import { historiasDeEtapas } from "@/lib/scope/funnel";
 import { destinatariosValidos, preventasValidos } from "@/lib/domain/opportunity";
@@ -164,6 +165,7 @@ export default async function PipelinePage({
     cuentas,
     oportunidades,
     historias,
+    totalEnOficina,
   ] = await Promise.all([
     listPipelines(session),
     paisPromesa,
@@ -197,30 +199,14 @@ export default async function PipelinePage({
     // recortan los filtros del usuario: «¿el proceso mueve?» es una pregunta
     // sobre el proceso, no sobre el subconjunto que se esté mirando.
     historiasDeEtapas(session, { desde: desdeLaVentana, where: deLaOficina }),
+    // Cuántas hay al alcance en la oficina **sin** filtros: distingue «los
+    // filtros dejaron fuera todo» de «todavía no hay nada» (§46).
+    countOpportunities(session, deLaOficina),
   ]);
-
-  /**
-   * El alta necesita las etapas con su cuenta de requisitos, para poder decir
-   * «2 requisitos de entrada» ANTES de enviar. Enterarse al guardar es
-   * enterarse tarde.
-   */
-  const pipelinesParaAlta = pipelines.map((p) => ({
-    id: p.id,
-    name: p.name,
-    countryCode: p.countryCode,
-    stages: p.stages.map((e) => ({
-      id: e.id,
-      name: e.name,
-      position: e.position,
-      probability: toClient(e.probability),
-      requisitos: e.gateRequires.length,
-      gateMode: e.gateMode,
-    })),
-  }));
 
   const botonDeAlta = puedeCrear ? (
     <NuevaOportunidad
-      pipelines={pipelinesParaAlta}
+      pipelines={pipelinesParaAlta(pipelines)}
       origenes={catalogos.origenes}
       rolesDeComite={catalogos.rolesComite}
       propietarios={propietarios.map((u) => ({ id: u.id, name: u.name }))}
@@ -378,14 +364,27 @@ export default async function PipelinePage({
   });
   const columnasDeForecast = vistaDeForecast(forecast, tarjetas);
 
-  const accionVacio = (
-    <>
-      <Boton href="/oportunidades" variante="secundario">
-        Limpiar filtros
-      </Boton>
-      {botonDeAlta}
-    </>
-  );
+  // Dos vacíos distintos (§46): sin nada al alcance, «limpiar filtros» no
+  // arregla nada y la salida es dar de alta —o esperar a que asignen—; con
+  // filtros que dejaron fuera todo, limpiarlos.
+  const sinOportunidades = totalEnOficina === 0;
+  const vacio: VacioDePipeline = {
+    sinOportunidades,
+    accion: sinOportunidades ? (
+      (botonDeAlta ?? (
+        <Boton href="/actividades" variante="secundario">
+          Ir a actividades
+        </Boton>
+      ))
+    ) : (
+      <>
+        <Boton href="/oportunidades" variante="secundario">
+          Limpiar filtros
+        </Boton>
+        {botonDeAlta}
+      </>
+    ),
+  };
 
   return (
     <>
@@ -452,7 +451,7 @@ export default async function PipelinePage({
               // no mueve (§39); el dominio lo vuelve a comprobar por oportunidad.
               puedeMover={puedeCrear}
               accion={cambiarEtapaAccion}
-              accionVacio={accionVacio}
+              vacio={vacio}
             />
           )}
 
@@ -464,7 +463,7 @@ export default async function PipelinePage({
             <Embudo
               etapas={etapasDelEmbudo}
               riesgos={riesgos}
-              accionVacio={accionVacio}
+              vacio={vacio}
             />
           )}
 
@@ -475,7 +474,7 @@ export default async function PipelinePage({
               desplazamiento={forecast.desplazamiento}
               fueraDeVentana={forecast.fueraDeVentana}
               hrefDe={hrefDeForecast}
-              accionVacio={accionVacio}
+              vacio={vacio}
             />
           )}
         </div>

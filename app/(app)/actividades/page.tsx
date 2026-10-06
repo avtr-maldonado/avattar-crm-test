@@ -197,7 +197,9 @@ async function contextosPorPais(paises: CountryCode[]): Promise<Map<CountryCode,
  * suelta no tiene por dónde entrar. Es la misma limitación del detalle.
  */
 function EditorDeActividad({ a, edicion }: { a: ActividadDeTablero; edicion: Edicion }) {
-  if (!a.opportunity) return null;
+  // Sin oportunidad al alcance no hay lápiz: la acción autoriza cargando la
+  // oportunidad por `lib/scope` y la rechazaría (§46).
+  if (!a.opportunity?.accesible) return null;
   const contexto = edicion.contextos.get(a.opportunity.countryCode);
   if (!contexto) return null;
 
