@@ -327,4 +327,25 @@ describe("editarOportunidad · lo que queda en la bitácora", () => {
     });
     expect(cuantos).toBe(0);
   });
+
+  it("enviar la misma fecha de cierre, como la manda el panel, no inventa un registro (§49)", async () => {
+    // La columna es `date`: la base devuelve medianoche UTC y el panel manda
+    // mediodía local. Comparar instantes anotaba un cambio en cada guardado.
+    const { id } = await unaOportunidad(jorge, "Edición · cierre igual");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const dia = detalle!.expectedCloseDate.toISOString().slice(0, 10);
+
+    const r = await editarOportunidad(
+      jorge,
+      detalle!,
+      { name: "Mismo cierre", expectedCloseDate: new Date(`${dia}T12:00:00`) },
+      await umbrales(),
+    );
+    expect(r.ok).toBe(true);
+
+    const cuantos = await prisma.auditLog.count({
+      where: { entity: "Opportunity", entityId: id, action: "CAMBIAR_CIERRE_ESTIMADO" },
+    });
+    expect(cuantos).toBe(0);
+  });
 });

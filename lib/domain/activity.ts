@@ -45,6 +45,7 @@ export type EdicionDeActividad = Partial<
   >
 > & {
   siguiente?: SiguientePaso;
+  /** Se acepta por compatibilidad y no decide nada: editar no pregunta (§49). */
   sinSeguimiento?: boolean;
 };
 
@@ -202,10 +203,10 @@ export async function registrarActividad(
  *
  * ## Completar desde aquí es completar
  *
- * Marcar hecha una actividad que estaba por hacer es exactamente «una
- * actividad que se completa» (§12.4): si con eso la oportunidad se queda sin
- * nada pendiente, se pregunta igual que al registrar. Las demás ediciones no
- * preguntan nada.
+ * Marcar hecha una actividad que estaba por hacer la completa y recalcula los
+ * acumulados; **no pregunta** por el siguiente paso aunque la oportunidad se
+ * quede sin pendientes (decisiones §49, que enmienda §19 para la edición). El
+ * DEBE de §12.4 sigue vivo en `registrarActividad`.
  *
  * ## Los acumulados se recalculan desde la base
  *
@@ -256,17 +257,11 @@ export async function editarActividad(
   if (!siguiente.ok) return siguiente;
 
   const hecha = cambios.hecha ?? actual.completedAt != null;
-  const seCompletaAhora = hecha && actual.completedAt == null;
-  const abierta = detalle.status === "ABIERTA";
 
-  if (abierta && seCompletaAhora && !cambios.siguiente && !cambios.sinSeguimiento) {
-    // Los pendientes que quedarían **además** de esta: si no hay ninguno, la
-    // oportunidad se queda sin próximo paso y hay que preguntar.
-    const otrosPendientes = await prisma.activity.count({
-      where: { opportunityId: detalle.id, completedAt: null, deletedAt: null, id: { not: actual.id } },
-    });
-    if (otrosPendientes === 0) return falla("CONFIRMACION", PREGUNTA_SIN_SEGUIMIENTO);
-  }
+  // Marcarla hecha al editar **no** pregunta por el siguiente paso (§49):
+  // quien edita tiene la actividad delante y el aviso de «sin próximo paso» al
+  // guardar ya se lo dice. El DEBE de §12.4 sigue vivo al registrar una hecha
+  // nueva (`registrarActividad`).
 
   const responsable = await responsableValido(cambios.userId ?? actual.user.id, detalle);
   if (!responsable.ok) return responsable;

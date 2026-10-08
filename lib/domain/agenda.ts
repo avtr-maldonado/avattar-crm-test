@@ -1,4 +1,4 @@
-import { lunesDe } from "@/lib/tiempo";
+import { fechaEn, instanteEn, lunesDe } from "@/lib/tiempo";
 
 /**
  * El estado de una actividad en la agenda · P-07, decisiones §42.
@@ -28,6 +28,15 @@ export const ORDEN_DE_ESTADOS: readonly EstadoDeAgenda[] = ["vencida", "en_progr
 const DURACION_POR_OMISION_MIN = 30;
 
 export type RelojDeAgenda = { ahora: Date; inicioDeHoy: Date };
+
+/**
+ * El reloj con el que se califica una actividad (§49): «hoy» empieza a la
+ * medianoche de la zona —la del país de la oportunidad—, nunca a la del
+ * servidor ni a la de UTC. Lo usan la agenda y el detalle de la oportunidad.
+ */
+export function relojDeAgenda(ahora: Date, zona: string): RelojDeAgenda {
+  return { ahora, inicioDeHoy: instanteEn(fechaEn(ahora, zona), "00:00", zona) };
+}
 
 type Agendable = { startsAt: Date; durationMin: number | null; completedAt: Date | null };
 

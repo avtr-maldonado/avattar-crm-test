@@ -96,7 +96,7 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     cotizaciones, documentos, agenda (bandeja, semana y tablero: pendientes + hechas en 14 días → §42;
                     cada actividad dice si su oportunidad sigue al alcance: `accesible` → §46),
                     contadores (acotados a la oficina activa),
-                    configuracion, pipelines, busqueda (buscador global: todo el alcance, no la oficina),
+                    configuracion, pipelines (los de los países de la sesión, para todo rol → §48), busqueda (buscador global: todo el alcance, no la oficina),
                     funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline),
                     usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS),
                     cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
@@ -121,7 +121,8 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     opportunityAccess (puedeEditarOportunidad: propietario u oficina, lo aplican los siete servicios que
                     mutan una oportunidad; preventaDe: el responsable de preventa → §39),
                     agenda (estadoDeAgenda y agruparPorEstado: realizada, vencida por día, en progreso, por realizar → §42;
-                    semanaElegida: el lunes que pide la URL, o el de hoy → §44).
+                    semanaElegida: el lunes que pide la URL, o el de hoy → §44; relojDeAgenda: «hoy» empieza a la
+                    medianoche de la zona, lo usa también la pestaña Actividades del detalle → §49).
                     Servicios con transacción:
                     opportunity, activity (registrar y editar; responsable, duración y calendario por
                     parámetro), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
@@ -162,7 +163,9 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     · AyudaEmergente (<details> con un icono junto a la etiqueta; lo usa el campo «Pronóstico»)
                     · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
-                    contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo)
+                    contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo) · FilaEnlazada (la fila
+                    de cuentas lleva a la ficha al pulsar cualquier celda; el enlace del nombre sigue siendo el
+                    control, el oyente va al DOM como en Panel.cerrarAlFondo → §49)
 components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,analisis,actividades}/   por pantalla
                     actividades: VistaLista · VistaKanban (cuatro columnas de estado, sin arrastre) · VistaSemana (verde
                     hecho, coral vencido, horas por día) · comun (ActividadDeTablero, formatos, PastillaDeEstado) → §42
@@ -201,7 +204,8 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     AbrirCotizacion
                     objetivos: TablaDeObjetivos (la cuadrícula por vendedor y Q1–Q4: se guarda en un viaje, una
                     entrada de bitácora por cuota que cambia → §34) · TiraDeTrimestres · TablaDeEquipo
-                    contactos: EditarOrganizacion · EditarPersona · AccesoDePersona (propietario y con quién se
+                    contactos: EditarOrganizacion (envía con useEnvioQueConserva: un error no borra lo tecleado → §48) ·
+                    EditarPersona · AccesoDePersona (propietario y con quién se
                     comparte una persona; lo ve solo quien la administra → §29)
                     analisis: FiltrosDeAnalisis (cliente; país, vendedor y lapso como pastillas Desplegable, una navegación
                     por «Aplicar»; parte de la URL viva; producto y tipo dejaron de ser filtros → §36) · SelectorDeLapso
@@ -273,7 +277,9 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
 - **Una actividad agendada ya es el siguiente paso** (decisiones §19, regla nueva que no está en el
   spec): el `DEBE` de §12.4 —preguntar antes de cerrar sin seguimiento— solo se dispara cuando la
   oportunidad **se queda sin ningún pendiente**. Si la actividad queda por hacer, o si ya había otra
-  agendada, no hay nada que preguntar. `lastActivityAt` solo avanza con actividades hechas.
+  agendada, no hay nada que preguntar. `lastActivityAt` solo avanza con actividades hechas. **Al editar
+  una actividad y marcarla hecha tampoco se pregunta** (§49): la pregunta solo vive al registrar una
+  hecha nueva.
 - **Las horas de una actividad son de pared en la zona del país de la oportunidad** (decisiones
   §20): `startsAt` es instante, la zona sale de `Country.timezone`, y con ella se captura, se lee
   (pestaña y agenda) y se manda al calendario. Nunca la zona del servidor ni la del navegador. El
@@ -351,7 +357,12 @@ un trimestre fiscal completos; los conmutadores de las tarjetas van sin «Agrupa
 el mismo día (§46): el alta abre desde la ficha de cuenta con la cuenta puesta (antes 404), Preventa no ve ese botón, el
 pipeline distingue «sin nada al alcance» de «los filtros dejaron fuera todo», el menú de usuario sin texto, y la agenda
 marca «Sin acceso» en vez de enlazar a lo que ya no se alcanza. **En el comité de la oportunidad, «Editar» solo para
-quien administra a la persona** (§47, 5-oct): compartida es solo lectura también ahí. **Pendiente y visible:** las autorizaciones de
+quien administra a la persona** (§47, 5-oct): compartida es solo lectura también ahí. **Los pipelines del alta son los de los
+países de la sesión, para todo rol, y la cuenta nueva conserva lo tecleado cuando un dato falla** (§48,
+7-oct). **Cuatro correcciones de uso** el mismo día (§49): la fila de cuentas lleva a la ficha, editar una
+actividad y marcarla hecha no pregunta por el siguiente paso, el cierre estimado solo se anota en la bitácora
+cuando cambia el día, y las actividades del detalle llevan la pastilla de estado de la agenda. **Pendiente y
+visible:** las autorizaciones de
 descuento, fuera de este alcance por decisión del negocio. Hay plan escrito para E0 y para las mutaciones de E1 en
 `docs/superpowers/plans/`; lo demás se construyó pantalla por pantalla, sin plan propio.
 
@@ -416,6 +427,9 @@ Los demás lugares donde vive el contexto, y para quién:
 - `docs/funcionalidades-y-casos-de-uso.md` — lo construido, funcionalidad por funcionalidad con
   sus casos de uso por rol y lo pendiente. Para negocio y pruebas; se actualiza al cerrar cada
   incremento, leyendo el código y no el spec.
+- `docs/plan-de-pruebas.md` — los casos de prueba manuales por bloque (140 el 8-oct-2026), derivados del
+  catálogo anterior. La copia viva donde se anotan resultados es un doc de claude.ai (ver el ADR); este
+  archivo es la versión del repo.
 - `.claude/skills/` y `.agents/skills/` — copias idénticas de skills de terceros, gestionadas por
   `skills-lock.json`. Se actualizan con el instalador (`npx skills check` / `update`), no a mano.
   No se versionan (`.gitignore`): en un clon nuevo se reinstalan desde el lock.
