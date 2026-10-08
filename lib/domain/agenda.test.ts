@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agruparPorEstado, estadoDeAgenda, semanaElegida } from "./agenda";
+import { agruparPorEstado, estadoDeAgenda, semanaElegida, relojDeAgenda } from "./agenda";
 
 /**
  * El estado de una actividad en la agenda · decisiones §42.
@@ -79,5 +79,22 @@ describe("semanaElegida · la semana que se ve vive en la URL (decisiones §44)"
     expect(semanaElegida("ayer", hoy)).toBe("2026-09-28");
     expect(semanaElegida("2026-13-40", hoy)).toBe("2026-09-28");
     expect(semanaElegida(["2026-10-12", "x"], hoy)).toBe("2026-09-28");
+  });
+});
+
+describe("relojDeAgenda · §49", () => {
+  it("«hoy» empieza a la medianoche de la zona, no a la del servidor ni a la de UTC", () => {
+    // 7-oct-2026 03:30Z es todavía la noche del 6 en Ciudad de México (UTC-6).
+    const ahora = new Date("2026-10-07T03:30:00Z");
+    const reloj = relojDeAgenda(ahora, "America/Mexico_City");
+    expect(reloj.ahora).toBe(ahora);
+    expect(reloj.inicioDeHoy.toISOString()).toBe("2026-10-06T06:00:00.000Z");
+  });
+
+  it("con el reloj, una pendiente de ayer en la zona es vencida y una de hoy por realizar", () => {
+    const reloj = relojDeAgenda(new Date("2026-10-07T15:00:00Z"), "America/Mexico_City");
+    const base = { durationMin: 30, completedAt: null };
+    expect(estadoDeAgenda({ ...base, startsAt: new Date("2026-10-07T04:00:00Z") }, reloj)).toBe("vencida");
+    expect(estadoDeAgenda({ ...base, startsAt: new Date("2026-10-07T20:00:00Z") }, reloj)).toBe("por_realizar");
   });
 });

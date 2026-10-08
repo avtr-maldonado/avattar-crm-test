@@ -170,7 +170,7 @@ error caro de esta pantalla: crear una cuenta duplicada sin darse cuenta.
 | CU-10.1b Tipo de negocio y pronóstico | Ídem | El tipo de negocio abre en «Sin especificar» y es **obligatorio**; el campo «Pronóstico» lleva un icono de ayuda que explica en una línea qué es Compromiso, Mejor caso, Pipeline y Omitida (`RN-15`) | Sin tipo de negocio no se crea: «Elige el tipo de negocio», en el campo. La ayuda también está al editar |
 | CU-10.2 Con una cuenta nueva en línea | Cualquier rol | Escribe un nombre que no existe y lo deja | La cuenta se crea **en la misma operación** que la oportunidad, con la sede del país del pipeline y quien crea como propietario (§14, §18) |
 | CU-10.3 Con una persona principal | Cualquier rol | Con cuenta existente, el campo es un desplegable con **todos sus contactos** (nombre · cargo · rol) y la opción «Nuevo contacto…», que abre debajo la captura de nombre, cargo y rol en el comité. Con cuenta nueva, se escribe directamente el nombre | Opcional a propósito: exigirla pelea contra la captura rápida. Ver los contactos de golpe evita crear a alguien que ya estaba. Solo se listan los de cuentas que la sesión alcanza; si no alcanza ninguna, queda capturar uno nuevo |
-| CU-10.4 Pipeline, etapa y cierre | Cualquier rol | Elige pipeline y etapa de entrada (cada etapa dice cuántos requisitos tiene), importe estimado, origen y cierre estimado | **El país de la oportunidad es el del pipeline** (§18): a una misma cuenta se le vende en México y en Colombia. Hay que operar en ese país (`AC-05`). La fecha se anota con su trimestre fiscal. El folio `OPP-AAAA-NNNNN` se asigna al crear, consecutivo por año, y es inmutable (`INV-12`) |
+| CU-10.4 Pipeline, etapa y cierre | Cualquier rol | Elige pipeline —**solo los de los países que alcanza**: uno si opera en un país, los de varios si opera en varios (§48)— y etapa de entrada (cada etapa dice cuántos requisitos tiene), importe estimado, origen y cierre estimado | **El país de la oportunidad es el del pipeline** (§18): a una misma cuenta se le vende en México y en Colombia. Hay que operar en ese país (`AC-05`). La fecha se anota con su trimestre fiscal. El folio `OPP-AAAA-NNNNN` se asigna al crear, consecutivo por año, y es inmutable (`INV-12`) |
 | CU-10.5 Asignar a otra persona | Gerente, Dirección, Administración | Elige propietario | Solo usuarios **activos que operan en ese país** (`Q-14`). Un vendedor siempre crea a su nombre (`Q-13`) |
 | CU-10.6 La etapa de entrada tiene requisitos en advertencia | Cualquier rol | La compuerta no se cumple (p. ej. persona con rol declarado) | El formulario dice qué falta y ofrece «Crear de todos modos». Queda registrado y alimenta el reporte semanal de incumplimiento (§8.3) |
 | CU-10.7 La etapa de entrada es bloqueante | Cualquier rol | La compuerta no se cumple | No se puede crear ahí. Hay que cumplir los requisitos o elegir otra etapa |
@@ -211,6 +211,7 @@ destildar (`INV-11`, `RN-13`).
 |---|---|---|---|
 | CU-13.1 Abrir el detalle | Quien la alcance | Pulsa la tarjeta o el resultado del buscador | Barra superior con el nombre, el folio y la cuenta; estado, pipeline y banderas; a la derecha «Ver cuenta», **«Ganada»** (verde) y **«Perdida»** (coral) (F-38); la barra de etapas; y las pestañas Resumen, Actividades, Cotización, MEDDIC, Hitos, Documentos y Bitácora, con su conteo. El historial de etapas vive en Bitácora, no en Resumen. La pestaña vive en la URL |
 | CU-13.2 Oportunidad fuera del alcance | Vendedor | Pega el enlace de una que no es suya | **404**, igual que si no existiera. Distinguir «no existe» de «no es tuya» le confirmaría que la del compañero existe |
+| CU-13.3 Estado de cada actividad | Quien la alcance | Abre la pestaña Actividades | Cada actividad lleva la pastilla de estado de la pantalla de Actividades —Por realizar, En progreso, Realizada en verde, Vencida en coral—, calculada con «hoy» a la medianoche de la zona de la oportunidad (§49). Sustituye al texto «realizada / pendiente» |
 
 ### F-14 · Editar los datos comerciales
 
@@ -271,6 +272,7 @@ calendario de Microsoft 365 está configurado, lo agendado aparece en el calenda
 | CU-15.11 Editar una actividad | Quien alcance la oportunidad | Pulsa el lápiz de la fila | El mismo formulario, con los datos cargados. Cambiar horario o notas actualiza el evento del calendario; cambiar de responsable lo mueve a su calendario. Completar la última pendiente pregunta como al registrar (§12.4). La última y la próxima actividad de la oportunidad se recalculan |
 | CU-15.12 Un tipo que no está en los botones | Ídem | Lo elige en «Otro…» | Se aplica igual. Los botones son los seis con dibujo; si Administración renombra un tipo, ese tipo pasa al desplegable y nada más |
 | CU-15.13 Desde Actividades | Cualquiera | Pulsa el lápiz de una actividad en la bandeja o en la semana | Se edita en el sitio con el mismo formulario del detalle, en la zona del país de su oportunidad y con sus responsables (F-29, F-30). El alta sigue viviendo en la oportunidad: el botón «Registrar actividad», que no llevaba a ningún lado, se quitó el 29-sep-2026 |
+| CU-15.14 Marcar hecha al editar | Quien alcance la oportunidad | Edita una actividad pendiente y marca «Marcar como hecha», aunque sea la última pendiente | Se guarda **sin preguntar** por el siguiente paso (§49, enmienda a §19): el aviso de «sin próximo paso» al guardar ya lo dice. La pregunta de CU-15.3 sigue solo al registrar una hecha nueva |
 
 ### F-16 · Cotizar
 
@@ -350,7 +352,7 @@ y el alta. No es una tabla nueva; es una lectura (decisiones §21).
 |---|---|---|---|
 | CU-37.1 Leer la historia | Quien alcance la oportunidad | Abre la pestaña | Cada evento con qué pasó, cuándo (en la zona de la oportunidad) y quién. La creación dice en qué etapa nació |
 | CU-37.2 Movimiento de etapa | — | Se cambió de etapa | «Etapa: Propuesta → Negociación», con la marca «Avanzó con advertencia» si saltó una compuerta (§8.3) |
-| CU-37.3 Cierre estimado | — | Se movió la fecha de cierre | «Cierre estimado: 20 dic 2026 → 15 ene 2027». Se anota desde el 22 de septiembre de 2026; los cambios anteriores no existen en la historia |
+| CU-37.3 Cierre estimado | — | Se movió la fecha de cierre | «Cierre estimado: 20 dic 2026 → 15 ene 2027». Se anota desde el 22 de septiembre de 2026; los cambios anteriores no existen en la historia. Solo cuando el **día** cambia: guardar el panel de edición con la misma fecha no anota nada (§49) |
 | CU-37.4 Cotización | — | Se agregó, editó o quitó una línea | «Cotización: $80,000.00 → $95,000.00» y debajo qué línea y campo cambiaron. Sin `VER_COSTO`, un cambio de costo se nombra pero no se cifra (`INV-02`) |
 | CU-37.5 Actividad hecha | — | Se registró o completó una actividad | Entra con palomita. Las pendientes no: son agenda, no historia |
 | CU-37.6 Filtrar | Cualquiera | Pulsa Todo, Etapas, Cotización, Actividades o Cambios | El filtro vive en la URL (`INV-10`); cada pestaña dice cuántos hay |
@@ -367,6 +369,7 @@ oficina. Lo que tiene propietario y se recorta son las personas.
 | CU-20.1 Listar | Cualquier rol | Entra a Contactos | Nombre, tipo (y la sede si la tiene), oportunidades abiertas, pipeline, ganado 12 meses, propietario y última actividad (en rojo pasados 30 días). Indicadores: cuentas, con pipeline abierto, estratégicas, sin actividad |
 | CU-20.2 Vendedor | Vendedor | — | Ve todas las cuentas, pero **los agregados se calculan solo sobre sus oportunidades** (§5.3): una cuenta ajena aparece sin pipeline, y no puede deducir por resta el de un compañero |
 | CU-20.3 Sin histórico | Cualquier rol | Ninguna oportunidad cerrada todavía | «Ganado 12 meses» dice «sin histórico», no cero: el sistema arrancó en limpio y un cero afirmaría que la cuenta no compró (`C-02`) |
+| CU-20.4 Abrir la ficha desde la fila | Cualquier rol | Pulsa en cualquier celda de la fila de una cuenta | Abre la ficha, igual que el nombre (§49). El nombre sigue siendo el enlace para el teclado y el lector de pantalla; Ctrl+clic abre otra pestaña; pulsar un botón o seleccionar texto en la fila no navega |
 
 ### F-21 · Ver las personas
 
@@ -382,6 +385,7 @@ oficina. Lo que tiene propietario y se recorta son las personas.
 |---|---|---|---|
 | CU-22.1 Alta | Cualquier rol | «Nueva organización» desde la pestaña o desde el estado vacío: nombre, razón social, identificador fiscal (RFC, NIT o RUT, con nombre genérico), tipo, sector, ciudad y **sede** opcional en cualquier país | Quien crea queda como propietario (§14). La sede es informativa: no decide quién la ve (§18) |
 | CU-22.2 Nombre repetido | Cualquier rol | Ya existe una con ese nombre, en cualquier país, aunque no la alcance | Se rechaza; solo se le dice que existe, nunca de quién es (§18) |
+| CU-22.3 Un dato mal capturado | Cualquier rol | Pulsa «Crear cuenta» con Empleados o Días de crédito que no son número, o sin nombre | El formulario señala el campo con el dato concreto y **conserva todo lo demás** (§48). La señal se apaga al corregir el campo. «Cancelar» limpia el formulario; al reabrir no quedan errores viejos |
 
 ### F-23 · Crear una persona
 
@@ -394,7 +398,7 @@ oficina. Lo que tiene propietario y se recorta son las personas.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-24.1 Editar la cuenta | Propietario, o Gerencia con alcance de oficina (`Q-15`) | Desde su ficha | Mismo formulario del alta con los datos cargados, sede incluida. Reasignar la cuenta admite cualquier usuario activo: no hay país que lo limite (§18) |
+| CU-24.1 Editar la cuenta | Propietario, o Gerencia con alcance de oficina (`Q-15`) | Desde su ficha | Mismo formulario del alta con los datos cargados, sede incluida. Reasignar la cuenta admite cualquier usuario activo: no hay país que lo limite (§18). Un error al guardar conserva lo editado (§48) |
 | CU-24.2 Editar una persona | Quien la administra: su propietario, el gerente de su país, Dirección, Administración (§29) | Desde Personas, desde el comité de la ficha de cuenta o desde el comité en el detalle de oportunidad (§47) | Ídem. A quien se la compartieron, o la ve por tener negocio en la cuenta, no se le ofrece «Editar»: en Personas aparece «Solo lectura» y en el detalle de oportunidad la fila dice «de quién es» sin lápiz. El servidor rechaza la edición de todos modos |
 
 ### F-25 · Ficha de la cuenta

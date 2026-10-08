@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FilaEnlazada } from "@/components/ui/FilaEnlazada";
 import { requireSession } from "@/lib/auth/session";
 import type { Session } from "@/lib/auth/permissions";
 import { listOrganizationsConIndicadores } from "@/lib/scope/organizationIndicators";
@@ -191,8 +192,10 @@ export default async function ContactosPage({
               </thead>
               <tbody>
                 {organizaciones.map((o) => (
-                  <tr
+                  /* Toda la fila lleva a la ficha; el enlace del nombre sigue siendo el control (§49). */
+                  <FilaEnlazada
                     key={o.id}
+                    href={`/contactos/organizaciones/${o.id}`}
                     className="border-t border-borde transition-colors duration-rapido hover:bg-superficie-sutil"
                   >
                     <td className="px-3 py-2.5">
@@ -241,7 +244,7 @@ export default async function ContactosPage({
                     <td className="tabular px-3 py-2.5 text-right">
                       <UltimaActividad fecha={o.indicadores.ultimaActividad} ahora={ahora} />
                     </td>
-                  </tr>
+                  </FilaEnlazada>
                 ))}
               </tbody>
             </table>

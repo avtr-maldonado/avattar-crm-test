@@ -2288,3 +2288,91 @@ Preventa, que puede ver la oportunidad sin que la persona sea suya).
 son de dos usuarios administradores y los vendedores sembrados no tienen ninguna. Las pruebas de
 integración nuevas se escriben contra lo que seguro existe (una oportunidad cualquiera, Dirección,
 Paulina para crear personas, Iván como Preventa), no contra un vendedor con oportunidades.
+
+## 48. Los pipelines del alta son los de los países de la sesión, y la cuenta nueva no se borra al fallar (7 de octubre de 2026)
+
+**Decisión del negocio:** dos correcciones de uso.
+
+**Pipelines por alcance.** En el alta de oportunidad, el campo «Pipeline» ofrecía todos los pipelines
+a Dirección y Administración sin mirar los países de la persona: una administradora dada de alta solo
+con México veía también Colombia y Chile. El alcance de países de una sesión es `countryCodes` para
+todo rol —es lo que pinta la barra de oficinas (§16) y de donde sale la oficina activa—, así que
+`listPipelines` acota por esos países siempre. Con un país, solo los de ese país (venta y
+renovaciones); con varios, los de esos países. Como `listPipelines` es el único lector, el cambio
+alcanza a los dos puntos de alta (pipeline y ficha de cuenta, §46), a la validación del alta —que ya
+rechazaba un pipeline fuera de la lista— y a la pastilla «Pipeline» de los filtros. Hoy toda
+Dirección y Administración lleva los tres países, así que para ellos nada cambia; la regla queda
+escrita para quien se dé de alta con menos.
+
+**Lo que no cambia:** el alcance de **lectura** de Dirección y Administración sigue siendo toda la
+operación (`opportunityScope`, AC-05). Lo que se acota es qué se ofrece para crear y para filtrar.
+Una Dirección de un solo país que además leyera solo ese país sería una pregunta nueva para el
+negocio, junto a Q-01; no esta decisión.
+
+**La cuenta nueva conserva lo tecleado.** El formulario de cuenta (alta y edición) enviaba con
+`action=`, y React reinicia el formulario al terminar la acción, con error o sin él: un dato mal
+capturado en Empleados devolvía VALIDACION y vaciaba los otros nueve campos. Ahora envía desde
+`onSubmit` con `useEnvioQueConserva` —el mismo patrón que el alta de oportunidad desde §26— y pinta
+los errores con `useProblemas`, que los apaga al corregir el campo. El formulario se remonta solo al
+cerrar (creada, guardada o cancelada) y descarta el último resultado, para que la siguiente apertura
+empiece limpia y sin errores viejos.
+
+**Pendiente del mismo patrón:** siguen enviando con `action=` —y por tanto se reinician al fallar—
+los formularios de persona, producto, usuario, acceso de persona, edición de oportunidad, cambio de
+etapa y la cuadrícula de objetivos. En los de edición el reinicio devuelve los valores guardados y se
+pierde solo lo editado; en los de alta (persona, producto, usuario) se pierde todo, como pasaba aquí.
+Se corrigen con el mismo cambio cuando el negocio lo pida.
+
+**Costo de volver:** una línea en `listPipelines`. En el formulario, volver a `action=` es volver al
+defecto.
+
+Dónde vive: `lib/scope/pipelines.ts` (`listPipelines`), `components/contactos/EditarOrganizacion.tsx`.
+Pruebas: `tests/integracion/pipelines.test.ts` (nueva: una administradora con un solo país recibe
+solo ese país; Dirección con dos no recibe el tercero; el vendedor, igual que antes). El formulario
+se verificó montando el componente real en Edge con una acción que devuelve VALIDACION: conserva los
+diez campos, el error se apaga al corregir, cierra al crear y reabre limpio tras crear o cancelar.
+
+## 49. Cuatro correcciones de uso: la fila de cuentas, completar al editar, el cierre en la bitácora y el estado en el detalle (7 de octubre de 2026)
+
+**Decisión del negocio:** cuatro ajustes de uso reportados el 7-oct-2026.
+
+**La fila de cuentas lleva a la ficha.** En Contactos solo el nombre de la cuenta era enlace; ahora
+toda la fila lo es (`FilaEnlazada`). El enlace del nombre sigue siendo el control: es lo que se
+tabula, lo que lee un lector de pantalla y lo que Next prefetcha; la fila solo amplía el blanco del
+ratón. El oyente va al DOM y no a `onClick`, por la misma razón que el panel de §44: una fila no es
+un control, y así se dejan pasar los clics que ya tienen dueño —un enlace, un botón, un campo— y los
+de seleccionar texto. Ctrl o ⌘ abren en otra pestaña. Solo la tabla de cuentas; la de personas abre
+un panel, no una ficha.
+
+**Editar una actividad y marcarla hecha no pregunta por el siguiente paso.** Enmienda a §19 y al
+DEBE de §12.4. `editarActividad` devolvía CONFIRMACION cuando completar la actividad dejaba la
+oportunidad sin pendientes, igual que al registrar; el negocio lo quitó: quien edita tiene la
+actividad delante, y el aviso de «sin próximo paso» al guardar ya se lo dice. La pregunta sigue viva
+al **registrar** una actividad hecha nueva sin que quede nada pendiente (CU-15.3); si el negocio
+también la quiere fuera de ahí, es el mismo cambio en `registrarActividad`. `sinSeguimiento` se
+sigue aceptando al editar y no decide nada.
+
+**El cierre estimado solo se anota cuando cambia el día.** `expectedCloseDate` es columna `date`:
+la base devuelve medianoche UTC y el panel de edición manda mediodía local (como el alta y el dato
+rápido, para que un huso al oeste no recorra el día). `editarOportunidad` comparaba instantes, así
+que cada guardado del panel —aunque la fecha fuera la misma— escribía `CAMBIAR_CIERRE_ESTIMADO` en
+la bitácora. Ahora compara el día (la fecha en UTC, que es lo que la columna guarda). El registro,
+cuando lo hay, sigue llevando los instantes.
+
+**Las actividades del detalle llevan su estado.** La pestaña Actividades de la oportunidad muestra
+la misma pastilla que la pantalla de Actividades (Por realizar, En progreso, Realizada, Vencida),
+con `estadoDeAgenda` y el reloj de la zona de la oportunidad (`relojDeAgenda`, nuevo en el dominio:
+«hoy» empieza a la medianoche de la zona). Sustituye al texto «realizada / pendiente».
+
+**Costo de volver:** cada uno es local: `FilaEnlazada` por `<tr>`; el bloque de CONFIRMACION en
+`editarActividad` (la prueba anterior decía cómo era); comparar instantes en vez de días; la
+pastilla por el texto.
+
+Dónde vive: `components/ui/FilaEnlazada.tsx`, `app/(app)/contactos/page.tsx`, `lib/domain/activity.ts`
+(`editarActividad`), `lib/domain/opportunity.ts` (`diaDeCierre`), `lib/domain/agenda.ts`
+(`relojDeAgenda`), `app/(app)/oportunidades/[id]/page.tsx` (`TabActividades`). Pruebas:
+`tests/integracion/registrar-actividad.test.ts` (completar la última al editar ya no pregunta),
+`tests/integracion/edicion-oportunidad.test.ts` (la misma fecha, como la manda el panel, no anota),
+`lib/domain/agenda.test.ts` (`relojDeAgenda`). La fila se verificó montando el componente real en
+Edge: pulsar una celda navega, el enlace y el botón de la fila no lo disparan, Ctrl+clic abre otra
+pestaña.

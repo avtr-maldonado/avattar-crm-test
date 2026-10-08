@@ -610,9 +610,13 @@ export async function editarOportunidad(
   // Mover el cierre es lo que más se edita y lo que más explica, meses
   // después, por qué un trimestre no cerró como se prometió. Sin rastro nadie
   // sabe cuántas veces se corrió (decisiones §21).
+  //
+  // La columna es `date`: la base devuelve medianoche UTC y el panel manda
+  // mediodía. Comparar instantes anotaba un cambio en cada guardado aunque la
+  // fecha fuera la misma (§49); se compara el día, que es lo único que guarda.
   const cambiaCierre =
     cambios.expectedCloseDate !== undefined &&
-    cambios.expectedCloseDate.getTime() !== detalle.expectedCloseDate.getTime();
+    diaDeCierre(cambios.expectedCloseDate) !== diaDeCierre(detalle.expectedCloseDate);
 
   // El cambio de propietario SÍ está en INV-09; el cierre entró con la
   // bitácora. Los dos van en la misma transacción que el cambio.
@@ -670,6 +674,11 @@ export async function editarOportunidad(
   });
 
   return ok(null);
+}
+
+/** El día que guarda una columna `date`, tal como Prisma lo devuelve: la fecha en UTC. */
+function diaDeCierre(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
 // ═══════════════════════════════════════════════════ Marcar ganada o perdida

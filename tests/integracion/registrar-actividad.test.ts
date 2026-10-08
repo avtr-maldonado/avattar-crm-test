@@ -470,18 +470,23 @@ describe("editarActividad", () => {
     expect(o.nextActivityAt?.toISOString()).toBe(nuevaHora.toISOString());
   });
 
-  it("completar la última pendiente pregunta antes, igual que al registrar", async () => {
+  it("completar la última pendiente al editar NO pregunta: la marca hecha y deja la oportunidad sin próximo paso (§49)", async () => {
     const { oportunidadId, actividadId } = await unaAgendada("Editar · completar la última");
     const detalle = await getOpportunityDetail(jorge, oportunidadId);
 
     const r = await editarActividad(jorge, detalle!, actividadId, { hecha: true });
 
-    expect(r).toMatchObject({ ok: false, motivo: "CONFIRMACION" });
+    expect(r.ok).toBe(true);
     const a = await prisma.activity.findUniqueOrThrow({
       where: { id: actividadId },
       select: { completedAt: true },
     });
-    expect(a.completedAt).toBeNull();
+    expect(a.completedAt).not.toBeNull();
+    const o = await prisma.opportunity.findUniqueOrThrow({
+      where: { id: oportunidadId },
+      select: { nextActivityAt: true },
+    });
+    expect(o.nextActivityAt).toBeNull();
   });
 
   it("completarla con confirmación la marca hecha y deja la oportunidad sin próximo paso", async () => {

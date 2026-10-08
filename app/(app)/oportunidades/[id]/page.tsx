@@ -9,6 +9,8 @@ import {
 } from "@/lib/scope/opportunityDetail";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { ciudadDe, etiquetaDeDuracion, fechaCortaEn, horaEn } from "@/lib/tiempo";
+import { estadoDeAgenda, relojDeAgenda, type RelojDeAgenda } from "@/lib/domain/agenda";
+import { PastillaDeEstado } from "@/components/actividades/comun";
 import { cotizacionVigente } from "@/lib/scope/cotizaciones";
 import { bitacoraDeOportunidad } from "@/lib/scope/bitacora";
 import { listProductos } from "@/lib/scope/productos";
@@ -185,6 +187,8 @@ export default async function DetalleOportunidadPage({
   ];
 
   const banderas = computeRiskFlags(oportunidad, oportunidad.stage, new Date());
+  // Fuera del JSX: el reloj se toma una vez por render (§49).
+  const reloj = relojDeAgenda(new Date(), pais.timezone);
   const conCotizacion = cotizacionConLineas(oportunidad) != null;
 
   return (
@@ -250,6 +254,7 @@ export default async function DetalleOportunidadPage({
             <TabActividades
               actividades={actividades}
               zona={pais.timezone}
+              reloj={reloj}
               composer={oportunidad.status === "ABIERTA" ? composer : null}
             />
           ) : (
@@ -946,11 +951,14 @@ type PropsDelComposer = Omit<
 function TabActividades({
   actividades,
   zona,
+  reloj,
   composer,
 }: {
   actividades: Awaited<ReturnType<typeof listActivities>>;
   /** La zona de la oportunidad: las horas se leen como en la captura. */
   zona: string;
+  /** Para la pastilla de estado: la misma de la pantalla de Actividades (§49). */
+  reloj: RelojDeAgenda;
   /** Lo que necesita el composer; `null` cuando la oportunidad ya no admite escritura. */
   composer: PropsDelComposer | null;
 }) {
@@ -985,6 +993,7 @@ function TabActividades({
           return (
             <li key={a.id} className="rounded-md border border-borde bg-superficie-tarjeta p-4">
               <div className="flex flex-wrap items-center gap-2">
+                <PastillaDeEstado estado={estadoDeAgenda(a, reloj)} />
                 <Pastilla>{a.type.name}</Pastilla>
                 <p className="text-sm font-medium text-texto-titulo">{a.subject}</p>
                 <span className="tabular ml-auto text-xs text-texto-tenue">
@@ -1014,7 +1023,6 @@ function TabActividades({
               {a.outcome && <p className="mt-1 text-sm text-texto-cuerpo">{a.outcome}</p>}
               <p className="mt-2 text-xs text-texto-tenue">
                 {a.user.name}
-                {a.completedAt ? " · realizada" : " · pendiente"}
                 {a.externalEventId && " · en el calendario"}
               </p>
             </li>

@@ -11,18 +11,22 @@ import { toClient } from "@/lib/money";
  * `app/**` no puede importar `lib/db` y porque el pipeline sí se acota por
  * país: un gerente de México no tiene por qué ver el tablero de Colombia.
  *
+ * ## Los países de la sesión, para todo rol · decisiones §48
+ *
+ * El alcance de países de una sesión es `countryCodes`, el mismo que pinta la
+ * barra de oficinas y del que sale la oficina activa. Antes Dirección y
+ * Administración recibían todos los pipelines sin mirar sus países; una
+ * administradora dada de alta con un solo país veía el alta de oportunidad
+ * ofreciéndole Colombia y Chile. Con un país, solo los de ese país; con
+ * varios, los de esos países. Lo que la sesión no alcanza no se ofrece.
+ *
  * El kanban necesita **todas** las etapas del pipeline, incluidas las vacías.
  * Una columna que desaparece cuando no tiene tarjetas rompe el mapa mental del
  * proceso: el vendedor deja de ver que Propuesta existe.
  */
 export async function listPipelines(session: Session) {
-  const dePais =
-    session.role === "DIRECCION" || session.role === "ADMINISTRADOR"
-      ? {}
-      : { countryCode: { in: session.countryCodes } };
-
   return prisma.pipeline.findMany({
-    where: { active: true, ...dePais },
+    where: { active: true, countryCode: { in: session.countryCodes } },
     select: {
       id: true,
       name: true,
