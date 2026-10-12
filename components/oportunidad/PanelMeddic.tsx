@@ -16,6 +16,7 @@ import {
   Panel,
   Seleccion,
   useEnvioQueConserva,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 
 /** El valor del desplegable de persona que significa «crear una nueva» (§27). */
@@ -111,7 +112,7 @@ export function PanelMeddic({
 }) {
   const [editando, setEditando] = useState<ComponenteMeddic | null>(null);
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: Resultado | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -124,6 +125,9 @@ export function PanelMeddic({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, editando !== null);
 
   // El panel envía desde onSubmit: un rechazo por evidencia vacía no debe
   // borrar lo que ya se había escrito (useEnvioQueConserva).

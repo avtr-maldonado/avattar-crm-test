@@ -15,6 +15,7 @@ import {
   Seleccion,
   useEnvioQueConserva,
   useProblemas,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 
 /** Alta y edición comparten formulario, así que comparten tipo de resultado. */
@@ -99,10 +100,6 @@ export function EditarOrganizacion({
   etiquetaBoton?: string;
 }) {
   const [abierto, setAbierto] = useState(false);
-  /** Sube al cerrar: remonta el formulario para que la siguiente apertura empiece limpia. */
-  const [generacion, setGeneracion] = useState(0);
-  /** El resultado que se cerró sin atender: al reabrir no vuelve a pintarse. */
-  const [descartado, setDescartado] = useState<ResultadoDeContacto | null>(null);
   const esAlta = organizacion === undefined;
 
   const [resultado, enviar, enviando] = useActionState(
@@ -113,23 +110,17 @@ export function EditarOrganizacion({
         return r;
       }
       setAbierto(false);
-      setGeneracion((g) => g + 1);
       avisar.exito(esAlta ? "Cuenta creada" : "Cuenta actualizada");
       return r;
     },
     null,
   );
 
-  const resultadoVivo = resultado === descartado ? null : resultado;
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51). Remontar el
+  // formulario ya lo hace `Panel`, así que aquí no queda maquinaria propia.
+  const resultadoVivo = useResultadoVivo(resultado, abierto);
   const problemas = useProblemas(resultadoVivo);
   const alEnviar = useEnvioQueConserva(enviar);
-
-  /** Cancelar o cerrar descarta lo tecleado y el resultado que quedó en pantalla. */
-  function cerrar() {
-    setAbierto(false);
-    setGeneracion((g) => g + 1);
-    setDescartado(resultado);
-  }
 
   const idFormulario = `organizacion-${organizacion?.id ?? "nueva"}`;
 
@@ -143,7 +134,7 @@ export function EditarOrganizacion({
         titulo={esAlta ? "Nueva cuenta" : "Editar cuenta"}
         subtitulo={esAlta ? undefined : organizacion.name}
         abierto={abierto}
-        alCerrar={cerrar}
+        alCerrar={() => setAbierto(false)}
         ancho="lg"
         pie={
           <>
@@ -153,7 +144,7 @@ export function EditarOrganizacion({
                 : "Marcarla estratégica la destaca en el tablero y en la ficha."}
             </p>
             <div className="flex items-center gap-2">
-              <Boton variante="fantasma" type="button" onClick={cerrar}>
+              <Boton variante="fantasma" type="button" onClick={() => setAbierto(false)}>
                 Cancelar
               </Boton>
               <Boton type="submit" form={idFormulario} disabled={enviando}>
@@ -163,10 +154,9 @@ export function EditarOrganizacion({
           </>
         }
       >
-        {/* Se envía desde onSubmit y no con action=: ver useEnvioQueConserva. La key
-            remonta el formulario al cerrar, nunca al fallar. */}
+        {/* Se envía desde onSubmit y no con action=: ver useEnvioQueConserva. De
+            remontarlo en cada apertura se encarga el Panel (§51). */}
         <form
-          key={generacion}
           id={idFormulario}
           onSubmit={alEnviar}
           onChange={problemas.alCambiar}

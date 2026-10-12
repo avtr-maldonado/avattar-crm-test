@@ -105,6 +105,37 @@ export function corregir(
   return { de: resultado, campos };
 }
 
+/**
+ * Qué resultado ya se vio, para que no vuelva a aparecer al reabrir un panel ·
+ * decisiones §51.
+ *
+ * Un `<dialog>` que se cierra no desmonta nada, y el resultado de
+ * `useActionState` vive en el componente de fuera: sin esto, cancelar y volver
+ * a abrir devolvía el formulario en blanco pero señalando los campos que
+ * faltaban la vez pasada.
+ *
+ * La regla es la misma de `corregir`, con otro disparador: lo que estaba en
+ * pantalla al **cerrar** se da por visto, y al abrir se mantiene así. Un envío
+ * nuevo devuelve otro objeto, así que se reporta solo, aunque rechace el mismo
+ * campo por la misma razón.
+ *
+ * Sin cambio de apertura devuelve el mismo objeto a propósito: quien lo use en
+ * un render no debe provocar otro render por nada.
+ */
+export type Visto = {
+  abierto: boolean;
+  descartado: ResultadoAccion<unknown> | null;
+};
+
+export function darPorVisto(
+  visto: Visto,
+  resultado: ResultadoAccion<unknown> | null,
+  abierto: boolean,
+): Visto {
+  if (visto.abierto === abierto) return visto;
+  return { abierto, descartado: abierto ? visto.descartado : resultado };
+}
+
 /** Como `problemaDe`, salvo que el campo ya se haya corregido para ese resultado. */
 export function problemaPendiente(
   resultado: ResultadoAccion<unknown> | null,

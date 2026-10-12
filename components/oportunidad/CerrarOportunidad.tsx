@@ -14,6 +14,7 @@ import {
   Seleccion,
   useEnvioQueConserva,
   useProblemas,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 
 type Accion = (previo: ResultadoAccion | null, form: FormData) => Promise<ResultadoAccion>;
@@ -54,7 +55,7 @@ export function CerrarOportunidad({
     setGeneracion((g) => g + 1);
   }
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: ResultadoAccion | null, form: FormData) => {
       const cual = form.get("__accion") === "perdida" ? "perdida" : "ganada";
       const r = await acciones[cual](previo, form);
@@ -71,6 +72,9 @@ export function CerrarOportunidad({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, panel !== null);
 
   const alEnviar = useEnvioQueConserva(enviar);
   const cumpleTodo = requisitos.every((r) => r.cumple);

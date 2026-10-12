@@ -11,6 +11,7 @@ import {
   Panel,
   useEnvioQueConserva,
   useProblemas,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import type { Eleccion, Sugerencia } from "@/components/ui/Autocompletado";
@@ -75,9 +76,22 @@ export function NuevaOportunidad({
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
-  const [resultado, enviar, enviando] = useActionState(accion, null);
+  const [resultadoCrudo, enviar, enviando] = useActionState(accion, null);
   const [estado, despachar] = useReducer(reducir, organizacionInicial, estadoInicialCon);
   const yaAtendido = useRef<Resultado | null>(null);
+
+  // El modal se cierra en cuanto la accion responde bien, y se cierra aqui,
+  // derivado, no con un `setAbierto(false)` dentro del efecto. Importa por el
+  // aviso: el `<dialog>` vive en la capa superior del navegador y los avisos
+  // se pintan debajo de ella, asi que con el modal abierto «Oportunidad
+  // creada» pasaba sus cuatro segundos detras del fondo oscurecido mientras la
+  // navegacion al detalle tardaba en llegar. Creada, no hay nada que seguir
+  // editando: la pantalla siguiente es el detalle.
+  const panelAbierto = abierto && !resultadoCrudo?.ok;
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51). Cancelar y
+  // volver a abrir ya no devuelve los avisos de los campos que faltaban.
+  const resultado = useResultadoVivo(resultadoCrudo, panelAbierto);
 
   const problemas = useProblemas(resultado);
   const alEnviar = useEnvioQueConserva(enviar);
@@ -136,28 +150,28 @@ export function NuevaOportunidad({
    * que ningún problema se muestre dos veces.
    */
   useEffect(() => {
-    if (!resultado || yaAtendido.current === resultado) return;
-    yaAtendido.current = resultado;
+    if (!resultadoCrudo || yaAtendido.current === resultadoCrudo) return;
+    yaAtendido.current = resultadoCrudo;
 
-    if (!resultado.ok) {
-      avisarSiCorresponde(resultado);
+    if (!resultadoCrudo.ok) {
+      avisarSiCorresponde(resultadoCrudo);
       return;
     }
 
-    avisar.exito("Oportunidad creada", resultado.datos.folio);
+    avisar.exito("Oportunidad creada", resultadoCrudo.datos.folio);
 
     // §8.3 · avanzar pese a una compuerta queda registrado y alimenta el reporte
     // semanal de incumplimiento. Enterarse por ese reporte, una semana después,
     // es enterarse tarde.
-    if (resultado.datos.gateOverride) {
+    if (resultadoCrudo.datos.gateOverride) {
       avisar.advertencia(
         "Nació sin cumplir los requisitos de la etapa",
         "Queda registrado en su historial y en el reporte semanal de incumplimiento.",
       );
     }
 
-    router.push(`/oportunidades/${resultado.datos.id}`);
-  }, [resultado, router]);
+    router.push(`/oportunidades/${resultadoCrudo.datos.id}`);
+  }, [resultadoCrudo, router]);
 
   function limpiar() {
     despachar({ tipo: "LIMPIAR", organizacion: organizacionInicial });
@@ -182,15 +196,6 @@ export function NuevaOportunidad({
 
   const nombreDeOrganizacion =
     estado.organizacion.tipo === "VACIA" ? "" : estado.organizacion.nombre;
-
-  // El modal se cierra en cuanto la acción responde bien, y se cierra aquí,
-  // derivado, no con un `setAbierto(false)` dentro del efecto. Importa por el
-  // aviso: el `<dialog>` vive en la capa superior del navegador y los avisos
-  // se pintan debajo de ella, así que con el modal abierto «Oportunidad
-  // creada» pasaba sus cuatro segundos detrás del fondo oscurecido mientras la
-  // navegación al detalle tardaba en llegar. Creada, no hay nada que seguir
-  // editando: la pantalla siguiente es el detalle.
-  const panelAbierto = abierto && !resultado?.ok;
 
   return (
     <>

@@ -130,7 +130,9 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     usuario, objetivo (fijar cuota), permisos (cambiarPermiso: la matriz de §5.2 editable por
                     Administración, nunca su propia columna → §40; la tabla se abre en lectura y la edición
                     se enciende con un botón → §43)
-lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions
+lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions · las reglas puras de qué
+                    aviso se apaga y cuándo: corregir/problemaPendiente (al teclear) y darPorVisto (al cerrar el
+                    panel → §51)
 lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
                     permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission;
                     oficinaActiva y menuColapsado leen las cookies de preferencia) · permissions (can)
@@ -151,9 +153,11 @@ lib/filters/        definición y parseo de filtros → INV-10 · analisis.ts: l
 lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
 components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>; `cerrarAlFondo` solo en los
-                    paneles que muestran y no capturan → §44; useEnvioQueConserva envía
+                    paneles que muestran y no capturan → §44; **cada apertura remonta los hijos**, porque
+                    cerrar un <dialog> oculta pero no desmonta → §51; useEnvioQueConserva envía
                     desde onSubmit para que React no reinicie el formulario cuando la acción devuelve VALIDACION;
-                    useProblemas apaga el error de un campo al corregirlo) · avisos (Sileo)
+                    useProblemas apaga el error de un campo al corregirlo; useResultadoVivo descarta al cerrar el
+                    resultado que quedó en pantalla, que vive fuera del panel → §51) · avisos (Sileo)
                     · MenuDeUsuario (ficha y cierre de sesión desde la barra superior, <dialog> no modal)
                     · Desplegable + ListaDeVarios/ListaDeUno (las pastillas de filtro con borrador, «Ninguno» y «Aplicar»;
                     salieron de BarraDeFiltros el 30-sep-2026 porque Análisis las usa igual)
@@ -359,7 +363,9 @@ pipeline distingue «sin nada al alcance» de «los filtros dejaron fuera todo»
 marca «Sin acceso» en vez de enlazar a lo que ya no se alcanza. **En el comité de la oportunidad, «Editar» solo para
 quien administra a la persona** (§47, 5-oct): compartida es solo lectura también ahí. **Los pipelines del alta son los de los
 países de la sesión, para todo rol, y la cuenta nueva conserva lo tecleado cuando un dato falla** (§48,
-7-oct). **Cuatro correcciones de uso** el mismo día (§49): la fila de cuentas lleva a la ficha, editar una
+7-oct). **Un panel que se reabre empieza de cero** (§51, 12-oct): `Panel` remonta sus hijos en cada apertura y
+el resultado de la acción se descarta al cerrar, así que ningún formulario vuelve con lo que no se guardó ni
+con los avisos de la vez pasada. **Cuatro correcciones de uso** el 7-oct (§49): la fila de cuentas lleva a la ficha, editar una
 actividad y marcarla hecha no pregunta por el siguiente paso, el cierre estimado solo se anota en la bitácora
 cuando cambia el día, y las actividades del detalle llevan la pastilla de estado de la agenda. **Pendiente y
 visible:** las autorizaciones de
@@ -373,18 +379,30 @@ pnpm dev                    # desarrollo · lo levanta quien desarrolla, no el a
 pnpm build                  # prisma generate + next build · AVISAR antes: escribe el mismo .next que dev
 pnpm db:generate            # cliente de Prisma, sin conexión
 pnpm db:diff                # genera el SQL desde schema.prisma, sin conexión
-pnpm db:seed                # escenario del prototipo aprobado → §15
+pnpm db:seed                # escenario del prototipo aprobado → §15 (solo DEV)
+pnpm db:seed:catalogos --env <archivo> --admin "correo|Nombre|ROL|MX,CO"
+                            # ambiente nuevo: catálogos + primeros administradores, sin negocio → §50
 pnpm test                   # unitarios de lib/domain + integración contra la base sembrada
 pnpm test:e2e               # criterios de aceptación §14
 pnpm lint && pnpm typecheck
 pnpm react-doctor           # calidad de las pantallas · NO `pnpm doctor`, ese es de pnpm
 ```
 
+**Dos ambientes desde el 12 de octubre de 2026** (§50): `cjwahoscedjnjgalmyzu` es desarrollo y lo
+lee `.env.local`; `luujtoutcpswhewsxmja` es producción y lo lee `.env.production.local`, que **no se
+versiona y no lo lee la aplicación local**. Producción ya tiene el esquema, los catálogos, dos
+administradores, el bucket y el acceso con Microsoft (mismo registro de Entra que desarrollo, con su
+propio callback); le falta el despliegue en Vercel y el dominio. Los dos comandos que escriben en una base reciben el
+ambiente por `--env`, imprimen a qué host van antes de tocar nada y aceptan `--dry-run`. Nunca
+copiar las cadenas de producción a `.env.local`.
+
 **Migraciones:** el schema de Prisma es la fuente; Supabase lleva el historial aplicado. Se genera
 el SQL con `pnpm db:diff`, se guarda en `supabase/migrations/` y se aplica con el MCP de Supabase,
 que además permite verificar en el acto con `list_tables` y `get_advisors`. Si el MCP no está
-autorizado en la sesión, `node aplicar-migraciones.mjs` hace lo mismo con la CLI global de Supabase
-(no `npx supabase`: resuelve a una copia vieja). Nunca editar una migración ya aplicada. Si
+autorizado en la sesión, `node aplicar-migraciones.mjs [--env <archivo>] [--dry-run]` hace lo mismo
+con la CLI global de Supabase (no `npx supabase`: resuelve a una copia vieja). **La prueba de que un
+ambiente está al día es `prisma migrate diff --from-url <base> --to-schema-datamodel
+prisma/schema.prisma --script` devolviendo vacío.** Nunca editar una migración ya aplicada. Si
 `supabase db push` rechaza el historial —las aplicadas con el MCP llevan otra versión—, aplicar
 con `pnpm exec prisma db execute --file <sql> --url $DIRECT_URL` y anotar la versión a mano en
 `supabase_migrations.schema_migrations` (pasó el 25-sep-2026 con `personas_por_propietario`).

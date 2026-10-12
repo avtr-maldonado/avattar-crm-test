@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { SIN_CORRECCIONES, corregir, falla, problemaPendiente } from "./acciones";
+import {
+  SIN_CORRECCIONES,
+  corregir,
+  falla,
+  problemaPendiente,
+  darPorVisto,
+} from "./acciones";
 
 const IMPORTE = { campo: "estimatedAmount", mensaje: "Escribe el importe en dólares." };
 const NOMBRE = { campo: "name", mensaje: "Ponle nombre a la oportunidad." };
@@ -45,5 +51,36 @@ describe("los problemas de un campo se apagan al corregirlo", () => {
 
   it("sin resultado no hay problema que apagar", () => {
     expect(problemaPendiente(null, SIN_CORRECCIONES, "name")).toBeUndefined();
+  });
+});
+
+describe("un resultado no sobrevive al cierre del panel · §51", () => {
+  const rechazo = () => falla("VALIDACION", { campo: "name", mensaje: "Pon el nombre." });
+
+  it("al cerrar, el resultado que quedaba en pantalla se da por visto", () => {
+    const r = rechazo();
+    const abierto = { abierto: true, descartado: null };
+    const cerrado = darPorVisto(abierto, r, false);
+    expect(cerrado).toEqual({ abierto: false, descartado: r });
+  });
+
+  it("al reabrir sigue dado por visto: el panel no vuelve señalando lo de antes", () => {
+    const r = rechazo();
+    const cerrado = darPorVisto({ abierto: true, descartado: null }, r, false);
+    const reabierto = darPorVisto(cerrado, r, true);
+    expect(reabierto.descartado).toBe(r);
+  });
+
+  it("un envío nuevo se ve, aunque rechace lo mismo", () => {
+    const primero = rechazo();
+    const cerrado = darPorVisto({ abierto: true, descartado: null }, primero, false);
+    const segundo = rechazo();
+    expect(segundo).not.toBe(primero);
+    expect(cerrado.descartado).not.toBe(segundo);
+  });
+
+  it("sin cambio de apertura devuelve el mismo objeto, para no re-renderizar de más", () => {
+    const visto = { abierto: true, descartado: null };
+    expect(darPorVisto(visto, rechazo(), true)).toBe(visto);
   });
 });

@@ -21,6 +21,7 @@ import {
   Seleccion,
   useEnvioQueConserva,
   useProblemas,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 import {
   estadoInicial,
@@ -163,7 +164,7 @@ export function ComposerDeActividad({
     return inicialDeEdicion ?? estadoInicial({ tipo: tipos[0], ...ahoraRedondeado(zona) });
   }
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: Resultado | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -177,6 +178,9 @@ export function ComposerDeActividad({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
 
   const problemas = useProblemas(resultado);
   const alEnviar = useEnvioQueConserva(enviar);

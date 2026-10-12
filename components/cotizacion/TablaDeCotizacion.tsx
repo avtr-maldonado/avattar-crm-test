@@ -13,6 +13,7 @@ import {
   Panel,
   Seleccion,
   useEnvioQueConserva,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 import { calcularEnVivo, type LineaEnVivo } from "./calculoEnVivo";
 import { INICIAL, reducirEdicion } from "./estadoDeEdicion";
@@ -118,7 +119,7 @@ export function TablaDeCotizacion({
   const [edicion, despacharEdicion] = useReducer(reducirEdicion, INICIAL);
   const { editando, generacion, borrador } = edicion;
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: Resultado | null, form: FormData) => {
       const cual = String(form.get("__accion") ?? "guardarLinea") as keyof typeof acciones;
       const r = await acciones[cual](previo, form);
@@ -151,6 +152,9 @@ export function TablaDeCotizacion({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, agregando);
 
   const alGuardar = useEnvioQueConserva(enviar);
 
