@@ -14,6 +14,7 @@ import {
   Entrada,
   Panel,
   Seleccion,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 
 const TIPOS_DE_NEGOCIO = [
@@ -86,7 +87,7 @@ export function EditarOportunidad({
   const [abierto, setAbierto] = useState(false);
 
   /** El aviso va en el flujo de la acción: una vez por envío, sin efecto. */
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: ResultadoAccion | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -99,6 +100,9 @@ export function EditarOportunidad({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
 
   // RN-29 · si no llega al mínimo, «Compromiso» se ofrece deshabilitado y con
   // su razón. Ocultarlo dejaría a quien lo busca sin saber por qué no está.

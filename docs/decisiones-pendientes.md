@@ -590,6 +590,11 @@ correcto pero la protección no sirve: la ruta directa también responde.
 **Se apaga en** Supabase → Storage → `documentos` → Public bucket. No es un
 cambio de código.
 
+**Verificado el 12 de octubre de 2026** contra `storage.buckets`: `public = false`. Ya se apagó en
+DEV. El bucket sigue sin límite de tamaño ni de tipos, y ninguna migración lo crea: en un proyecto
+nuevo hay que crearlo a mano, privado desde el primer día (plan de ambiente productivo,
+`docs/superpowers/specs/2026-10-12-ambiente-productivo-supabase.md`, D4).
+
 ### Los pesos MEDDIC se leen del pipeline, con respaldo
 
 `INV-05` prohíbe umbrales en el código, y §7 dice que los pesos se configuran
@@ -2376,3 +2381,210 @@ Dónde vive: `components/ui/FilaEnlazada.tsx`, `app/(app)/contactos/page.tsx`, `
 `lib/domain/agenda.test.ts` (`relojDeAgenda`). La fila se verificó montando el componente real en
 Edge: pulsar una celda navega, el enlace y el botón de la fila no lo disparan, Ctrl+clic abre otra
 pestaña.
+
+## 50. Dos ambientes: el proyecto productivo de Supabase y el seed partido en dos (12 de octubre de 2026)
+
+**Decisión del negocio:** tener un ambiente productivo aparte del de desarrollo. El negocio creó el
+proyecto `luujtoutcpswhewsxmja` («CRM Avattar - PROD») en la misma organización de Supabase. Desde
+hoy hay dos bases con el mismo esquema y datos distintos: `cjwahoscedjnjgalmyzu` sigue siendo
+desarrollo y prueba, con el escenario §15; el nuevo lleva lo real.
+
+**Lo que se hizo para que el esquema pueda viajar.** El plan del 12-oct
+(`docs/superpowers/specs/2026-10-12-ambiente-productivo-supabase.md`) encontró que copiar DEV tal
+cual habría llevado tres defectos al ambiente nuevo. Los tres quedaron corregidos:
+
+- **Dos migraciones aplicadas que no estaban en el repo.** `mover_extensiones_fuera_de_public`
+  (quita `citext`, saca `pg_trgm` de `public`) y `unicidad_real_de_objetivos_anuales` (el índice con
+  `NULLS NOT DISTINCT` que impide dos cuotas anuales de la misma persona, `RN-32`) se habían
+  aplicado a DEV sin dejar archivo. Un ambiente nuevo habría nacido **aceptando dos cuotas anuales
+  iguales**, que es exactamente lo que `RN-32` supone imposible. El SQL seguía guardado en
+  `supabase_migrations.schema_migrations.statements` y se recuperó de ahí. La de extensiones se
+  volvió condicional: en DEV corrió como un `ALTER` directo porque `pg_trgm` estaba en `public`,
+  pero en una base nueva la inicial ya lo crea en `extensions` y ahí el `ALTER` directo falla.
+  Además `organizaciones_sin_pais` estaba registrada como `20260917192619` y el archivo decía otra
+  versión: se renombró el archivo, no el historial.
+- **La llave foránea de la sede.** Cuando las cuentas dejaron de pertenecer a un país (§18) la
+  relación se volvió opcional y Prisma pasó a generar `ON DELETE SET NULL`, pero la migración de
+  aquel día solo quitó el `NOT NULL`: la restricción se quedó en `ON DELETE RESTRICT`. El efecto
+  práctico era mínimo —los países no se borran—, pero mantenía `prisma migrate diff` devolviendo
+  SQL para siempre, y ese vacío es la única prueba de que un ambiente quedó al día. Corregido en
+  `20261012120000_sede_opcional_al_borrar_pais.sql`, aplicado primero a DEV.
+- **El seed no sabía sembrar sin inventar.** `prisma/seed.ts` mezclaba configuración y escenario en
+  una sola pasada, así que no había forma de poblar una base nueva sin arrastrar quince
+  oportunidades y diecinueve cuentas de demostración. Los catálogos salieron a
+  `prisma/seed/catalogos.ts` (`sembrarCatalogos`), que es lo que un ambiente necesita para existir:
+  países con su política, la matriz de permisos de §5.2, los seis catálogos y los pipelines con sus
+  etapas y pesos MEDDIC. El escenario lo sigue llamando y continúa con lo suyo.
+
+**Cómo se escribe en una base, desde hoy.** Los dos comandos que escriben reciben el ambiente por
+`--env`, imprimen el host y el proyecto antes de tocar nada, y aceptan `--dry-run`:
+
+```
+node aplicar-migraciones.mjs --env .env.production.local --dry-run
+pnpm db:seed:catalogos --env .env.production.local --admin "correo|Nombre|ADMINISTRADOR|MX,CO,CL"
+```
+
+La razón de la ceremonia: lo único que distingue tocar desarrollo de tocar producción es un nombre
+de archivo, y en producción no hay deshacer. `.env.production.local` no se versiona y **no lo lee la
+aplicación local**; copiarlo a `.env.local` sería apuntar `pnpm dev` a la base real.
+
+**Dos seguros más.** El seed de catálogos se niega a correr sobre una base que ya tiene datos de
+negocio, salvo `--force`: volver a sembrar devolvería la matriz de permisos a la del código y
+borraría lo que Administración haya ajustado en pantalla (§40). Y los dos comandos rechazan una
+cadena de conexión que todavía traiga los marcadores de la plantilla, para que el error no llegue
+disfrazado de fallo de red.
+
+**Lo que no viaja, y no por olvido.** Usuarios, cuentas, personas, oportunidades, actividades,
+cotizaciones, hitos, objetivos y bitácora son el escenario §15. Los productos tampoco: el catálogo
+real lo entrega el negocio, y diez productos inventados en producción son diez productos que alguien
+va a cotizar de verdad. Los perfiles de los primeros administradores nacen con `entraObjectId` nulo
+y el primer ingreso los vincula por correo (`CU-01.1`); copiar el de DEV no serviría, porque cada
+proyecto de Supabase emite los suyos.
+
+**Costo de volver:** el ambiente productivo se borra desde la consola. En el repo, `sembrarCatalogos`
+se puede volver a pegar dentro de `seed.ts` y los dos comandos aceptar solo `.env.local`; las cuatro
+migraciones nuevas se quedan, porque corrigen defectos reales de DEV.
+
+Dónde vive: `supabase/migrations/20260902012224`, `20260902050952`, `20260917192619`,
+`20261012120000`; `prisma/seed/catalogos.ts`, `prisma/seed-catalogos.ts`, `prisma/seed.ts`;
+`aplicar-migraciones.mjs`; `.env.example`, `.env.production.local` (sin versionar). Verificado:
+`prisma migrate diff` contra DEV devuelve vacío; el ensayo contra DEV dice «Remote database is up to
+date»; el seed de catálogos se niega contra DEV por tener negocio; typecheck, lint y 344 pruebas de
+dominio y arquitectura en verde.
+
+### §50 · Lo que se ejecutó el 12 de octubre de 2026 por la tarde
+
+**Producción tiene esquema y catálogos.** Se aplicaron las nueve migraciones a
+`luujtoutcpswhewsxmja` y se sembraron los catálogos y dos administradores. Verificado contra la
+base: 33 tablas, todas con RLS y sin políticas (igual que desarrollo, donde la autorización vive en
+`lib/scope`); `pg_trgm`, `pgcrypto` y `uuid-ossp` en el esquema `extensions`; Postgres 17.11; el
+índice de objetivos con `NULLS NOT DISTINCT`; la llave de la sede en `SET NULL`; y
+`prisma migrate diff` contra producción devolviendo vacío, que es la prueba de que el esquema
+coincide con `schema.prisma`. Los trece catálogos tienen exactamente los mismos conteos que
+desarrollo, y las doce tablas de negocio están en cero. Los dos administradores
+(`miguel.maldonado@` y `alejandro.salazar@`, los dos con los tres países) existen con
+`entraObjectId` nulo, esperando su primer ingreso.
+
+**La región no se supuso, se probó.** La plantilla quedó con el marcador `[REGION]` sin llenar, y
+sustituir el ref del proyecto en el host de desarrollo habría sido adivinar: Supabase reparte los
+proyectos nuevos entre regiones y prefijos de pooler (`aws-0-`, `aws-1-`). Se probaron ocho
+candidatas con una consulta trivial hasta que una autenticó. Resultó `aws-0-us-east-1`, la misma
+que desarrollo, pero eso se supo después de medirlo.
+
+**El pooler de un proyecto nuevo corta en quince conexiones.** La primera pasada del seed de
+catálogos murió con `EMAXCONNSESSION: max clients reached in session mode - pool_size: 15`. La
+causa: los catálogos se sembraban con `Promise.all` sobre las seis listas, medio centenar de
+`upsert` simultáneos, y Prisma abre una conexión por cada uno hasta su propio límite, que en esta
+máquina es mayor que quince. En desarrollo nunca se notó porque su pooler da más. Los catálogos y
+los países pasaron a sembrarse **en serie**: son cuarenta y tantas filas y el paralelismo no
+compraba nada. Como todo va por `upsert`, la segunda pasada completó lo que la primera dejó a
+medias sin duplicar nada.
+
+**El bucket dejó de ser un clic.** `Q-17` y la deuda D4 del plan quedan cerradas con la migración
+`20261012130000_bucket_documentos.sql`, que inserta el bucket `documentos` **privado** en
+`storage.buckets` con `ON CONFLICT DO NOTHING`. Se aplicó a los dos ambientes: en desarrollo fue
+inocua porque ya existía. Va sin límite de tamaño ni lista de tipos, igual que desarrollo: ponerles
+tope es una decisión de operación que se toma en la consola, y una lista blanca mal puesta se
+descubre cuando alguien no puede subir el contrato que cierra el trato. No lleva políticas de
+`storage.objects` porque el CRM entra con `service_role` desde el servidor y la autorización la
+decidió `lib/scope` antes (INV-01).
+
+**Entra ID: «la misma integración» todavía pide un paso.** El proveedor Azure de producción está
+**apagado**; el endpoint de autorización responde «provider is not enabled». Desarrollo usa el
+tenant `5afa577a-1806-4dd4-8f35-34f1a6a98651` y el registro de aplicación
+`631faf1d-061d-4ad8-b2b5-fce81a058b05`, con el redirect
+`https://cjwahoscedjnjgalmyzu.supabase.co/auth/v1/callback`. Usar el mismo registro en producción no
+basta: **el callback pertenece al proyecto de Supabase, no a la aplicación**, así que hay que
+encender el proveedor en producción con ese mismo client id, secret y tenant, y añadir
+`https://luujtoutcpswhewsxmja.supabase.co/auth/v1/callback` a los redirect URIs del registro en el
+portal de Entra. Sin ese segundo paso Microsoft rechaza el ingreso con `AADSTS50011`. Los dos son
+clics en consolas ajenas a esta máquina.
+
+**Lo que falta para que producción se pueda usar:** el proveedor de Entra (arriba), el proyecto de
+Vercel ligado a `main` con sus variables —incluidas la anon key y la `service_role` del proyecto
+nuevo, que no están en esta máquina—, el dominio y su DNS, y el humo del bloque 11 del plan de
+pruebas. El catálogo de productos sigue pendiente de que el negocio lo entregue.
+
+### §50 · Entra ID encendido y la base verificada por las dos vías (12 de octubre de 2026, al cierre)
+
+**El proveedor de Microsoft quedó encendido en producción**, y se comprobó sin credenciales siguiendo
+el redirect del endpoint público de autorización: producción manda al mismo tenant
+(`5afa577a-…`) y al mismo registro de aplicación (`631faf1d-…`) que desarrollo, con el callback
+`https://luujtoutcpswhewsxmja.supabase.co/auth/v1/callback`, que es el suyo y no el de desarrollo.
+Esa comprobación vale la pena cada vez que se toca el SSO: es la única que distingue «configurado»
+de «configurado en el proyecto correcto».
+
+**La base responde por las dos vías.** Hasta ahora todo se había hecho por el pooler en modo sesión
+(5432), que es el de las migraciones. La aplicación usa el de transacción (6543 con
+`?pgbouncer=true`), que es exactamente el que falló en Vercel el 14 de septiembre sin dejar rastro
+en los logs de la base. Se probó antes de desplegar, con una lectura representativa: los cuatro
+pipelines con sus etapas, los 36 permisos concedidos y los dos administradores, en 1.8 segundos
+desde México.
+
+**Ningún archivo del código apunta a un proyecto en duro.** La aplicación lee `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` y `DIRECT_URL` del
+ambiente, y nada más. Las dos únicas menciones al ref de desarrollo están en `.mcp.json` y en un
+comentario de `supabase/config.toml`, que son herramientas de quien desarrolla.
+
+**Una trampa anotada:** `.mcp.json` apunta el conector de Supabase **solo al proyecto de
+desarrollo**. Quien lo autorice y crea que cubre los dos ambientes se va a equivocar. Apuntarlo
+también a producción es una decisión aparte —un conector con permisos de escritura sobre la base
+real—, y por eso no se hizo aquí.
+
+**Queda, y ya no es de base de datos:** el proyecto de Vercel ligado a `main` con las cinco
+variables del proyecto nuevo (la anon key y la `service_role` salen de Project Settings → API y no
+están en esta máquina), el dominio con su DNS, agregarlo al Site URL y a los Redirect URLs de
+Supabase, y el humo del bloque 11 del plan de pruebas. `GET /salud` del dominio nuevo es la primera
+comprobación después de desplegar.
+
+## 51. Un panel que se reabre empieza de cero (12 de octubre de 2026)
+
+**Decisión del negocio:** dos reportes con la misma raíz. En el alta de oportunidad, enviar con
+campos vacíos deja sus avisos; al cancelar y volver a abrir, el formulario aparecía en blanco pero
+**seguía señalando los mismos campos**. En Editar usuario, cambiar el rol sin guardar y volver a
+abrir mostraba el rol elegido y no el guardado. El negocio pidió lo mismo para todos: que cada
+apertura recargue.
+
+**La causa.** `close()` de un `<dialog>` oculta, no desmonta. El panel sigue en el árbol con todo lo
+que tuviera dentro, así que un campo no controlado conserva lo tecleado y cualquier estado de un
+hijo sobrevive al cierre. Y el resultado de `useActionState`, que vive **fuera** del panel, en el
+componente que lo abre, tampoco se va: al reabrir se vuelve a pintar contra un formulario en
+blanco. En el alta de oportunidad era peor, porque `limpiar()` llamaba a `useProblemas.reiniciar()`,
+que al borrar las correcciones devolvía **incluso los avisos que ya se habían atendido**.
+
+**La corrección, en dos piezas y una sola vez.** Lo que se repitió a mano en §48 para el formulario
+de cuenta ahora vive donde corresponde:
+
+- **`Panel` remonta sus hijos en cada apertura.** Una `key` que cuenta las aperturas en el
+  contenedor del contenido: al abrir, el subárbol se desmonta y vuelve a montarse, los
+  `defaultValue` se releen y el estado de los hijos nace otra vez. Se cuenta al abrir y no al
+  cerrar para que el formulario no se vea reiniciar mientras el panel se va. Alcanza a los
+  veintiséis paneles de la aplicación sin tocar ninguno.
+- **`useResultadoVivo(resultado, abierto)`** para lo que el panel no alcanza. `useActionState` no
+  deja borrar su resultado, así que no se borra: se **recuerda cuál ya se vio** al cerrar y se deja
+  de reportar. Un envío nuevo devuelve otro objeto, así que vuelve a mostrarse solo, aunque rechace
+  el mismo campo por la misma razón. Se deriva durante el render y no en un efecto: un efecto lo
+  pintaría un cuadro tarde, justo el cuadro en el que el panel aparece. La regla es pura y está
+  probada en `lib/acciones` (`darPorVisto`), junto a la de `corregir`, que es su hermana.
+
+**Crudo y vivo.** Los catorce formularios con panel usan el vivo para lo que se muestra. El crudo se
+queda solo donde se reacciona a un resultado **nuevo**: en el alta de oportunidad, el efecto que
+avisa una vez y navega al detalle, y el cálculo que cierra el modal al crear. Confundirlos ahí
+dejaría la oportunidad creada sin navegación.
+
+**Lo que esto no arregla, a propósito.** El estado que vive en el componente de fuera —el reductor
+del alta de oportunidad, por ejemplo— no lo toca el remontado, porque no está dentro del panel. Esos
+formularios ya lo limpian ellos al cancelar. Y sigue pendiente lo de §48: siete formularios envían
+con `action=` y React los reinicia al fallar, que es un problema distinto —ocurre con el panel
+abierto— y se corrige con `useEnvioQueConserva`.
+
+**Costo de volver:** quitar la `key` del contenedor de `Panel` y el gancho de los catorce
+formularios. El §48 del formulario de cuenta se puede reconstruir a mano.
+
+Dónde vive: `components/ui/formulario.tsx` (`Panel`, `useResultadoVivo`), `lib/acciones.ts`
+(`darPorVisto`, `Visto`), y los catorce formularios con panel. `EditarOrganizacion` perdió la
+maquinaria propia de §48, que ahora es la de todos. Pruebas: `lib/acciones.test.ts` (+4 sobre la
+regla pura, vistas en rojo antes). En navegador, montando los dos formularios reales con una acción
+que rechaza: antes del cambio el alta volvía con cuatro campos señalados y cinco avisos, y el rol a
+medio cambiar sobrevivía con el nombre y la casilla de país; después, las dos aperturas vuelven
+limpias.

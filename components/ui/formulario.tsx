@@ -5,9 +5,11 @@ import { startTransition, useCallback, useEffect, useRef, useState, type ReactNo
 import {
   SIN_CORRECCIONES,
   corregir,
+  darPorVisto,
   problemaPendiente,
   type Problema,
   type ResultadoAccion,
+  type Visto,
 } from "@/lib/acciones";
 
 /**
@@ -179,6 +181,26 @@ export function Panel({
 }) {
   const dialogo = useRef<HTMLDialogElement>(null);
 
+  // Cada apertura estrena los hijos · decisiones §51.
+  //
+  // `close()` de un <dialog> oculta, no desmonta: el panel sigue en el árbol
+  // con todo lo que tuviera dentro. Por eso un campo no controlado volvía con
+  // lo que alguien tecleó y no guardó —el rol a medio cambiar en Editar
+  // usuario era el caso que lo destapó— y por eso cualquier estado de un hijo
+  // sobrevivía al cierre. Cambiar la `key` del contenedor desmonta y vuelve a
+  // montar el contenido, así que los `defaultValue` se releen y el estado de
+  // los hijos nace otra vez. Se cuenta al **abrir** y no al cerrar para que el
+  // formulario no se vea reiniciar mientras el panel se va.
+  //
+  // Lo que esto NO alcanza es el resultado de la acción, que vive en el padre:
+  // para eso está `useResultadoVivo`.
+  const [generacion, setGeneracion] = useState(0);
+  const [eraAbierto, setEraAbierto] = useState(abierto);
+  if (eraAbierto !== abierto) {
+    setEraAbierto(abierto);
+    if (abierto) setGeneracion((g) => g + 1);
+  }
+
   useEffect(() => {
     const el = dialogo.current;
     if (!el) return;
@@ -244,7 +266,9 @@ export function Panel({
         </button>
       </header>
 
-      <div className="px-6 py-5">{children}</div>
+      <div key={generacion} className="px-6 py-5">
+        {children}
+      </div>
 
       {pie && (
         <footer className="flex flex-wrap items-center justify-between gap-4 border-t border-borde bg-superficie-sutil px-6 py-4">
@@ -342,4 +366,39 @@ export function useProblemas(resultado: ResultadoAccion<unknown> | null) {
     },
     reiniciar: () => setCorrecciones(SIN_CORRECCIONES),
   };
+}
+
+/**
+ * El resultado de la última acción, salvo el que se quedó en pantalla al
+ * cerrar el panel · decisiones §51.
+ *
+ * `Panel` remonta sus hijos en cada apertura, pero el resultado de
+ * `useActionState` vive en el padre y sobrevive: al reabrir, el formulario
+ * volvía señalando los mismos campos que faltaban la vez pasada, aunque ya
+ * estuviera en blanco. Peor con `useProblemas.reiniciar()`, que al borrar las
+ * correcciones devolvía incluso los avisos que ya se habían atendido.
+ *
+ * Aquí no se borra el resultado —`useActionState` no deja—, se **recuerda cuál
+ * ya se vio** y se deja de reportar. Un envío nuevo devuelve un objeto nuevo,
+ * así que vuelve a mostrarse solo.
+ *
+ * Se deriva durante el render y no en un efecto: el valor sale de comparar la
+ * apertura de antes con la de ahora, y un efecto lo pintaría un cuadro tarde,
+ * justo el cuadro en el que el panel aparece.
+ *
+ * Quien necesite el resultado **crudo** —navegar al crear, avisar una sola
+ * vez— que use el de `useActionState` directamente: esto es para lo que se
+ * muestra.
+ */
+export function useResultadoVivo<T>(
+  resultado: ResultadoAccion<T> | null,
+  abierto: boolean,
+): ResultadoAccion<T> | null {
+  const [visto, setVisto] = useState<Visto>({ abierto, descartado: null });
+
+  // La regla es pura y está probada en `lib/acciones`, como la de `corregir`.
+  const siguiente = darPorVisto(visto, resultado, abierto);
+  if (siguiente !== visto) setVisto(siguiente);
+
+  return resultado === siguiente.descartado ? null : resultado;
 }

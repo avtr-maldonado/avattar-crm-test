@@ -9,7 +9,14 @@ import { problemaDe } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Autocompletado, type Sugerencia } from "@/components/ui/Autocompletado";
 import { Boton } from "@/components/ui/primitivas";
-import { AvisosDeAccion, Campo, Entrada, Panel, Seleccion } from "@/components/ui/formulario";
+import {
+  AvisosDeAccion,
+  Campo,
+  Entrada,
+  Panel,
+  Seleccion,
+  useResultadoVivo,
+} from "@/components/ui/formulario";
 
 export type PersonaDelFormulario = {
   id: string;
@@ -72,7 +79,7 @@ export function EditarPersona({
   const esAlta = persona === undefined;
   const eligeEmpresa = esAlta && organizationId === undefined;
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: ResultadoDeContacto | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -86,6 +93,9 @@ export function EditarPersona({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
 
   const idFormulario = `persona-${persona?.id ?? organizationId ?? "nueva"}`;
 

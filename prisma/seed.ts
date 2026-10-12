@@ -1,36 +1,28 @@
 import { PrismaClient, type MeddicComponent } from "@prisma/client";
 import { computeMeddicScore } from "@/lib/domain/meddic";
 import { derivarActividades } from "./seed/actividades";
+import { sembrarCatalogos } from "./seed/catalogos";
 import { derivarMeddic } from "./seed/meddic";
-import { PERMISOS_POR_ROL } from "./seed/permisos";
 import {
   ANIO_FISCAL,
   CUOTAS_T3,
   DESCUADRE_DELIBERADO,
-  ETAPAS_RENOVACION,
-  ETAPAS_VENTA,
-  FAMILIAS_PRODUCTO,
-  GATE_MODE_INICIAL,
   MEDDIC_DETALLADO,
-  MOTIVOS_PERDIDA,
   OPORTUNIDADES,
   ORGANIZACIONES,
-  ORIGENES,
-  PAISES,
   PERSONAS_ACEROS,
   PESOS_MEDDIC,
-  PIPELINES,
-  POLITICA_BASE,
   PRODUCTOS,
-  ROLES_COMITE,
-  TIPOS_ACTIVIDAD,
-  TIPOS_DOCUMENTO,
   USUARIOS,
   correoDe,
 } from "./seed/datos";
 
 /**
  * Siembra el escenario del prototipo aprobado (§15).
+ *
+ * Los catálogos —países, política, permisos, las seis listas y los pipelines—
+ * salieron a `./seed/catalogos` el 12 de octubre de 2026, para poder poblar un
+ * ambiente nuevo sin arrastrar este escenario (`pnpm db:seed:catalogos`).
  *
  * Idempotente: todo va por `upsert` con una llave natural, así que correrlo dos
  * veces no duplica. Eso importa porque el seed se corre a mano durante el
@@ -51,81 +43,7 @@ const enDias = (dias: number) =>
 async function main() {
   console.log("Sembrando el escenario del prototipo aprobado (§15)…\n");
 
-  // ── Países y política comercial ──────────────────────────────────────────
-  // Los tres países son independientes entre sí; dentro de cada uno, la
-  // política tiene que esperar a que exista el país por la llave foránea.
-  await Promise.all(
-    PAISES.map(async (pais) => {
-      await prisma.country.upsert({
-        where: { code: pais.code },
-        update: { name: pais.name, taxRate: pais.taxRate, taxLabel: pais.taxLabel, timezone: pais.timezone },
-        create: { ...pais, fiscalYearStartMonth: 1 },
-      });
-      await prisma.commercialPolicy.upsert({
-        where: { countryCode: pais.code },
-        update: POLITICA_BASE,
-        create: { countryCode: pais.code, ...POLITICA_BASE },
-      });
-    }),
-  );
-  console.log(`  ${PAISES.length} países con su política comercial`);
-
-  // ── Permisos y la matriz de §5.2 ─────────────────────────────────────────
-  for (const [code, meta] of Object.entries(PERMISOS_POR_ROL)) {
-    const permiso = await prisma.permission.upsert({
-      where: { code },
-      update: { name: meta.nombre, description: meta.descripcion },
-      create: { code, name: meta.nombre, description: meta.descripcion },
-    });
-    for (const [role, valor] of Object.entries(meta.roles)) {
-      await prisma.rolePermission.upsert({
-        where: { role_permissionId: { role: role as never, permissionId: permiso.id } },
-        update: { granted: valor.granted, limitValue: valor.limite ?? null },
-        create: {
-          role: role as never,
-          permissionId: permiso.id,
-          granted: valor.granted,
-          limitValue: valor.limite ?? null,
-        },
-      });
-    }
-  }
-  console.log(`  ${Object.keys(PERMISOS_POR_ROL).length} permisos con su matriz por rol`);
-
-  // ── Catálogos ────────────────────────────────────────────────────────────
-  // Las seis listas son independientes entre sí: van en paralelo.
-  await Promise.all([
-    ...TIPOS_ACTIVIDAD.map((name) =>
-      prisma.activityType.upsert({ where: { name }, update: {}, create: { name } }),
-    ),
-    ...TIPOS_DOCUMENTO.map((t) =>
-      prisma.documentType.upsert({
-        where: { name: t.name },
-        update: { isContract: t.isContract },
-        create: t,
-      }),
-    ),
-    ...MOTIVOS_PERDIDA.map((m) =>
-      prisma.lossReason.upsert({
-        where: { name: m.name },
-        update: { requiresCompetitor: m.requiresCompetitor },
-        create: m,
-      }),
-    ),
-    ...ROLES_COMITE.map((name) =>
-      prisma.committeeRole.upsert({ where: { name }, update: {}, create: { name } }),
-    ),
-    ...ORIGENES.map((name) =>
-      prisma.opportunitySource.upsert({ where: { name }, update: {}, create: { name } }),
-    ),
-    ...FAMILIAS_PRODUCTO.map((name) =>
-      prisma.productFamily.upsert({ where: { name }, update: {}, create: { name } }),
-    ),
-  ]);
-  console.log(
-    `  catálogos: ${TIPOS_ACTIVIDAD.length} tipos de actividad, ${TIPOS_DOCUMENTO.length} de documento, ` +
-      `${MOTIVOS_PERDIDA.length} motivos de pérdida, ${ROLES_COMITE.length} roles de comité`,
-  );
+  const { etapasPorPipeline } = await sembrarCatalogos(prisma);
 
   // ── Usuarios ─────────────────────────────────────────────────────────────
   const filasUsuario = await Promise.all(
@@ -148,64 +66,6 @@ async function main() {
   );
   console.log(`  ${USUARIOS.length} usuarios`);
 
-  // ── Pipelines, etapas y pesos MEDDIC ─────────────────────────────────────
-  const etapasPorPipeline = new Map<string, Map<string, string>>();
-  for (const p of PIPELINES) {
-    const existente = await prisma.pipeline.findFirst({
-      where: { name: p.nombre },
-      select: { id: true },
-    });
-    const pipeline = existente
-      ? await prisma.pipeline.update({
-          where: { id: existente.id },
-          data: { countryCode: p.pais, isRenewal: p.renovacion },
-        })
-      : await prisma.pipeline.create({
-          data: { name: p.nombre, countryCode: p.pais, isRenewal: p.renovacion },
-        });
-
-    const etapas = p.renovacion ? ETAPAS_RENOVACION : ETAPAS_VENTA;
-    const mapa = new Map<string, string>();
-    for (const e of etapas) {
-      const fila = await prisma.stage.upsert({
-        where: { pipelineId_position: { pipelineId: pipeline.id, position: e.position } },
-        update: {
-          name: e.name,
-          probability: e.probability,
-          staleAfterDays: e.staleAfterDays,
-          gateRequires: [...e.gateRequires],
-          gateMode: GATE_MODE_INICIAL,
-          isClosing: e.isClosing,
-        },
-        create: {
-          pipelineId: pipeline.id,
-          name: e.name,
-          position: e.position,
-          probability: e.probability,
-          staleAfterDays: e.staleAfterDays,
-          gateRequires: [...e.gateRequires],
-          gateMode: GATE_MODE_INICIAL,
-          isClosing: e.isClosing,
-        },
-      });
-      mapa.set(e.name, fila.id);
-    }
-    etapasPorPipeline.set(p.nombre, mapa);
-
-    for (const [component, weight] of Object.entries(PESOS_MEDDIC)) {
-      await prisma.meddicWeight.upsert({
-        where: {
-          pipelineId_component: {
-            pipelineId: pipeline.id,
-            component: component as MeddicComponent,
-          },
-        },
-        update: { weight },
-        create: { pipelineId: pipeline.id, component: component as MeddicComponent, weight },
-      });
-    }
-  }
-  console.log(`  ${PIPELINES.length} pipelines con sus etapas y pesos MEDDIC`);
 
   // ── Productos y lista de precio ──────────────────────────────────────────
   const familias = new Map(

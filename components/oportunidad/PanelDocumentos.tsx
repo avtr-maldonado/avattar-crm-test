@@ -5,7 +5,14 @@ import type { ResultadoAccion } from "@/lib/acciones";
 import { problemaDe } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton, Pastilla } from "@/components/ui/primitivas";
-import { AvisosDeAccion, Campo, Entrada, Panel, Seleccion } from "@/components/ui/formulario";
+import {
+  AvisosDeAccion,
+  Campo,
+  Entrada,
+  Panel,
+  Seleccion,
+  useResultadoVivo,
+} from "@/components/ui/formulario";
 
 type Resultado = ResultadoAccion<{ puntaje?: number; url?: string } | null>;
 type Accion = (previo: Resultado | null, form: FormData) => Promise<Resultado>;
@@ -52,7 +59,7 @@ export function PanelDocumentos({
 }) {
   const [subiendo, setSubiendo] = useState(false);
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: Resultado | null, form: FormData) => {
       const cual = String(form.get("__accion") ?? "subir") as keyof typeof acciones;
       const r = await acciones[cual](previo, form);
@@ -75,6 +82,9 @@ export function PanelDocumentos({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, subiendo);
 
   function despachar(campos: Record<string, string>) {
     const datos = new FormData();

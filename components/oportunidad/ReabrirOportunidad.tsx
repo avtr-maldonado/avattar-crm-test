@@ -4,7 +4,12 @@ import { useActionState, useState } from "react";
 import type { ResultadoAccion } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton } from "@/components/ui/primitivas";
-import { AvisosDeAccion, Panel, useEnvioQueConserva } from "@/components/ui/formulario";
+import {
+  AvisosDeAccion,
+  Panel,
+  useEnvioQueConserva,
+  useResultadoVivo,
+} from "@/components/ui/formulario";
 
 type Accion = (previo: ResultadoAccion | null, form: FormData) => Promise<ResultadoAccion>;
 
@@ -29,7 +34,7 @@ export function ReabrirOportunidad({
 }) {
   const [abierto, setAbierto] = useState(false);
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: ResultadoAccion | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -42,6 +47,9 @@ export function ReabrirOportunidad({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
   const alEnviar = useEnvioQueConserva(enviar);
 
   return (

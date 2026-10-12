@@ -15,7 +15,8 @@
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
     "db:diff": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "db:seed:catalogos": "tsx prisma/seed-catalogos.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0",

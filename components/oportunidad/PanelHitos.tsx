@@ -12,6 +12,7 @@ import {
   Panel,
   useEnvioQueConserva,
   useProblemas,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 
 type Resultado = ResultadoAccion<{ puntaje?: number; url?: string } | null>;
@@ -101,7 +102,9 @@ export function PanelHitos({
     setGeneracion((g) => g + 1);
   }
 
-  const [resultado, enviar, enviando] = useActionState(
+  const abierto = editando !== null || agregando;
+
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: Resultado | null, form: FormData) => {
       const cual = String(form.get("__accion") ?? "guardar") as keyof typeof acciones;
       const r = await acciones[cual](previo, form);
@@ -118,6 +121,9 @@ export function PanelHitos({
     null,
   );
 
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
+
   function despachar(campos: Record<string, string>) {
     const datos = new FormData();
     datos.set("opportunityId", opportunityId);
@@ -125,7 +131,6 @@ export function PanelHitos({
     startTransition(() => enviar(datos));
   }
 
-  const abierto = editando !== null || agregando;
   const netoN = neto === null ? null : Number(neto);
   const asignadoN = Number(cuadre.asignadoCrudo);
   // Lo que queda sin contar el hito que se edita: su monto vuelve a la bolsa.

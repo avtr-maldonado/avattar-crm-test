@@ -8,7 +8,13 @@ import type { Role } from "@/lib/dto";
 import { ETIQUETA_ROL } from "@/lib/etiquetas";
 import { Boton } from "@/components/ui/primitivas";
 import { SelectorDeVarios } from "@/components/ui/SelectorDeVarios";
-import { AvisosDeAccion, Campo, Panel, Seleccion } from "@/components/ui/formulario";
+import {
+  AvisosDeAccion,
+  Campo,
+  Panel,
+  Seleccion,
+  useResultadoVivo,
+} from "@/components/ui/formulario";
 
 type ResultadoDeContacto = ResultadoAccion<{ id: string } | null>;
 
@@ -38,7 +44,7 @@ export function AccesoDePersona({
 }) {
   const [abierto, setAbierto] = useState(false);
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: ResultadoDeContacto | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -51,6 +57,9 @@ export function AccesoDePersona({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
 
   const idFormulario = `acceso-${persona.id}`;
   // El propietario no se comparte consigo mismo. Si se transfiere, quien la

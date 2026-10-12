@@ -177,6 +177,7 @@ error caro de esta pantalla: crear una cuenta duplicada sin darse cuenta.
 | CU-10.8 Nombre de cuenta repetido | Cualquier rol | Escribe una cuenta nueva cuyo nombre ya existe, en cualquier país, aunque no la alcance | Se rechaza con el mensaje de que ya existe. Un duplicado partiría el histórico para siempre (§14, §18) |
 | CU-10.9 Creada | Cualquier rol | — | Aviso «Oportunidad creada» con su folio y navegación al detalle |
 | CU-10.10 Falta un campo al crear | Cualquier rol | Pulsa «Crear oportunidad» sin importe, sin fecha o sin nombre | El formulario señala qué falta junto a cada campo y **conserva todo lo demás capturado**. La señal de un campo se apaga en cuanto se corrige; si el servidor lo vuelve a rechazar, se vuelve a encender. «Cancelar» sí limpia el formulario |
+| CU-10.11 Cancelar y volver a abrir | Cualquier rol | Envía con campos vacíos, ve los avisos, pulsa «Cancelar» y abre otra vez «Nueva oportunidad» | El formulario abre **limpio y sin avisos** (§51): ni las señales de los campos que faltaban ni el aviso general. Vale para todos los paneles de la aplicación |
 
 ### F-11 · Mover una oportunidad de etapa
 
@@ -543,6 +544,7 @@ Pestaña Usuarios, solo con `ADMINISTRAR_USUARIOS`. Cada operación deja bitáco
 |---|---|---|---|
 | CU-35.1 Alta previa | Administración | Correo, nombre, rol y países | El perfil queda listo, sin vincular; el primer ingreso con Microsoft lo vincula por correo (F-01) |
 | CU-35.2 Editar | Administración | Cambia rol, países, nombre o estado | Desactivar es quitar el acceso. **Nadie se quita a sí mismo** el acceso ni el rol de administrador (§15) |
+| CU-35.2b Cerrar sin guardar | Administración | Abre «Editar», cambia el rol o los países, no guarda, cierra y vuelve a abrir | Vuelve con **lo guardado**, no con lo que se dejó a medias (§51). Antes el desplegable conservaba la opción elegida y parecía guardada |
 | CU-35.3 Dar acceso a quien ya entró | Administración | En la lista de quienes entraron con Microsoft sin perfil, asigna rol y país | Se crea el perfil ya vinculado, o se vincula el que existía con ese correo |
 
 ---
@@ -624,5 +626,5 @@ las dos tablas originales, de menor jerarquía. Los filtros globales mueven todo
 | Carga masiva de productos y costos (`Q-05`) | Pendiente | |
 | Ficha de persona · P-05 | Pendiente | El buscador lleva a la empresa |
 | Colombia y Chile productivos · E5 | Pendiente | Los pipelines existen; faltan datos, cuotas y equipos |
-| Bucket `documentos` privado (`Q-17`) | Riesgo abierto | Hoy está en público |
+| Bucket `documentos` privado (`Q-17`) | Resuelto | Privado en los dos ambientes y creado por la migración `20261012130000` desde el 12-oct-2026, así que ya no depende de que alguien lo recuerde. Sigue sin límite de tamaño ni de tipos: eso se decide en la consola (§50) |
 | Prospectos, crédito compartido, migración desde Pipedrive | Fuera | `decisiones-pendientes.md` §4 |

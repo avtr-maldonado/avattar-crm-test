@@ -14,6 +14,7 @@ import {
   Entrada,
   Panel,
   Seleccion,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 
 type ResultadoDeUsuario = ResultadoAccion<{ id: string } | null>;
@@ -72,7 +73,7 @@ export function FormularioDeUsuario(props: Props) {
   const usuario = props.modo === "edicion" ? props.usuario : null;
   const pendiente = props.modo === "acceso" ? props.pendiente : null;
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: ResultadoDeUsuario | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -96,6 +97,9 @@ export function FormularioDeUsuario(props: Props) {
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
 
   const idFormulario = `usuario-${props.modo}-${usuario?.id ?? pendiente?.authUserId ?? "nuevo"}`;
   const campo = (nombre: string) => `${idFormulario}-${nombre}`;

@@ -13,6 +13,7 @@ import {
   Entrada,
   Panel,
   Seleccion,
+  useResultadoVivo,
 } from "@/components/ui/formulario";
 
 /** Alta y edición comparten formulario, así que comparten tipo de resultado. */
@@ -69,7 +70,7 @@ export function EditarProducto({
   const [costo, setCosto] = useState(producto?.standardCost ?? "");
   const esAlta = producto === undefined;
 
-  const [resultado, enviar, enviando] = useActionState(
+  const [resultadoCrudo, enviar, enviando] = useActionState(
     async (previo: ResultadoDeProducto | null, form: FormData) => {
       const r = await accion(previo, form);
       if (!r.ok) {
@@ -82,6 +83,9 @@ export function EditarProducto({
     },
     null,
   );
+
+  // Lo que se muestra: el resultado muere al cerrar el panel (§51).
+  const resultado = useResultadoVivo(resultadoCrudo, abierto);
 
   const idFormulario = `producto-${producto?.id ?? "nuevo"}`;
   // Los dos vacíos = sin lista (§22): precio y costo se fijan en cada cotización.
