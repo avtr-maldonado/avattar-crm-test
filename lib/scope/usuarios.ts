@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, Role } from "@prisma/client";
 import { requirePermission, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { createServiceRoleClient } from "@/lib/supabase/admin";
@@ -6,10 +6,11 @@ import { createServiceRoleClient } from "@/lib/supabase/admin";
 /**
  * Los usuarios del CRM, para Administración · P-11.
  *
- * Aquí el alcance no es por país ni por propietario: es el permiso
- * `ADMINISTRAR_USUARIOS`. Quien no lo tiene no lee nada, y se lanza en vez de
- * devolver vacío para que un olvido en la pantalla no se vea como «no hay
- * usuarios». La pantalla ya responde 403 antes de llegar aquí.
+ * La puerta es el permiso `ADMINISTRAR_USUARIOS`: quien no lo tiene no lee
+ * nada, y se lanza en vez de devolver vacío para que un olvido en la pantalla
+ * no se vea como «no hay usuarios». Desde §55 Gerencia también lo tiene, y
+ * entonces el alcance sí es por país: un gerente ve a quienes operan en sus
+ * países. A quién puede **editar** lo decide `administraUsuario`, aparte.
  */
 const seleccion = {
   id: true,
@@ -27,10 +28,42 @@ function conVinculo<T extends { entraObjectId: string | null }>(u: T) {
   return { ...u, vinculado: u.entraObjectId !== null };
 }
 
-export async function listUsuarios(session: Session) {
+/**
+ * El alcance por rol (§55). Administración y Dirección ven a todos; Gerencia,
+ * a quienes operan en alguno de sus países. Los demás roles no llegan aquí sin
+ * el permiso; si la matriz se lo diera, verían lo de sus países, como Gerencia.
+ */
+function userScope(session: Session): Prisma.UserWhereInput {
+  const base: Prisma.UserWhereInput = { deletedAt: null };
+  switch (session.role) {
+    case "ADMINISTRADOR":
+    case "DIRECCION":
+      return base;
+    case "GERENTE_PAIS":
+    case "VENDEDOR":
+    case "PREVENTA":
+      return { ...base, countryCodes: { hasSome: session.countryCodes } };
+  }
+}
+
+export type FiltrosDeUsuarios = {
+  /** `true` con acceso, `false` sin acceso, ausente todos. */
+  activos?: boolean;
+  roles?: readonly Role[];
+};
+
+/** Los filtros de la URL (§55), **después** del alcance: recortan, nunca amplían. */
+function filtrosDeUsuarios(f: FiltrosDeUsuarios): Prisma.UserWhereInput {
+  return {
+    ...(f.activos === undefined ? {} : { active: f.activos }),
+    ...(f.roles && f.roles.length > 0 ? { role: { in: [...f.roles] } } : {}),
+  };
+}
+
+export async function listUsuarios(session: Session, filtros: FiltrosDeUsuarios = {}) {
   requirePermission(session, "ADMINISTRAR_USUARIOS");
   const filas = await prisma.user.findMany({
-    where: { deletedAt: null },
+    where: { AND: [userScope(session), filtrosDeUsuarios(filtros)] },
     select: seleccion,
     orderBy: [{ active: "desc" }, { name: "asc" }],
   });
@@ -41,7 +74,7 @@ export type UsuarioAdministrable = Awaited<ReturnType<typeof listUsuarios>>[numb
 
 export async function getUsuario(session: Session, id: string): Promise<UsuarioAdministrable | null> {
   requirePermission(session, "ADMINISTRAR_USUARIOS");
-  const u = await prisma.user.findFirst({ where: { id, deletedAt: null }, select: seleccion });
+  const u = await prisma.user.findFirst({ where: { AND: [userScope(session), { id }] }, select: seleccion });
   return u ? conVinculo(u) : null;
 }
 

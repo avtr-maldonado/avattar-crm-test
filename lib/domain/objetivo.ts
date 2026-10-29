@@ -240,7 +240,9 @@ export async function guardarCuotasDelEquipo(
   // AC-05 por la puerta de atrás, igual que al fijar una sola.
   const usuarios = await prisma.user.findMany({
     where: { id: { in: ids }, active: true, deletedAt: null, countryCodes: { has: entrada.countryCode } },
-    select: { id: true },
+    // El nombre sale gratis en esta consulta y es lo que hace util el rechazo
+    // del margen: una hoja trae veinte filas y decir solo «Q2» no señala a nadie.
+    select: { id: true, name: true },
   });
   const validos = new Set(usuarios.map((u) => u.id));
   if (ids.some((id) => !validos.has(id))) {
@@ -260,21 +262,36 @@ export async function guardarCuotasDelEquipo(
   // Qué queda en cada trimestre, ya con la otra métrica respetada, y la
   // validación del dedazo antes de abrir la transacción.
   const pendientes: { userId: string; q: number; venta: Money; utilidad: Money; antes: (typeof existentes)[number] | undefined }[] = [];
+  /** Quién pide margen arriba del 100 %, y en qué trimestres (§54). */
+  const excesos = new Map<string, number[]>();
   for (const f of cuotas) {
     for (let q = 1; q <= 4; q++) {
       const antes = trimestral(f.userId, q);
       const nueva = f.cuotas[q - 1]!;
       const venta = entrada.metrica === "VENTA" ? nueva : (antes?.revenueQuota ?? CERO);
       const utilidad = entrada.metrica === "UTILIDAD" ? nueva : (antes?.grossProfitQuota ?? CERO);
+      // El margen arriba del 100 % se junta y se reporta al final, con nombre
+      // y con todos los trimestres (§54). Devolver en el primero obligaba a
+      // guardar, corregir y volver a guardar por cada dedazo de la hoja.
       if (!venta.isZero() && utilidad.gt(venta)) {
-        return falla("VALIDACION", {
-          campo: `q${q}`,
-          mensaje: `Q${q}: la utilidad no puede ser mayor que la venta; sería un margen arriba del 100 %.`,
-        });
+        excesos.set(f.userId, [...(excesos.get(f.userId) ?? []), q]);
       }
       const sinCambio = antes ? antes.revenueQuota.equals(venta) && antes.grossProfitQuota.equals(utilidad) : venta.isZero() && utilidad.isZero();
       if (!sinCambio) pendientes.push({ userId: f.userId, q, venta, utilidad, antes });
     }
+  }
+
+  if (excesos.size > 0) {
+    const nombreDe = new Map(usuarios.map((u) => [u.id, u.name]));
+    return falla(
+      "VALIDACION",
+      ...[...excesos].map(([userId, qs]) => ({
+        campo: "cuotas",
+        mensaje: `${nombreDe.get(userId) ?? "Esa persona"}: la utilidad pasa de la venta en ${qs
+          .map((q) => `Q${q}`)
+          .join(", ")}; sería un margen arriba del 100 %.`,
+      })),
+    );
   }
   // Se van: los objetivos de quien se elimina, y la fila ANUAL de quien recibe
   // trimestres, porque desde §34 el anual es la suma y una anual aparte que no

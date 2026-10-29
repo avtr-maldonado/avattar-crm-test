@@ -78,3 +78,14 @@ export function cambioDeCampo(
 function rechaza(campo: string, mensaje: string): ResultadoAccion<never> {
   return falla("VALIDACION", { campo, mensaje });
 }
+
+/**
+ * La fecha ganada que llega de la ficha · decisiones §55. No entra en
+ * `CAMPOS_RAPIDOS` porque no pasa por `editarOportunidad` —una cerrada no se
+ * edita— sino por `cambiarFechaGanada`, que es quien decide. Aquí solo se
+ * lee: `YYYY-MM-DD` a medianoche UTC, que es lo que guarda una columna `date`.
+ */
+export function fechaGanadaDe(valor: string): ResultadoAccion<Date> {
+  const fecha = /^\d{4}-\d{2}-\d{2}$/.test(valor) ? new Date(`${valor}T00:00:00Z`) : new Date(Number.NaN);
+  return Number.isNaN(fecha.getTime()) ? rechaza("actualCloseDate", "Pon la fecha en que se ganó.") : ok(fecha);
+}

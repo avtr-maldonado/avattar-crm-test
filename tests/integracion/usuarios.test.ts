@@ -49,7 +49,9 @@ const supabaseAdmin = createSupabaseClient(
 );
 
 let admin: Session; // ADMINISTRADOR
-let jorge: Session; // GERENTE_PAIS · sin ADMINISTRAR_USUARIOS
+let jorge: Session; // GERENTE_PAIS
+/** Jorge sin el permiso, declarado aqui: la matriz de la base no decide la prueba. */
+const sinPermiso = (): Session => ({ ...jorge, permissions: new Set([...jorge.permissions].filter((p) => p !== "ADMINISTRAR_USUARIOS")) });
 const perfilesCreados: string[] = [];
 let authUserId: string | null = null;
 
@@ -151,7 +153,7 @@ describe("crearUsuario · el alta previa deja el perfil listo para el primer ing
   });
 
   it("solo quien tiene ADMINISTRAR_USUARIOS", async () => {
-    const r = await crearUsuario(jorge, {
+    const r = await crearUsuario(sinPermiso(), {
       email: correo("gerente"),
       name: "Intento de Gerente",
       role: "VENDEDOR",
@@ -283,7 +285,104 @@ describe("darAcceso · quien ya entró con Microsoft y no tiene perfil", () => {
   });
 
   it("solo quien tiene ADMINISTRAR_USUARIOS ve la lista", async () => {
-    await expect(autenticadosSinPerfil(jorge)).rejects.toThrow();
-    await expect(listUsuarios(jorge)).rejects.toThrow();
+    await expect(autenticadosSinPerfil(sinPermiso())).rejects.toThrow();
+    await expect(listUsuarios(sinPermiso())).rejects.toThrow();
+  });
+});
+
+// ═══════════════════════════════════════ Gerencia administra a su equipo · §55
+
+describe("Gerencia administra a su equipo · decisiones §55", () => {
+  /** Jorge con el permiso concedido en la prueba: la matriz de la base no decide aquí. */
+  const gerente = (): Session => ({ ...jorge, permissions: new Set([...jorge.permissions, "ADMINISTRAR_USUARIOS"]) });
+  let creadoPorGerente: string | null = null;
+
+  it("lista a quienes operan en sus países y no a los de otros", async () => {
+    const enCO = await crearUsuario(admin, {
+      email: correo("solo-co"),
+      name: "Vendedora de Colombia",
+      role: "VENDEDOR",
+      countryCodes: ["CO"],
+    });
+    expect(enCO.ok).toBe(true);
+    if (!enCO.ok) return;
+    perfilesCreados.push(enCO.datos.id);
+
+    const lista = await listUsuarios(gerente());
+    expect(lista.some((u) => u.email === "pe@avattar.com")).toBe(true);
+    expect(lista.some((u) => u.id === enCO.datos.id)).toBe(false);
+    expect(await getUsuario(gerente(), enCO.datos.id)).toBeNull();
+  });
+
+  it("crea vendedores y preventas en sus países, con bitácora a su nombre", async () => {
+    const r = await crearUsuario(gerente(), {
+      email: correo("equipo"),
+      name: "Nuevo del Equipo",
+      role: "PREVENTA",
+      countryCodes: ["MX"],
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    perfilesCreados.push(r.datos.id);
+    creadoPorGerente = r.datos.id;
+
+    const traza = await prisma.auditLog.findFirst({
+      where: { entity: "User", entityId: r.datos.id, action: "CREAR_USUARIO" },
+      select: { byUserId: true },
+    });
+    expect(traza?.byUserId).toBe(jorge.userId);
+  });
+
+  it("no crea otros roles ni en otros países", async () => {
+    const otroRol = await crearUsuario(gerente(), {
+      email: correo("gerente-nuevo"),
+      name: "Gerente Nuevo",
+      role: "GERENTE_PAIS",
+      countryCodes: ["MX"],
+    });
+    expect(otroRol).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+
+    const otroPais = await crearUsuario(gerente(), {
+      email: correo("vendedor-co"),
+      name: "Vendedor en Colombia",
+      role: "VENDEDOR",
+      countryCodes: ["MX", "CO"],
+    });
+    expect(otroPais).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+  });
+
+  it("edita a los suyos, pero no los saca de su alcance ni toca a quien no administra", async () => {
+    expect(creadoPorGerente).not.toBeNull();
+    const suyo = await getUsuario(gerente(), creadoPorGerente!);
+    expect(suyo).not.toBeNull();
+
+    const renombrar = await editarUsuario(gerente(), suyo!, { name: "Nuevo del Equipo Editado" });
+    expect(renombrar.ok).toBe(true);
+
+    const ascender = await editarUsuario(gerente(), suyo!, { role: "GERENTE_PAIS" });
+    expect(ascender).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+
+    const mover = await editarUsuario(gerente(), suyo!, { countryCodes: ["MX", "CL"] });
+    expect(mover).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+
+    // Administración opera en MX también, así que aparece en su lista; editarla no.
+    const laAdmin = await getUsuario(gerente(), admin.userId);
+    expect(laAdmin).not.toBeNull();
+    const tocarAdmin = await editarUsuario(gerente(), laAdmin!, { name: "Intento" });
+    expect(tocarAdmin).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+  });
+});
+
+describe("listUsuarios · filtros por estado y rol · §55", () => {
+  it("recortan después del alcance: solo inactivos, solo un rol", async () => {
+    const inactivos = await listUsuarios(admin, { activos: false });
+    expect(inactivos.every((u) => !u.active)).toBe(true);
+
+    const preventas = await listUsuarios(admin, { roles: ["PREVENTA"] });
+    expect(preventas.length).toBeGreaterThan(0);
+    expect(preventas.every((u) => u.role === "PREVENTA")).toBe(true);
+
+    const todos = await listUsuarios(admin);
+    expect(todos.length).toBeGreaterThanOrEqual(inactivos.length + preventas.length - 1);
   });
 });

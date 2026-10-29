@@ -24,16 +24,19 @@ export type OportunidadSinPaso = {
  */
 export function VistaLista({
   actividades,
-  sinProxima,
+  sinProxima = [],
   reloj,
   f,
   editorDe,
+  mostrarOportunidad = true,
 }: {
   actividades: ActividadDeTablero[];
-  sinProxima: OportunidadSinPaso[];
+  sinProxima?: OportunidadSinPaso[];
   reloj: RelojDeAgenda;
   f: Formatos;
   editorDe: EditorDe;
+  /** En la ficha de una oportunidad (§55) la tabla es la misma, pero cada fila ya sabe de cuál es. */
+  mostrarOportunidad?: boolean;
 }) {
   const ordenadas = actividades
     .map((a) => ({ a, estado: estadoDeAgenda(a, reloj) }))
@@ -81,7 +84,7 @@ export function VistaLista({
                 <tr key={a.id} className={clsx("border-t border-borde", estado === "realizada" && "text-texto-tenue")}>
                   <td className="px-3 py-2">
                     <p className={clsx("font-medium", estado === "realizada" ? "text-texto-tenue" : "text-texto-titulo")}>{a.subject}</p>
-                    <EnlaceAOportunidad a={a} className="block truncate text-xs text-texto-tenue hover:text-acento" />
+                    {mostrarOportunidad && <EnlaceAOportunidad a={a} className="block truncate text-xs text-texto-tenue hover:text-acento" />}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2">
                     <PastillaDeEstado estado={estado} />

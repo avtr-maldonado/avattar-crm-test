@@ -32,7 +32,9 @@ export type NombreDeIcono =
   | "lapiz"
   | "palomita"
   | "ayuda"
-  | "filtro";
+  | "filtro"
+  | "vinculo"
+  | "vinculoRoto";
 
 const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
   // Tres columnas de alturas distintas: el kanban.
@@ -152,6 +154,25 @@ const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
 
   // Un embudo: los filtros del tablero.
   filtro: <path d="M3.5 4.5h13l-5 6v4.5l-3 1.5v-6z" />,
+
+  // Dos medios eslabones y la barra que los une. El roto es el mismo dibujo sin
+  // la barra, con dos cabos y el hueco a la vista: el par se lee como un
+  // control en dos estados, y la diferencia no depende del color. Horizontal
+  // en vez de diagonal porque a 16 px la diagonal se confunde con un clip.
+  vinculo: (
+    <>
+      <path d="M8.5 14.5H6.5a4.5 4.5 0 0 1 0-9h2" />
+      <path d="M11.5 5.5h2a4.5 4.5 0 0 1 0 9h-2" />
+      <path d="M7 10h6" />
+    </>
+  ),
+  vinculoRoto: (
+    <>
+      <path d="M8.5 14.5H6.5a4.5 4.5 0 0 1 0-9h2" />
+      <path d="M11.5 5.5h2a4.5 4.5 0 0 1 0 9h-2" />
+      <path d="M7 10h1.2M11.8 10H13" />
+    </>
+  ),
 
   // Un círculo con signo de interrogación: «¿qué quiere decir esto?».
   ayuda: (

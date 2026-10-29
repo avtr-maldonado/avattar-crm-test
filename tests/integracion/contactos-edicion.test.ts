@@ -3,7 +3,12 @@ import { prisma } from "@/lib/db";
 import type { Session } from "@/lib/auth/permissions";
 import { getOrganization } from "@/lib/scope/organizations";
 import { getPersona, listPersonas } from "@/lib/scope/people";
-import { crearPersona, editarOrganizacion, editarPersona } from "@/lib/domain/contact";
+import {
+  crearOrganizacion,
+  crearPersona,
+  editarOrganizacion,
+  editarPersona,
+} from "@/lib/domain/contact";
 
 async function sesionDe(correo: string): Promise<Session> {
   const u = await prisma.user.findUniqueOrThrow({
@@ -31,6 +36,7 @@ let jorge: Session;
 let paulina: Session;
 let organizacionId: string;
 const personasCreadas: string[] = [];
+const cuentasCreadas: string[] = [];
 let nombreOriginal: string;
 
 beforeAll(async () => {
@@ -47,6 +53,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (cuentasCreadas.length) {
+    await prisma.organization.deleteMany({ where: { id: { in: cuentasCreadas } } });
+  }
   if (personasCreadas.length) {
     await prisma.person.deleteMany({ where: { id: { in: personasCreadas } } });
   }
@@ -191,5 +200,96 @@ describe("editarOrganizacion · la ficha es del dueño · Q-15", () => {
     const organizacion = await getOrganization(jorge, organizacionId);
     const r = await editarOrganizacion(jorge, organizacion!, { creditDays: -10 });
     expect(r).toMatchObject({ motivo: "VALIDACION" });
+  });
+});
+
+describe("editarOrganizacion · lo que §52 corrige", () => {
+  /** Una cuenta propia y desechable: estas pruebas escriben. */
+  async function unaCuenta(nombre: string) {
+    const r = await crearOrganizacion(jorge, { name: nombre, type: "PROSPECTO", countryCode: "MX" });
+    if (!r.ok) throw new Error(`no se pudo crear la cuenta de prueba: ${JSON.stringify(r.problemas)}`);
+    cuentasCreadas.push(r.datos.id);
+    return r.datos.id;
+  }
+
+  it("rechaza ponerle el nombre de otra cuenta que ya existe", async () => {
+    // Al crear ya se rechazaba el homónimo; al editar no se miraba, así que el
+    // duplicado entraba por la puerta de atrás y partía el histórico igual.
+    const id = await unaCuenta(`QA-homonima-${Date.now()}`);
+    const otra = await prisma.organization.findFirstOrThrow({
+      where: { deletedAt: null, id: { not: id } },
+      select: { name: true },
+    });
+
+    const r = await editarOrganizacion(jorge, (await getOrganization(jorge, id))!, { name: otra.name });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.motivo).toBe("VALIDACION");
+      expect(r.problemas[0]?.campo).toBe("name");
+    }
+  });
+
+  it("no se estorba a sí misma: guardar sin cambiar el nombre pasa", async () => {
+    const nombre = `QA-misma-${Date.now()}`;
+    const id = await unaCuenta(nombre);
+    const r = await editarOrganizacion(jorge, (await getOrganization(jorge, id))!, {
+      name: nombre,
+      city: "Monterrey",
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("cambia el propietario de una cuenta CON sede, como lo manda la pantalla", async () => {
+    // La pantalla envía todos los campos, sede incluida. Mezclar la relación
+    // del propietario con la llave de país hacía que Prisma rechazara la
+    // escritura entera y la pantalla reventara.
+    const id = await unaCuenta(`QA-propietario-${Date.now()}`);
+    const otro = await prisma.user.findFirstOrThrow({
+      where: { active: true, deletedAt: null, id: { not: jorge.userId } },
+      select: { id: true },
+    });
+
+    const r = await editarOrganizacion(jorge, (await getOrganization(jorge, id))!, {
+      name: `QA-propietario-renombrada-${Date.now()}`,
+      legalName: "QA SA de CV",
+      type: "CLIENTE",
+      city: "Monterrey",
+      employees: 120,
+      creditDays: 30,
+      isStrategic: true,
+      countryCode: "MX",
+      ownerId: otro.id,
+    });
+
+    expect(r.ok).toBe(true);
+    const tras = await prisma.organization.findUniqueOrThrow({
+      where: { id },
+      select: { ownerId: true, countryCode: true },
+    });
+    expect(tras.ownerId).toBe(otro.id);
+    expect(tras.countryCode).toBe("MX");
+  });
+});
+
+describe("crearPersona · sin rol en el comité · §52", () => {
+  it("se crea sin rol declarado, que es opcional (CU-23.1)", async () => {
+    // Antes la escritura pedía desconectar una relación que al crear no existe,
+    // y la pantalla reventaba en vez de guardar.
+    const organizacion = await getOrganization(paulina, organizacionId);
+    const r = await crearPersona(paulina, organizacion!, {
+      name: "QA Sin Rol De Comite",
+      committeeRoleId: null,
+    });
+
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      personasCreadas.push(r.datos.id);
+      const p = await prisma.person.findUniqueOrThrow({
+        where: { id: r.datos.id },
+        select: { committeeRoleId: true },
+      });
+      expect(p.committeeRoleId).toBeNull();
+    }
   });
 });

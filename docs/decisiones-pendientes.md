@@ -2588,3 +2588,299 @@ regla pura, vistas en rojo antes). En navegador, montando los dos formularios re
 que rechaza: antes del cambio el alta volvía con cuatro campos señalados y cinco avisos, y el rol a
 medio cambiar sobrevivía con el nombre y la casilla de país; después, las dos aperturas vuelven
 limpias.
+
+## 52. Siete correcciones: duplicados, escrituras que reventaban, la matriz que no mandaba y un filtro de responsable (13 de octubre de 2026)
+
+**Decisión del negocio:** siete reportes de uso. Tres resultaron ser el mismo defecto de fondo y uno
+cambia una regla.
+
+### Dos escrituras que reventaban por mezclar relación y llave
+
+Prisma no acepta en una misma escritura la **llave** de una relación junto al **objeto anidado** de
+otra. El modelo tiene dos formas, la «checked» —relaciones— y la «unchecked» —llaves—, y hay que
+elegir una. Dos caminos las mezclaban y el resultado no era un rechazo elegante sino una excepción:
+la pantalla de error con su digest.
+
+- **Cambiar el propietario de una cuenta** (reporte 2). La pantalla envía todos los campos, sede
+  incluida, y `editarOrganizacion` armaba `countryCode` como llave y el propietario como relación.
+  Con sede, la operación entera se rechazaba. Ahora el propietario también va como llave
+  (`ownerId`). Se notaba solo al cambiar de propietario, que es justo lo que nadie hace a diario.
+- **Crear una persona sin rol en el comité** (reporte 3). `datosDePersona` pedía *desconectar* la
+  relación cuando no había rol, y al crear no hay nada que desconectar. Ahora escribe la llave
+  (`committeeRoleId`), que vale igual para el alta y para la edición, y `crearPersona` conecta la
+  organización y al propietario por llave en vez de por relación.
+
+**Sobre el rol en el comité, una aclaración.** El reporte pedía «cambiar el error por un aviso de
+campo faltante». No se hizo así: el rol es **opcional** por diseño (`CU-23.1`), la pantalla lo
+ofrece como «Sin declarar» y el alta de oportunidad depende de que lo sea. Lo que estaba mal era que
+reventara; ahora la persona se crea sin rol, que es lo que el catálogo promete. Si el negocio quiere
+que sea obligatorio, es un cambio de una línea y una decisión que anotar, no un defecto.
+
+### Un duplicado que entraba por la puerta de atrás
+
+**Reporte 1.** Al crear una cuenta se rechazaba el homónimo desde §14; al editar no se miraba. Así
+que el duplicado que el alta impide se conseguía renombrando, y un duplicado parte el histórico para
+siempre. `editarOrganizacion` hace ahora la misma comprobación, excluyendo a la propia cuenta para
+que guardar sin tocar el nombre siga pasando.
+
+### La matriz manda al reabrir · enmienda a §32
+
+**Reporte 4.** `reabrirOportunidad` dejaba pasar al propietario y a quien tuviera alcance de oficina
+**antes** de mirar el permiso, así que apagar la celda en Administración › Roles y permisos no
+surtía efecto: un vendedor seguía reabriendo las suyas. Los permisos son datos (§5.2) y reabrir es
+uno de ellos. Desde hoy **solo `REABRIR_OPORTUNIDAD` decide**, y el botón de la ficha se ofrece con
+la misma pregunta, porque un botón que el servidor va a rechazar no se ofrece.
+
+Lo que esto cambia en la práctica: con la matriz sembrada, solo Administración reabre. Gerencia y
+Dirección lo hacían por tener alcance de oficina y ya no; si el negocio los quiere de vuelta, se
+enciende su celda desde la pantalla y surte efecto al momento, que es justo lo que antes no pasaba.
+El alcance sigue aparte: la oportunidad llega por `lib/scope`, así que ver y reabrir siguen siendo
+dos preguntas.
+
+### El formulario de productos
+
+- **Reporte 5.** Precio y costo eran los dos únicos campos con estado propio en el componente de
+  fuera, así que el remontado de §51 no los alcanzaba y volvían con lo del producto anterior. No
+  necesitaban ese estado para nada: pasaron a campos normales y ahora cada apertura los deja vacíos,
+  como a los demás.
+- **Reporte 6.** Enviaba con `action=`, y React reinicia el formulario al responder la acción: un
+  campo faltante se llevaba por delante todo lo demás. Es el patrón de §48, aplicado aquí. Quedan
+  seis formularios con el mismo pendiente: persona, usuario, acceso de persona, edición de
+  oportunidad, cambio de etapa y la cuadrícula de objetivos.
+
+### Un filtro de responsable en Actividades
+
+**Reporte 7.** El alcance de un vendedor incluye las actividades de sus oportunidades aunque las
+lleve otro (§2.3), y eso se queda: ver lo que pasa en una oportunidad propia es parte de trabajarla.
+Lo que faltaba era poder recortar a lo que a uno le toca hacer. Dos pastillas junto al selector de
+vistas —«Todas» y «Solo mías»— y el filtro en la URL (`mias=1`, INV-10), así que se comparte y el
+botón de regresar funciona. Recorta **dentro** del alcance y nunca lo amplía, como la oficina activa
+(§16): se suma al `AND` que ya lleva `activityScope`. Las tres vistas y los tres indicadores de
+arriba lo respetan, porque describen lo que se está mirando; el contador del menú sigue contando
+todo, y la pastilla encendida explica la diferencia.
+
+**Costo de volver:** cada uno es local. El de reabrir es el que tiene consecuencia de negocio: volver
+a §32 es devolver las dos condiciones que se quitaron.
+
+Dónde vive: `lib/domain/contact.ts` (`editarOrganizacion`, `datosDePersona`, `crearPersona`),
+`lib/domain/opportunity.ts` (`reabrirOportunidad`), `app/(app)/oportunidades/[id]/page.tsx`
+(`puedeReabrir`), `components/productos/EditarProducto.tsx`, `lib/scope/agenda.ts` (`soloDe` y los
+tres lectores), `app/(app)/actividades/page.tsx`. Pruebas: `tests/integracion/contactos-edicion.test.ts`
+(+4), `tests/integracion/cierre.test.ts` (+2, y dos existentes actualizadas a la regla nueva, con los
+permisos declarados en la prueba para que no dependan de quién editó la matriz),
+`tests/integracion/agenda.test.ts` (+2). Las cuatro de contactos y las de reabrir se vieron en rojo
+antes. El formulario de productos se verificó en navegador: antes un rechazo por SKU borraba nombre
+y unidad y al reabrir volvían precio y costo; después conserva lo capturado y abre vacío.
+
+## 53. Trimestres atados en la hoja de objetivos (13 de octubre de 2026)
+
+**Decisión del negocio:** casi toda cuota se captura igual en los cuatro trimestres, y solo a veces
+uno se mueve. Capturar cuatro veces el mismo número, por vendedor, es el trabajo aburrido de la
+pantalla. Se pidió un eslabón que ate los cuatro Q de un vendedor, de modo que teclear en uno los
+llene todos al momento, pudiendo soltar cualquiera para darle una cifra distinta. Vale igual para
+Venta y para Utilidad de venta.
+
+**Cómo quedó.** Un eslabón junto al nombre del vendedor ata sus cuatro trimestres. Mientras hay
+algún trimestre atado, cada celda muestra su propio eslabón, que lo suelta o lo vuelve a atar sin
+tocar a los demás; las celdas atadas se tiñen de azul para que no sorprenda que cambien juntas. Una
+fila que nunca tocó el control se ve exactamente como antes: los eslabones de celda aparecen solo
+cuando sirven de algo.
+
+**Tres decisiones que el pedido no fijaba:**
+
+- **Atar no pisa lo capturado.** Si la fila ya trae cuatro cifras distintas, pulsar el eslabón no
+  las unifica: solo hace que la siguiente tecleada se propague. Un clic por error no puede borrar el
+  trabajo de nadie, y la primera tecla las unifica igual.
+- **El vínculo no tiene cabeza.** No es «Q1 manda»: teclear en cualquiera de los atados llena a los
+  demás. Obligar a recordar cuál es el bueno sería una regla más que aprender, y el resultado es el
+  mismo.
+- **El eslabón de la fila completa, no deshace.** Con algunos sueltos, pulsarlo ata los cuatro; solo
+  cuando los cuatro están atados los suelta. Así el botón siempre hace lo que su estado dice, y
+  soltar de a uno sigue estando en la celda.
+
+**Es ayuda de captura, no dato.** El vínculo no viaja al servidor ni se guarda: vive mientras dura
+la hoja abierta. Cambiar de métrica o de año remonta la tabla y lo reinicia, que es lo correcto,
+porque son capturas distintas. Nada cambió en el modelo, en la acción ni en la bitácora: lo que se
+guarda sigue siendo una cuota por vendedor y trimestre, y se sigue anotando cada una que cambia
+(§34).
+
+**Por qué la regla vive aparte.** `components/objetivos/vinculos.ts` es puro y tiene pruebas: qué se
+propaga, qué no, y qué pasa al soltar uno con el resto atado son cuatro casos que a ojo se vuelven
+adivinanza en cuanto hay más de dos. Es el mismo trato que reciben `estadoDeAlta` y
+`estadoDeEdicion`.
+
+**Costo de volver:** el estado, los dos manejadores y el botón. La regla pura se queda sin usar.
+
+Dónde vive: `components/objetivos/vinculos.ts` (y su prueba), `components/objetivos/TablaDeObjetivos.tsx`,
+`components/ui/iconos.tsx` (`vinculo` y `vinculoRoto`: dos medios eslabones con la barra que los une,
+y el roto sin ella, para que la diferencia no dependa del color). Verificado en navegador con la
+tabla real: atar no cambia cifras, teclear en un atado llena a los atados, el suelto conserva lo
+suyo y no recibe nada, teclear en el suelto no toca a los demás, los totales de fila y de compañía
+siguen a lo visible, y la otra fila queda intacta.
+
+## 54. El aviso de margen dice de quién es y se va al corregir (13 de octubre de 2026)
+
+**Decisión del negocio:** en la hoja de objetivos, poner una utilidad mayor que la venta saca un
+aviso abajo. El aviso no decía **a quién** le pasaba —en una hoja de veinte filas eso es buscar a
+ciegas— y se quedaba en pantalla aunque ya se hubiera corregido o se pulsara «Descartar». Se pidió
+nombrar a los vendedores y que desaparezca al corregir o al descartar.
+
+**Por qué no bastaba con retocar el mensaje.** El aviso venía del servidor, que se entera al
+guardar. Para que diga a quién y se vaya al corregir, la regla tiene que evaluarse **sobre lo que
+hay en pantalla**, y ahí estaba el obstáculo: la hoja captura una métrica a la vez y el margen
+compara las dos. Ahora cada fila viaja con `contraparte`, lo guardado en la otra métrica trimestre a
+trimestre, que es exactamente con lo que el servidor compara. Con eso la hoja evalúa la misma regla
+que el servidor, sin adivinar.
+
+**Lo que se ve.** Mientras haya margen arriba del 100 %, el aviso lista un renglón por vendedor con
+sus trimestres —«Paulina Estrada · Q2, Q3»—, las celdas culpables se señalan en coral, y **no se
+ofrece guardar**: el servidor rechaza la hoja entera, no solo esa fila, así que ofrecer el botón
+sería prometer algo que no va a pasar. Corregir la última celda quita el aviso y vuelve a habilitar
+el guardado. «Descartar» devuelve las cifras guardadas, con lo que el aviso se va solo.
+
+**El veredicto del servidor también caduca.** Lo que el servidor rechazó se deja de mostrar en
+cuanto se teclea o se descarta: hablaba de cifras que ya cambiaron. Es la misma idea de §51
+(`useResultadoVivo`) con otro disparador, y la de `corregir` en `lib/acciones`: un rechazo vale para
+el envío que lo produjo, no para siempre.
+
+**El servidor mejoró también**, porque sigue siendo el que decide. Antes devolvía en el primer
+trimestre que encontraba y decía solo «Q2»; ahora junta todos los excesos y los reporta con nombre
+y con sus trimestres. El nombre salía gratis: la consulta que ya comprobaba `AC-05` solo tuvo que
+pedir una columna más. Con la hoja bloqueando antes de enviar, ese mensaje es el respaldo para
+cuando otra persona cambió la otra métrica mientras tanto.
+
+**Dos piezas puras más.** `components/objetivos/margen.ts` tiene la regla (`conflictosDeMargen`) y
+el lector de cifras (`leerCuota`, que salió de la tabla para no duplicarse). Diez pruebas: que la
+venta en cero no es conflicto, que la regla es simétrica al capturar venta, que las comas de
+«260,000» no se leen como 260. Y la tabla se partió en `FilaDeLaHoja` y `AvisoDeLaHoja`: con la
+captura, los eslabones de §53 y las marcas de §54 conviviendo, el cuerpo ya no se leía.
+
+**Costo de volver:** quitar `contraparte` de la fila y el cálculo en la tabla; el servidor puede
+quedarse con el mensaje mejorado, que no depende de nada de esto.
+
+Dónde vive: `components/objetivos/margen.ts` (y su prueba), `components/objetivos/TablaDeObjetivos.tsx`,
+`app/(app)/objetivos/page.tsx`, `lib/domain/objetivo.ts`. Pruebas: las diez de `margen.test.ts`, y
+`tests/integracion/objetivos.test.ts` comprueba que el rechazo del servidor nombra a la persona y el
+trimestre. Verificado en navegador con la hoja real: el aviso nombra a dos vendedores a la vez, junta
+los trimestres de cada uno, suelta a quien se corrige, desaparece al corregir el último, el mensaje
+del servidor se va al teclear, y «Descartar» lo quita y devuelve las cifras guardadas.
+
+## 55. Ocho cambios de uso: fecha ganada, la pestaña como tabla, el año que viene, un solo desglose, actividades desde Actividades con filtros, y Configuración para todos (29 de octubre de 2026)
+
+**Decisión del negocio:** un lote de ocho correcciones y ampliaciones. Dos cambian reglas de
+negocio y se razonan aparte; las demás son de uso y se anotan para que se sepa qué se decidió.
+
+### Las dos reglas nuevas
+
+**La fecha ganada se corrige después de cerrar.** `editarOportunidad` rechaza una cerrada con
+razón (RN-18): si una ganada se pudiera editar, bastaría cambiarle el importe después. Pero la
+fecha de cierre real es otra cosa: es lo que mide el avance de cuota (§10.2), y la gente la marca
+tarde —se ganó el viernes, se registró el lunes— o la trae de Pipedrive con la fecha real. Por eso
+existe `cambiarFechaGanada`, aparte: solo mueve `actualCloseDate`, exige que esté **ganada** y
+propietario u oficina, y deja `CAMBIAR_FECHA_GANADA` en la bitácora con antes y después (INV-09).
+Se ve en «Datos de la oportunidad» como «Fecha ganada», en blanco mientras no esté ganada, y se
+corrige en el sitio como el cierre estimado. **Supuestos:** no puede ser futura (nada se gana
+mañana); **sí** puede ser anterior a la creación en el CRM, porque lo importado se ganó antes de
+existir aquí. El mismo día no escribe ni anota, como el cierre estimado (§49).
+
+**Gerencia administra a su equipo.** `ADMINISTRAR_USUARIOS` se concede a `GERENTE_PAIS` en la
+matriz (migración `gerencia_administra_usuarios`, aplicada en desarrollo; **pendiente en
+producción**). A quién puede administrar lo decide `administraUsuario` (`lib/domain/userAccess`,
+puro, con pruebas): vendedores y preventas de sus países, ni otro rol ni otro país, porque dar de
+alta a un administrador o mover a alguien a otra oficina sería ampliar el alcance de quien lo hace.
+El lector (`lib/scope/usuarios`) le muestra a quienes operan en alguno de sus países —ahí aparecen
+Dirección y Administración, que operan en todos—, y la fila de quien no administra no trae
+«Editar». El formulario solo le ofrece los roles y países que puede asignar. Al editar se comprueba
+a quien es hoy **y** a quien quedaría: ni ascender fuera del equipo ni cambiar de oficina. Dirección
+no tiene el permiso en la matriz; si se le concede, administra como Administración.
+
+### Lo demás
+
+- **Configuración, no Administración.** La ruta es `/configuracion` (la vieja redirige). Es de todo
+  rol: pipelines y catálogos son el vocabulario del sistema y los consulta cualquiera; Usuarios la ve
+  quien tiene `ADMINISTRAR_USUARIOS`; Roles y permisos, solo Administración, por rol y no por
+  permiso, porque un permiso para editar permisos se quitaría a sí mismo (§40); Política comercial,
+  quien tiene su permiso. Desapareció el aviso de «solo lectura» (§41).
+- **Usuarios se filtra por estado y rol** en la URL (`estado=activos|inactivos`, `rol=` repetido),
+  aplicado en el lector **después** del alcance.
+- **La pestaña Actividades del detalle es la tabla de P-07**, con sus estados y su lápiz, sin la
+  línea de la oportunidad, que sería repetir el título. Las notas y el resultado ya no se leen en la
+  pestaña: se abren con el lápiz, como en Actividades.
+- **El selector de año de Objetivos ofrece siempre el en curso y el siguiente**, además de los que
+  ya tienen cuota, de menor a mayor: las cuotas del año que viene se fijan antes de que empiece.
+- **Un solo molde para los desgloses.** `PanelDeDesglose` (`components/ui`): franja de resumen
+  arriba y una tabla con la misma anatomía —principal con dos líneas y enlace, una nota, cifras a la
+  derecha, total si hay— para el embudo del pipeline y las gráficas de Análisis. En Análisis los
+  encabezados son genéricos («Oportunidad · Detalle · Valor») porque la cifra cambia por gráfica:
+  importe, margen, días.
+- **Nueva actividad desde Actividades.** El mismo composer sin `opportunityId`: el primer campo es la
+  oportunidad, buscada por nombre, folio o cuenta entre las **abiertas** al alcance del rol y de la
+  oficina activa (`oportunidadesParaAgendar`, que recorta y nunca amplía, §16). Al elegirla cambian
+  la zona y los responsables, porque son los del país de esa oportunidad (§20). Sin oportunidad
+  elegida, el campo lo dice. Sin ninguna abierta al alcance, el botón no se ofrece.
+- **Filtros de Actividades**: estado, tipo, oportunidad y lapso, en la URL. El lapso cambia **qué se
+  lee**: sin él, pendientes de cualquier fecha más hechas en dos semanas; con él, lo que empieza
+  dentro del rango, hecho o pendiente. Los otros tres recortan en memoria después del alcance
+  (`filtrarAgenda`, puro, con pruebas), como la bandera de riesgo: el estado se calcula (INV-11). En
+  la semana no hay lapso, y al pasar a ella se suelta. Las opciones de oportunidad salen de lo que se
+  está viendo. Los indicadores de arriba siguen a tipo y oportunidad; el estado no les aplica porque
+  cada uno ya es un estado.
+
+**Costo de volver:** la fecha ganada es un servicio y un campo; quitar a Gerencia de la matriz es
+una celda (y `administraUsuario` queda sin efecto para nadie); el resto es interfaz.
+
+Dónde vive: `lib/domain/opportunity.ts` (`cambiarFechaGanada`), `lib/domain/opportunityField.ts`
+(`fechaGanadaDe`), `lib/domain/userAccess.ts`, `lib/domain/usuario.ts`, `lib/scope/usuarios.ts`,
+`lib/scope/agenda.ts` (`oportunidadesParaAgendar`, el rango del tablero), `lib/domain/agenda.ts`
+(`filtrarAgenda`), `lib/scope/objetivos.ts`, `components/ui/PanelDeDesglose.tsx`,
+`components/actividades/FiltrosDeActividades.tsx`, `components/admin/FiltrosDeUsuarios.tsx`,
+`components/oportunidad/ComposerDeActividad.tsx`, `app/(app)/configuracion/`,
+`app/(app)/actividades/page.tsx`, `prisma/seed/permisos.ts`,
+`supabase/migrations/20261029100000_gerencia_administra_usuarios.sql`. Pruebas: `userAccess.test.ts`
+(10), `agenda.test.ts` (4 de `filtrarAgenda`), y en integración `usuarios` (5 de Gerencia y
+filtros), `cierre` (3 de la fecha ganada), `objetivos` (el año siguiente), `agenda` (el rango y las
+oportunidades para agendar). Verificado en navegador: el composer elige una de Colombia y la hora
+pasa a Bogotá con sus responsables; las pastillas navegan conservando lo aplicado; los dos desgloses
+tienen la misma tabla.
+
+## 56. El popup de desglose toma el ancho de su tabla (29 de octubre de 2026)
+
+**Decisión del negocio:** los desgloses —el embudo del pipeline y las gráficas de Análisis— a
+veces abrían con la tabla recortada y scroll horizontal. Se pidió que el popup se adapte al ancho
+de la tabla para que, en la medida de lo posible, no haga falta desplazarse.
+
+**Lo que se hizo.** `Panel` gana un tercer ancho, `contenido`: el `<dialog>` nativo ya mide
+`fit-content`, y `w-full` lo anclaba a su máximo. Con `contenido` el panel **crece con lo que
+tiene dentro**, desde el ancho de `lg` (48 rem, para que una tabla corta no deje un panel enano)
+hasta el viewport menos los márgenes. `PanelDeDesglose` lo usa; los formularios siguen con sus
+anchos fijos. El scroll horizontal del envoltorio de la tabla se queda como **respaldo** para
+ventanas más angostas que la tabla: en una de 820 px el panel se detiene en el viewport y la
+tabla se desplaza, que es mejor que recortarla.
+
+Medido con la maqueta: una tabla de 838 px abre en un panel de 888 px sin scroll a 1 440 y a
+1 100 px de ventana; a 820 px el panel mide 788 px y la tabla desplaza. El composer de actividad
+sigue en 768 px.
+
+**Costo de volver:** una palabra en `PanelDeDesglose`.
+
+Dónde vive: `components/ui/formulario.tsx` (`Panel`, `ancho="contenido"`),
+`components/ui/PanelDeDesglose.tsx`.
+
+## 57. Los filtros de Actividades se muestran con un botón, cerrados al entrar (29 de octubre de 2026)
+
+**Decisión del negocio:** la fila de filtros de Actividades (§55) ocupaba espacio siempre. Se
+pidió el mismo trato que el pipeline: un botón que los muestra y los oculta, cerrados por omisión.
+
+**Lo que se hizo.** `BarraDeHerramientas` ya hacía exactamente eso para el pipeline (§31), así que
+pasó de `components/pipeline` a `components/ui` y ganó un `id` para la fila de filtros, uno por
+pantalla. Actividades la usa con la vista y el responsable arriba, el botón de filtros, «Nueva
+actividad» a la derecha, y las pastillas abajo. Que los filtros se vean es estado de pantalla, no de
+la URL: lo que se aplica sigue en la URL (INV-10). Con filtros aplicados y ocultos, el botón lleva
+el punto: el recorte sigue ahí aunque no se vea.
+
+Verificado en la maqueta: nacen ocultos, el punto aparece solo con filtros aplicados y ocultos, un
+toque muestra las cuatro pastillas y otro las oculta; cada barra apunta a su propia fila.
+
+**Costo de volver:** devolver la fila a la página.
+
+Dónde vive: `components/ui/BarraDeHerramientas.tsx`, `app/(app)/actividades/page.tsx`.

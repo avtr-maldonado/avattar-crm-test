@@ -2,7 +2,6 @@
 
 import { useActionState, useState } from "react";
 import type { ResultadoAccion } from "@/lib/acciones";
-import { problemaDe } from "@/lib/acciones";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton } from "@/components/ui/primitivas";
 import {
@@ -13,6 +12,8 @@ import {
   Entrada,
   Panel,
   Seleccion,
+  useEnvioQueConserva,
+  useProblemas,
   useResultadoVivo,
 } from "@/components/ui/formulario";
 
@@ -66,8 +67,6 @@ export function EditarProducto({
   accion: (previo: ResultadoDeProducto | null, form: FormData) => Promise<ResultadoDeProducto>;
 }) {
   const [abierto, setAbierto] = useState(false);
-  const [lista, setLista] = useState(producto?.listPrice ?? "");
-  const [costo, setCosto] = useState(producto?.standardCost ?? "");
   const esAlta = producto === undefined;
 
   const [resultadoCrudo, enviar, enviando] = useActionState(
@@ -86,6 +85,8 @@ export function EditarProducto({
 
   // Lo que se muestra: el resultado muere al cerrar el panel (§51).
   const resultado = useResultadoVivo(resultadoCrudo, abierto);
+  const problemas = useProblemas(resultado);
+  const alEnviar = useEnvioQueConserva(enviar);
 
   const idFormulario = `producto-${producto?.id ?? "nuevo"}`;
   // Los dos vacíos = sin lista (§22): precio y costo se fijan en cada cotización.
@@ -115,14 +116,24 @@ export function EditarProducto({
           </>
         }
       >
-        <form id={idFormulario} action={enviar} className="flex flex-col gap-5">
+        {/* Se envía desde onSubmit y no con action=: con `action=` React reinicia
+            el formulario al responder la acción, y un campo faltante se llevaba
+            por delante todo lo demás (§48). De remontarlo en cada apertura se
+            encarga el Panel (§51), y por eso precio y costo ya no llevan estado:
+            sin él, cada apertura los deja vacíos (§52). */}
+        <form
+          id={idFormulario}
+          onSubmit={alEnviar}
+          onChange={problemas.alCambiar}
+          className="flex flex-col gap-5"
+        >
           {producto && <input type="hidden" name="productId" value={producto.id} />}
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
             <Campo
               etiqueta="SKU"
               htmlFor={`${idFormulario}-sku`}
-              problema={problemaDe(resultado, "sku")}
+              problema={problemas.problema("sku")}
             >
               <Entrada
                 id={`${idFormulario}-sku`}
@@ -131,17 +142,17 @@ export function EditarProducto({
                 disabled={!esAlta}
                 placeholder="Clave del producto"
                 className="uppercase [font-variant-numeric:tabular-nums]"
-                problema={problemaDe(resultado, "sku")}
+                problema={problemas.problema("sku")}
               />
             </Campo>
 
-            <Campo etiqueta="Nombre" htmlFor={`${idFormulario}-name`} problema={problemaDe(resultado, "name")}>
+            <Campo etiqueta="Nombre" htmlFor={`${idFormulario}-name`} problema={problemas.problema("name")}>
               <Entrada
                 id={`${idFormulario}-name`}
                 name="name"
                 defaultValue={producto?.name}
                 placeholder="Cómo aparece en la cotización"
-                problema={problemaDe(resultado, "name")}
+                problema={problemas.problema("name")}
               />
             </Campo>
           </div>
@@ -157,7 +168,7 @@ export function EditarProducto({
           </Campo>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <Campo etiqueta="Familia" htmlFor={`${idFormulario}-familyId`} problema={problemaDe(resultado, "familyId")}>
+            <Campo etiqueta="Familia" htmlFor={`${idFormulario}-familyId`} problema={problemas.problema("familyId")}>
               <Seleccion id={`${idFormulario}-familyId`} name="familyId" defaultValue={producto?.familyId ?? familias[0]?.id}>
                 {familias.map((f) => (
                   <option key={f.id} value={f.id}>
@@ -167,13 +178,13 @@ export function EditarProducto({
               </Seleccion>
             </Campo>
 
-            <Campo etiqueta="Unidad" htmlFor={`${idFormulario}-unit`} problema={problemaDe(resultado, "unit")}>
+            <Campo etiqueta="Unidad" htmlFor={`${idFormulario}-unit`} problema={problemas.problema("unit")}>
               <Entrada
                 id={`${idFormulario}-unit`}
                 name="unit"
                 defaultValue={producto?.unit}
                 placeholder="día, mes, usuario, pieza"
-                problema={problemaDe(resultado, "unit")}
+                problema={problemas.problema("unit")}
               />
             </Campo>
 
@@ -194,34 +205,32 @@ export function EditarProducto({
                 <Campo
                   etiqueta="Precio de lista"
                   htmlFor={`${idFormulario}-listPrice`}
-                  problema={problemaDe(resultado, "listPrice")}
+                  problema={problemas.problema("listPrice")}
                 >
                   <Entrada
                     id={`${idFormulario}-listPrice`}
                     name="listPrice"
                     inputMode="decimal"
-                    value={lista}
-                    onChange={(e) => setLista(e.target.value)}
+                    defaultValue={producto?.listPrice ?? ""}
                     placeholder="Por oportunidad"
                     className="[font-variant-numeric:tabular-nums]"
-                    problema={problemaDe(resultado, "listPrice")}
+                    problema={problemas.problema("listPrice")}
                   />
                 </Campo>
 
                 <Campo
                   etiqueta="Costo estándar"
                   htmlFor={`${idFormulario}-standardCost`}
-                  problema={problemaDe(resultado, "standardCost")}
+                  problema={problemas.problema("standardCost")}
                 >
                   <Entrada
                     id={`${idFormulario}-standardCost`}
                     name="standardCost"
                     inputMode="decimal"
-                    value={costo}
-                    onChange={(e) => setCosto(e.target.value)}
+                    defaultValue={producto?.standardCost ?? ""}
                     placeholder="Por oportunidad"
                     className="[font-variant-numeric:tabular-nums]"
-                    problema={problemaDe(resultado, "standardCost")}
+                    problema={problemas.problema("standardCost")}
                   />
                 </Campo>
 

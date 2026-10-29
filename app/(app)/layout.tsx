@@ -24,6 +24,11 @@ import { buscarGlobalAccion, elegirOficinaAccion } from "./acciones";
  * autorización**: la ruta de análisis responde 403 por su cuenta (AC-02). Lo
  * que el recorte evita es ofrecer una puerta que se va a cerrar en la cara.
  */
+// §55 · Configuración es de todos: pipelines y catálogos se consultan desde
+// cualquier rol; lo que cada quien puede tocar lo decide la pantalla pestaña
+// por pestaña, con la matriz.
+const SISTEMA: Rubro[] = [{ href: "/configuracion", etiqueta: "Configuración", icono: "admin" }];
+
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -65,10 +70,7 @@ export default async function AppLayout({
       : []),
   ];
 
-  const sistema: Rubro[] =
-    can(session, "EDITAR_CATALOGOS") || can(session, "ADMINISTRAR_USUARIOS")
-      ? [{ href: "/admin", etiqueta: "Administración", icono: "admin" }]
-      : [];
+  const sistema = SISTEMA;
 
   const secciones: SeccionNavegacion[] = [
     { titulo: "Comercial", rubros: comercial },

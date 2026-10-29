@@ -34,7 +34,7 @@ import { NuevaOportunidad } from "@/components/pipeline/NuevaOportunidad";
 import { Embudo, type RiesgoVisible } from "@/components/pipeline/Embudo";
 import { Forecast, type ColumnaVisible } from "@/components/pipeline/Forecast";
 import { BarraDeFiltros } from "@/components/pipeline/BarraDeFiltros";
-import { BarraDeHerramientas } from "@/components/pipeline/BarraDeHerramientas";
+import { BarraDeHerramientas } from "@/components/ui/BarraDeHerramientas";
 import { buscarOrganizacionesAccion, personasDeOrganizacionAccion, crearOportunidadAccion } from "./acciones";
 import { cambiarEtapaAccion } from "./[id]/acciones";
 

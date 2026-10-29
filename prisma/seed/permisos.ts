@@ -96,10 +96,12 @@ export const PERMISOS_POR_ROL: Record<string, DefinicionPermiso> = {
   // Agregado el 14-sep-2026 con el módulo de usuarios (decisiones-pendientes §15).
   // No está en la tabla original de §5.2: el alta de usuarios es un acto
   // administrativo y necesitaba un permiso propio, no «editar catálogos».
+  // Desde el 29-oct-2026 lo tiene también Gerencia (§55): administra a los
+  // vendedores y preventas de sus países, y a nadie más (`administraUsuario`).
   ADMINISTRAR_USUARIOS: {
     nombre: "Administrar usuarios",
     descripcion:
-      "Dar de alta perfiles, asignar rol y país, y dar acceso a quien ya entró con Microsoft. Deja traza (INV-09).",
-    roles: { VENDEDOR: no, GERENTE_PAIS: no, DIRECCION: no, ADMINISTRADOR: si, PREVENTA: no },
+      "Dar de alta perfiles, asignar rol y país, y dar acceso a quien ya entró con Microsoft. Gerencia solo a vendedores y preventas de sus países. Deja traza (INV-09).",
+    roles: { VENDEDOR: no, GERENTE_PAIS: si, DIRECCION: no, ADMINISTRADOR: si, PREVENTA: no },
   },
 };

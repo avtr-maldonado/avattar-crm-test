@@ -79,9 +79,9 @@ describe("marcador de rubro activo", () => {
       "/objetivos",
       "/analisis",
       "/autorizaciones",
-      "/admin",
+      "/configuracion",
     ];
-    for (const ruta of ["/oportunidades", "/actividades/hoy", "/admin"]) {
+    for (const ruta of ["/oportunidades", "/actividades/hoy", "/configuracion"]) {
       const encendidos = rubros.filter((r) => estaActivo(ruta, r));
       expect(encendidos, `${ruta} enciende ${encendidos.length} rubros`).toHaveLength(1);
     }

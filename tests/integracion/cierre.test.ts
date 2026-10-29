@@ -4,7 +4,7 @@ import type { Session } from "@/lib/auth/permissions";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
 import { getCotizacion } from "@/lib/scope/cotizaciones";
-import { crearOportunidad, marcarGanada, marcarPerdida, reabrirOportunidad } from "@/lib/domain/opportunity";
+import { cambiarFechaGanada, crearOportunidad, marcarGanada, marcarPerdida, reabrirOportunidad } from "@/lib/domain/opportunity";
 import { abrirCotizacion, guardarLinea } from "@/lib/domain/quoteService";
 import { guardarHito } from "@/lib/domain/milestoneService";
 
@@ -255,7 +255,19 @@ describe("marcarPerdida · AC-20", () => {
   });
 });
 
-describe("reabrirOportunidad · RN-18 enmendada (decisiones §32)", () => {
+/**
+ * La misma sesión con la matriz puesta a mano.
+ *
+ * `sesionDe` lee los permisos de la base, y la matriz se edita desde
+ * Administración (§40): una prueba que dependa de ella falla o pasa según
+ * quién la tocó por última vez. Aquí el permiso se declara.
+ */
+const con = (base: Session, ...permisos: string[]): Session => ({
+  ...base,
+  permissions: new Set(permisos),
+});
+
+describe("reabrirOportunidad · RN-18 enmendada (decisiones §32, §52)", () => {
   it("una perdida vuelve a abrirse en su etapa, sin cierre real ni motivo, con el mismo folio y en la bitácora", async () => {
     const id = await unaOportunidad();
     let detalle = await getOpportunityDetail(jorge, id);
@@ -264,7 +276,8 @@ describe("reabrirOportunidad · RN-18 enmendada (decisiones §32)", () => {
     expect(perdida.ok).toBe(true);
 
     detalle = await getOpportunityDetail(jorge, id);
-    const r = await reabrirOportunidad(jorge, detalle!);
+    // Con el permiso concedido: desde §52 es lo único que decide.
+    const r = await reabrirOportunidad(con(jorge, "REABRIR_OPORTUNIDAD"), detalle!);
     expect(r.ok).toBe(true);
 
     detalle = await getOpportunityDetail(jorge, id);
@@ -282,15 +295,109 @@ describe("reabrirOportunidad · RN-18 enmendada (decisiones §32)", () => {
     expect(rastro).toMatchObject({ before: { status: "PERDIDA" }, byUserId: jorge.userId });
   });
 
-  it("una abierta no se reabre, y quien no la alcanza tampoco", async () => {
+  it("una abierta no se reabre, ni con el permiso", async () => {
     const id = await unaOportunidad();
     const abierta = await getOpportunityDetail(jorge, id);
-    expect(await reabrirOportunidad(jorge, abierta!)).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+    expect(
+      await reabrirOportunidad(con(jorge, "REABRIR_OPORTUNIDAD"), abierta!),
+    ).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
 
     await marcarPerdida(jorge, abierta!, { lossReasonId: motivoSimple.id });
     const cerrada = await getOpportunityDetail(jorge, id);
-    // Paulina no es propietaria ni tiene alcance de oficina.
-    expect(await reabrirOportunidad(paulina, cerrada!)).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+    // Sin el permiso no se reabre aunque la oportunidad esté al alcance (§52).
+    expect(await reabrirOportunidad(con(paulina), cerrada!)).toMatchObject({
+      ok: false,
+      motivo: "AUTORIZACION",
+    });
   });
 });
 
+
+describe("reabrirOportunidad · la matriz manda · §52", () => {
+  it("el propietario NO la reabre si su rol no tiene el permiso", async () => {
+    // El defecto: ser el dueño bastaba, así que apagar la celda en
+    // Administración › Roles y permisos no surtía efecto (§40).
+    const id = await unaOportunidad();
+    const abierta = await getOpportunityDetail(jorge, id);
+    await marcarPerdida(jorge, abierta!, { lossReasonId: motivoSimple.id });
+    const cerrada = await getOpportunityDetail(jorge, id);
+
+    const sinPermiso = con(jorge, "VER_OPORTUNIDADES_OFICINA", "VER_OPORTUNIDADES_PROPIAS");
+    const r = await reabrirOportunidad(sinPermiso, cerrada!);
+
+    expect(r).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+    const tras = await getOpportunityDetail(jorge, id);
+    expect(tras!.status).toBe("PERDIDA");
+  });
+
+  it("con el permiso la reabre, aunque no sea suya", async () => {
+    const id = await unaOportunidad();
+    const abierta = await getOpportunityDetail(jorge, id);
+    await marcarPerdida(jorge, abierta!, { lossReasonId: motivoSimple.id });
+    const cerrada = await getOpportunityDetail(jorge, id);
+
+    const conPermiso = con(paulina, "REABRIR_OPORTUNIDAD", "VER_OPORTUNIDADES_OFICINA");
+    expect(await reabrirOportunidad(conPermiso, cerrada!)).toMatchObject({ ok: true });
+    expect((await getOpportunityDetail(jorge, id))!.status).toBe("ABIERTA");
+  });
+});
+
+// ═══════════════════════════════════════════════ Fecha ganada · decisiones §55
+
+describe("cambiarFechaGanada · decisiones §55", () => {
+  async function unaGanada() {
+    const id = await unaOportunidad();
+    await conCotizacion(id);
+    await conHitos(id, ["1000000"]);
+    const abierta = await getOpportunityDetail(jorge, id);
+    await marcarGanada(jorge, abierta!);
+    return (await getOpportunityDetail(jorge, id))!;
+  }
+
+  it("mueve el cierre real de una ganada y lo anota en la bitácora con antes y después", async () => {
+    const detalle = await unaGanada();
+    const r = await cambiarFechaGanada(jorge, detalle, new Date("2026-10-01T00:00:00Z"));
+    expect(r.ok).toBe(true);
+
+    const o = await prisma.opportunity.findUniqueOrThrow({
+      where: { id: detalle.id },
+      select: { actualCloseDate: true, status: true },
+    });
+    expect(o.status).toBe("GANADA");
+    expect(o.actualCloseDate!.toISOString().slice(0, 10)).toBe("2026-10-01");
+
+    const rastro = await prisma.auditLog.findFirst({
+      where: { entityId: detalle.id, action: "CAMBIAR_FECHA_GANADA" },
+      select: { byUserId: true, before: true, after: true },
+    });
+    expect(rastro?.byUserId).toBe(jorge.userId);
+    expect(String((rastro?.before as { actualCloseDate: string }).actualCloseDate)).toContain(
+      detalle.actualCloseDate!.toISOString().slice(0, 10),
+    );
+    expect(String((rastro?.after as { actualCloseDate: string }).actualCloseDate)).toContain("2026-10-01");
+  });
+
+  it("rechaza una fecha futura, y el mismo día no escribe nada", async () => {
+    const detalle = await unaGanada();
+    const manana = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const futura = await cambiarFechaGanada(jorge, detalle, manana);
+    expect(futura).toMatchObject({ ok: false, motivo: "VALIDACION" });
+    if (!futura.ok) expect(futura.problemas[0]?.campo).toBe("actualCloseDate");
+
+    const mismoDia = await cambiarFechaGanada(jorge, detalle, detalle.actualCloseDate!);
+    expect(mismoDia.ok).toBe(true);
+    const rastros = await prisma.auditLog.count({ where: { entityId: detalle.id, action: "CAMBIAR_FECHA_GANADA" } });
+    expect(rastros).toBe(0);
+  });
+
+  it("una abierta no tiene fecha ganada que cambiar, y quien no la alcanza tampoco la cambia", async () => {
+    const id = await unaOportunidad();
+    const abierta = await getOpportunityDetail(jorge, id);
+    const r = await cambiarFechaGanada(jorge, abierta!, new Date("2026-10-01T00:00:00Z"));
+    expect(r).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+
+    const ganada = await unaGanada();
+    const ajena = await cambiarFechaGanada(paulina, ganada, new Date("2026-10-01T00:00:00Z"));
+    expect(ajena).toMatchObject({ ok: false, motivo: "AUTORIZACION" });
+  });
+});

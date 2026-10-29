@@ -117,6 +117,13 @@ describe("avanceDeObjetivos · alcance por rol", () => {
     const anios = await aniosConObjetivos(direccion, "CL", 2026);
     expect(anios).toContain(2026);
   });
+
+  it("ofrece también el año siguiente, para fijar las cuotas antes de que empiece (§55), de menor a mayor", async () => {
+    const direccion = await sesionDe("dc@avattar.com");
+    const anios = await aniosConObjetivos(direccion, "CL", 2026);
+    expect(anios).toContain(2027);
+    expect(anios).toEqual([...anios].sort((a, b) => a - b));
+  });
 });
 
 describe("fijarObjetivo · acto administrativo", () => {
@@ -332,6 +339,13 @@ describe("guardarCuotasDelEquipo · la cuadrícula por vendedor y trimestre (dec
       filas: [{ userId: pe, cuotas: ["200000", "0", "0", "0"] }], eliminar: [],
     });
     expect(excede).toMatchObject({ ok: false, motivo: "VALIDACION" });
+    // §54 · el rechazo dice de quién es el problema y en qué trimestres, no
+    // solo que lo hay: la hoja puede traer veinte filas.
+    if (!excede.ok) {
+      const dicho = excede.problemas.map((p) => p.mensaje).join(" ");
+      expect(dicho).toContain("Paulina");
+      expect(dicho).toContain("Q1");
+    }
 
     const cabe = await guardarCuotasDelEquipo(admin, {
       countryCode: "MX", fiscalYear: ANIO_DE_PRUEBA, metrica: "UTILIDAD",

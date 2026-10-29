@@ -159,6 +159,12 @@ export default async function ObjetivosPage({
             nombre: c.renglon.usuario.name,
             iniciales: c.renglon.usuario.initials,
             cuotas: cuotaDe(c.renglon).map((m) => m.toFixed()),
+            // La otra métrica, como está guardada: la hoja captura una a la vez
+            // pero el margen compara las dos, y así el aviso de «utilidad por
+            // encima de la venta» se evalúa en la pantalla (§54).
+            contraparte: (metrica === "venta" ? c.renglon.cuotaUtilidad : c.renglon.cuotaVenta).map((m) =>
+              m.toFixed(),
+            ),
             esQuienMira: c.renglon.usuario.id === session.userId,
           },
         ]

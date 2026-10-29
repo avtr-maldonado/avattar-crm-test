@@ -90,15 +90,22 @@ singular.
 
 ```
 lib/db.ts           PrismaClient · SOLO lib/scope y lib/domain pueden importarlo
-lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un lector por pantalla:
+lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un lector por pantalla.
+                    **Una llave no se mezcla con una relación en la misma escritura de Prisma** (§52): o todo
+                    escalar (ownerId, committeeRoleId) o todo anidado, o la operación revienta entera:
                     opportunities, opportunityDetail (el comité trae de cada persona su propietario y los países
                     de este: la página decide «Editar» con administraPersona → §47), organizations, people, productos,
                     cotizaciones, documentos, agenda (bandeja, semana y tablero: pendientes + hechas en 14 días → §42;
-                    cada actividad dice si su oportunidad sigue al alcance: `accesible` → §46),
+                    soloDe: el filtro «solo mías» recorta por responsable dentro del alcance → §52;
+                    cada actividad dice si su oportunidad sigue al alcance: `accesible` → §46;
+                    con `rango` el tablero lee lo que empieza dentro del lapso → §55;
+                    oportunidadesParaAgendar: las abiertas al alcance y la oficina, para «Nueva actividad» → §55),
                     contadores (acotados a la oficina activa),
                     configuracion, pipelines (los de los países de la sesión, para todo rol → §48), busqueda (buscador global: todo el alcance, no la oficina),
-                    funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline),
-                    usuarios (perfiles y quienes entraron sin perfil; alcance = ADMINISTRAR_USUARIOS),
+                    funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline;
+                    aniosConObjetivos ofrece siempre el año en curso y el siguiente → §55),
+                    usuarios (perfiles y quienes entraron sin perfil; la puerta es ADMINISTRAR_USUARIOS y el alcance
+                    por rol: Gerencia ve a quienes operan en sus países; filtros de estado y rol después → §55),
                     cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
                     bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta),
                     analisis (P-09: ganadas con cotización vigente y actividades hechas dentro de un rango de fechas
@@ -118,13 +125,17 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     completarTrimestres, historicoDeVentas, rentabilidad, embudoDeForecast, cicloDeVenta,
                     antiguedadYEstancamiento, actividadPorVendedor, saludMeddic → decisiones §28),
                     personAccess (administraPersona: quién edita, comparte y transfiere una persona → §29),
+                    userAccess (administraUsuario, rolesQueAdministra, paisesQueAdministra: Gerencia administra a
+                    vendedores y preventas de sus países, nada más; lo aplican crear, editar y dar acceso → §55),
                     opportunityAccess (puedeEditarOportunidad: propietario u oficina, lo aplican los siete servicios que
                     mutan una oportunidad; preventaDe: el responsable de preventa → §39),
                     agenda (estadoDeAgenda y agruparPorEstado: realizada, vencida por día, en progreso, por realizar → §42;
+                    filtrarAgenda: estado, tipo y oportunidad recortan en memoria después del alcance → §55;
                     semanaElegida: el lunes que pide la URL, o el de hoy → §44; relojDeAgenda: «hoy» empieza a la
                     medianoche de la zona, lo usa también la pestaña Actividades del detalle → §49).
                     Servicios con transacción:
-                    opportunity, activity (registrar y editar; responsable, duración y calendario por
+                    opportunity (cambiarFechaGanada: la única corrección de una cerrada, con bitácora → §55),
+                    activity (registrar y editar; responsable, duración y calendario por
                     parámetro), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
                     product, quoteService, milestoneService, meddicService, document,
                     usuario, objetivo (fijar cuota), permisos (cambiarPermiso: la matriz de §5.2 editable por
@@ -165,6 +176,11 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     un hidden por elegido, la acción lo lee con form.getAll) · el Panel lleva text-left: el <dialog>
                     hereda la alineación del DOM donde se montó
                     · AyudaEmergente (<details> con un icono junto a la etiqueta; lo usa el campo «Pronóstico»)
+                    · BarraDeHerramientas (dos filas: vistas, el botón que muestra u oculta los filtros —cerrados al
+                    entrar, §31, con un punto si hay alguno aplicado— y el alta; la usan el pipeline y Actividades → §57)
+                    · PanelDeDesglose (el molde único de los popups de desglose: franja de resumen y tabla con la misma
+                    anatomía; lo usan DetalleDeEtapa y PanelDeDetalle → §55; abre con `ancho="contenido"`: el Panel
+                    crece con la tabla desde 48 rem hasta el viewport, y el scroll horizontal es solo respaldo → §56)
                     · iconos (SVG propios) · ContextoDeBarra (ProveedorDeBarra/useBarra: oficina activa y
                     acciones globales desde el layout) · SelectorDePais · BuscadorGlobal · BarraLateral (cliente,
                     contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo) · FilaEnlazada (la fila
@@ -175,11 +191,11 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     hecho, coral vencido, horas por día) · comun (ActividadDeTablero, formatos, PastillaDeEstado) → §42
                     · NavegacionDeSemana (flechas y «Hoy» como enlaces; la semana en la URL `semana=YYYY-MM-DD`) ·
                     formato (rangoDeSemana) → §44 · EnlaceAOportunidad: sin `accesible` no enlaza ni hay lápiz, ficha
-                    «Sin acceso» → §46
+                    «Sin acceso» → §46 · FiltrosDeActividades (estado, tipo, oportunidad y lapso como pastillas; sin
+                    lapso en la semana → §55) · VistaLista acepta `mostrarOportunidad` para la pestaña del detalle
                     pipeline: TableroKanban · TablaOportunidades · Embudo · Forecast (tablero de columnas
                     por mes o trimestre fiscal de cierre estimado, ventana que avanza; RN-15 y RN-01) ·
-                    BarraDeHerramientas (dos filas: vistas, botón de embudo que muestra los filtros —cerrados
-                    al entrar, §31— y alta; debajo los filtros) · BarraDeFiltros (§9; Estatus y Pronóstico como
+                    BarraDeFiltros (§9; Estatus y Pronóstico como
                     desplegables de varios, solo abiertas por omisión → §25, §27; `conservar` mantiene vista y
                     agrupación al aplicar → §31) · DetalleDeEtapa (clic en la barra del embudo: qué
                     oportunidades la suman y cómo pondera) ·
@@ -187,10 +203,12 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     VacioDePipeline (§46: dos vacíos; sin nada al alcance no se ofrece «Limpiar filtros») ·
                     NuevaOportunidad (`organizacionInicial`: el mismo modal abre desde la ficha de cuenta con la
                     cuenta puesta → §46; estadoDeAlta.estadoInicialCon)
-                    oportunidad: ComposerDeActividad (nueva o edición; agendar por omisión, «marcar como hecha»
+                    oportunidad: ComposerDeActividad (nueva o edición; sin `opportunityId` nace con el campo «Oportunidad»
+                    y toma zona y responsables del país de la elegida → §55; agendar por omisión, «marcar como hecha»
                     en el pie, tipos en botones con icono y el resto en «Otro…», fecha + inicio + fin en la zona
                     de la oportunidad, responsable; estadoDeActividad es su reductor puro) ·
-                    DatoEditable (los cinco datos que se corrigen en la ficha sin abrir el panel) ·
+                    DatoEditable (los cinco datos que se corrigen en la ficha sin abrir el panel, y la fecha ganada de
+                    una cerrada → §55) ·
                     Bitacora (línea de tiempo con filtros en la URL) · PanelMeddic (descripción por
                     componente, evidencia en la tarjeta, calificación rápida; parcial sin evidencia se señala
                     «Sin evidencia», confirmar la exige; «Nueva persona…» crea a la del comité desde el panel →
@@ -207,7 +225,13 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     no anticipa margen) · estadoDeEdicion (reductor puro: modo, generación, borrador) ·
                     AbrirCotizacion
                     objetivos: TablaDeObjetivos (la cuadrícula por vendedor y Q1–Q4: se guarda en un viaje, una
-                    entrada de bitácora por cuota que cambia → §34) · TiraDeTrimestres · TablaDeEquipo
+                    entrada de bitácora por cuota que cambia → §34; un eslabón ata los cuatro trimestres de un
+                    vendedor y cada Q se suelta por separado → §53, regla pura en vinculos.ts; el margen arriba del
+                    100 % se evalúa en la hoja, nombra al vendedor y sus trimestres, marca la celda y apaga el
+                    guardado → §54, regla pura en margen.ts · FilaDeLaHoja y AvisoDeLaHoja) · TiraDeTrimestres ·
+                    TablaDeEquipo
+                    admin: MatrizDePermisos · FormularioDeUsuario (solo ofrece los roles y países que la sesión administra) ·
+                    FiltrosDeUsuarios (estado y rol en la URL → §55)
                     contactos: EditarOrganizacion (envía con useEnvioQueConserva: un error no borra lo tecleado → §48) ·
                     EditarPersona · AccesoDePersona (propietario y con quién se
                     comparte una persona; lo ve solo quien la administra → §29)
@@ -231,7 +255,8 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     PanelDeDetalle (<dialog>: los renglones del tooltip y los ítems con enlace) · useDetalle en comun;
                     cada punto lleva `items` y las agrupadas `itemsPorSerie`, resueltos por id contra la lista acotada)
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
-                    del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion
+                    del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion.
+                    /configuracion es de todo rol y cada pestaña decide quién la ve; /admin redirige → §55
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
 app/salud/          GET público de diagnóstico: ¿base alcanzable? ¿qué variables existen? (lib/domain/salud)
 app/error.tsx       lo que ve el usuario ante una excepción no atrapada: en español y con el digest
@@ -293,6 +318,11 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   nuevas que no están en el spec): precio de lista y costo estándar **van juntos o no van**; sin
   ellos el producto existe y se fija precio y costo en cada cotización. La suma de
   hitos **no supera el neto** al guardar, con las cifras; sin cotización con líneas no hay tope.
+- **Gerencia administra a su equipo, y nada más** (decisiones §55, regla nueva que no está en el spec):
+  `ADMINISTRAR_USUARIOS` lo tiene también `GERENTE_PAIS`, y `administraUsuario` lo acota a vendedores y
+  preventas de sus países. Ni otro rol ni otro país, ni al editar: se comprueba a quien es hoy y a quien
+  quedaría. **La fecha ganada es la única corrección de una cerrada**: `cambiarFechaGanada`, no futura, con
+  `CAMBIAR_FECHA_GANADA` en la bitácora.
 - **Las cuentas se ven todas; las personas tienen propietario** (decisiones §18 y §29): toda
   cuenta se ve desde toda la operación, sin importar rol ni oficina. Cada persona es de quien la
   captura —transferible— y la ve su propietario, quien la administra (el gerente de su país,
@@ -342,7 +372,8 @@ objetivos**, con medición acumulada (decisiones §17). **Marcar ganada/perdida*
 pestañas, con filtros y agrupaciones en la URL; los bloques D y E de la propuesta quedaron fuera.
 Las **personas tienen propietario y se comparten** desde el 25-sep-2026 (§29); las cuentas se ven todas.
 Las actividades se **editan desde la bandeja y la semana** (§30, 29-sep); el alta sigue en la oportunidad.
-**Reabrir** existe desde el 29-sep-2026 (§32): quien pudo cerrarla la reabre, RN-18 enmendada.
+**Reabrir** existe desde el 29-sep-2026 (§32), y desde el 13-oct **lo decide la matriz de permisos y nada
+más** (`REABRIR_OPORTUNIDAD`, §52): ser el propietario dejó de bastar. RN-18 enmendada dos veces.
 **Sin piso de margen** desde el mismo día (§33). **Los objetivos se capturan en cuadrícula** desde el
 30-sep-2026 (§34): una fila por vendedor, Q1 a Q4, dos vistas (objetivos y avance) e indicadores de
 dos líneas. **Análisis de ventas es un tablero de gráficas** desde el mismo día (§35): cuatro tarjetas con
@@ -363,7 +394,17 @@ pipeline distingue «sin nada al alcance» de «los filtros dejaron fuera todo»
 marca «Sin acceso» en vez de enlazar a lo que ya no se alcanza. **En el comité de la oportunidad, «Editar» solo para
 quien administra a la persona** (§47, 5-oct): compartida es solo lectura también ahí. **Los pipelines del alta son los de los
 países de la sesión, para todo rol, y la cuenta nueva conserva lo tecleado cuando un dato falla** (§48,
-7-oct). **Un panel que se reabre empieza de cero** (§51, 12-oct): `Panel` remonta sus hijos en cada apertura y
+7-oct). **Siete correcciones** el 13-oct (§52): el homónimo también se rechaza al editar una cuenta, dos
+escrituras dejaron de mezclar llave y relación (cambiar propietario, crear persona sin rol), reabrir lo
+decide la matriz, el formulario de productos abre vacío y no borra al fallar, y Actividades filtra por
+responsable. **Los cuatro trimestres de un vendedor se atan** (§53, 13-oct): un eslabón por fila, teclear en
+uno llena a los atados, y cada Q se suelta por separado. **El aviso de margen dice de quién es y se va al
+corregir** (§54, 13-oct): se evalúa en la hoja, nombra vendedor y trimestres, marca la celda y apaga el guardado.
+**Ocho cambios de uso** el 29-oct (§55): la fecha ganada se corrige en la ficha aunque esté cerrada, con
+bitácora; la pestaña Actividades es la tabla de P-07; Objetivos ofrece el año siguiente; un solo molde para los
+desgloses del embudo y de Análisis; «Nueva actividad» desde Actividades eligiendo la oportunidad, con filtros
+de estado, tipo, oportunidad y lapso; y Administración pasó a ser **Configuración**, de todo rol, donde
+**Gerencia administra a su equipo** (vendedores y preventas de sus países) y Usuarios se filtra por estado y rol. **Un panel que se reabre empieza de cero** (§51, 12-oct): `Panel` remonta sus hijos en cada apertura y
 el resultado de la acción se descarta al cerrar, así que ningún formulario vuelve con lo que no se guardó ni
 con los avisos de la vez pasada. **Cuatro correcciones de uso** el 7-oct (§49): la fila de cuentas lleva a la ficha, editar una
 actividad y marcarla hecha no pregunta por el siguiente paso, el cierre estimado solo se anota en la bitácora

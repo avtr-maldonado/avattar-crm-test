@@ -681,6 +681,57 @@ function diaDeCierre(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+/**
+ * Corregir la fecha ganada de una cerrada · decisiones §55.
+ *
+ * `editarOportunidad` rechaza una cerrada con razón (RN-18): si una ganada se
+ * pudiera editar, bastaría cambiarle el importe después. Esto es otra cosa:
+ * solo mueve `actualCloseDate`, que es lo que mide el avance de cuota (§10.2)
+ * y lo que la gente marca tarde —se ganó el viernes y se registró el lunes—.
+ * Por eso vive aparte, exige que esté **ganada**, y deja `CAMBIAR_FECHA_GANADA`
+ * en la bitácora con antes y después (INV-09).
+ *
+ * La fecha no puede ser futura: nada se gana mañana. Sí puede ser anterior a
+ * la creación en el CRM: lo traído de Pipedrive se ganó antes de existir aquí.
+ * Quién puede es el de siempre: propietario u oficina.
+ */
+export async function cambiarFechaGanada(
+  session: Session,
+  detalle: DetalleOportunidad,
+  fecha: Date,
+): Promise<ResultadoAccion> {
+  if (detalle.status !== "GANADA") {
+    return falla("AUTORIZACION", "Solo una oportunidad ganada tiene fecha ganada.");
+  }
+  if (!puedeEditarOportunidad(session, detalle)) {
+    return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
+  }
+  if (Number.isNaN(fecha.getTime())) {
+    return falla("VALIDACION", { campo: "actualCloseDate", mensaje: "Pon la fecha en que se ganó." });
+  }
+  const dia = diaDeCierre(fecha);
+  if (dia > diaDeCierre(hoyUTC())) {
+    return falla("VALIDACION", { campo: "actualCloseDate", mensaje: "La fecha ganada no puede ser futura." });
+  }
+  // Mismo día: nada que escribir ni que anotar, como con el cierre estimado (§49).
+  if (detalle.actualCloseDate && diaDeCierre(detalle.actualCloseDate) === dia) return ok(null);
+
+  const actualCloseDate = new Date(`${dia}T00:00:00Z`);
+  await auditedTransaction(async (tx, audit) => {
+    await tx.opportunity.update({ where: { id: detalle.id }, data: { actualCloseDate } });
+    await audit({
+      entity: "Opportunity",
+      entityId: detalle.id,
+      action: "CAMBIAR_FECHA_GANADA",
+      byUserId: session.userId,
+      before: { actualCloseDate: detalle.actualCloseDate?.toISOString() ?? null },
+      after: { actualCloseDate: actualCloseDate.toISOString() },
+    });
+  });
+
+  return ok(null);
+}
+
 // ═══════════════════════════════════════════════════ Marcar ganada o perdida
 
 export type RequisitoParaGanar = {
@@ -887,9 +938,19 @@ export async function reabrirOportunidad(
   if (detalle.status === "ABIERTA") {
     return falla("AUTORIZACION", "Esta oportunidad ya está abierta.");
   }
-  const esSuya = detalle.owner.id === session.userId;
-  if (!esSuya && !can(session, "VER_OPORTUNIDADES_OFICINA") && !can(session, "REABRIR_OPORTUNIDAD")) {
-    return falla("AUTORIZACION", "Solo su propietario, Gerencia o Administración pueden reabrirla (RN-18).");
+  // La matriz manda, y nada más · §52 (enmienda a §32).
+  //
+  // Antes bastaba con ser el propietario o tener alcance de oficina, así que
+  // apagar la celda en Administración › Roles y permisos no surtía efecto: un
+  // vendedor seguía reabriendo las suyas. Los permisos son datos (§5.2) y
+  // reabrir es uno de ellos; si la matriz no lo concede, no se reabre. El
+  // alcance sigue aparte: el detalle llegó por `lib/scope`, así que ya se
+  // comprobó que esta sesión ve esta oportunidad.
+  if (!can(session, "REABRIR_OPORTUNIDAD")) {
+    return falla(
+      "AUTORIZACION",
+      "Tu rol no tiene permiso para reabrir oportunidades. Se concede en Administración › Roles y permisos.",
+    );
   }
 
   await auditedTransaction(async (tx, audit) => {

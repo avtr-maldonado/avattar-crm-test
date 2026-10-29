@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useReducer, useState } from "react";
+import { useActionState, useCallback, useMemo, useReducer, useState } from "react";
 import clsx from "clsx";
 import type { ResultadoAccion } from "@/lib/acciones";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/lib/tiempo";
 import { avisar, avisarSiCorresponde } from "@/components/ui/avisos";
 import { Boton } from "@/components/ui/primitivas";
+import { Autocompletado, type Sugerencia } from "@/components/ui/Autocompletado";
 import { Icono, type NombreDeIcono } from "@/components/ui/iconos";
 import {
   AreaDeTexto,
@@ -39,6 +40,25 @@ type Resultado = ResultadoAccion<{
 }>;
 
 export type TipoDeActividad = { id: string; name: string };
+
+/** Una oportunidad que se puede elegir desde la pantalla de Actividades (§55). */
+export type OportunidadElegible = {
+  id: string;
+  folio: string;
+  name: string;
+  organizacion: string;
+  countryCode: string;
+};
+
+/** La zona y los responsables de un país: lo que cambia al elegir la oportunidad (§20). */
+export type ContextoDeOportunidad = {
+  zona: string;
+  zonaEtiqueta: string;
+  usuarios: { id: string; name: string }[];
+};
+
+/** Cuántas sugerencias caben sin que la lista deje de leerse. */
+const MAXIMO_DE_SUGERENCIAS = 8;
 
 /** La actividad que se edita, tal como la manda el servidor. */
 export type ActividadEditable = {
@@ -118,6 +138,14 @@ function ahoraRedondeado(zona: string) {
  * Con `actividad`, abre cargado y el botón que lo abre es el lápiz de la fila.
  * Nada más cambia: la misma acción, el mismo reductor, la misma pregunta de
  * §12.4 si al completar se queda la oportunidad sin nada pendiente.
+ *
+ * ## Y el mismo formulario nace sin oportunidad
+ *
+ * Desde la pantalla de Actividades (§55) no hay `opportunityId`: el primer
+ * campo es la oportunidad, buscada entre las abiertas al alcance. Al elegirla
+ * cambian la zona y los responsables, porque son los del país de **esa**
+ * oportunidad (§20); `zona`, `zonaEtiqueta` y `usuarios` son el punto de
+ * partida mientras no se ha elegido ninguna.
  */
 export function ComposerDeActividad({
   opportunityId,
@@ -127,19 +155,45 @@ export function ComposerDeActividad({
   zona,
   zonaEtiqueta,
   actividad,
+  oportunidades,
+  contextos,
   accion,
 }: {
-  opportunityId: string;
+  /** Ausente: la actividad nace sin oportunidad y se elige en el formulario. */
+  opportunityId?: string;
   tipos: TipoDeActividad[];
   usuarios: { id: string; name: string }[];
   usuarioActual: string;
   zona: string;
   zonaEtiqueta: string;
   actividad?: ActividadEditable;
+  /** Las abiertas al alcance, para elegir; solo sin `opportunityId`. */
+  oportunidades?: OportunidadElegible[];
+  /** Por país, lo que la elegida decide. */
+  contextos?: Record<string, ContextoDeOportunidad>;
   accion: (previo: Resultado | null, form: FormData) => Promise<Resultado>;
 }) {
   const editando = actividad != null;
   const [abierto, setAbierto] = useState(false);
+
+  // La oportunidad elegida en el formulario, cuando no viene fija.
+  const [elegida, setElegida] = useState<OportunidadElegible | null>(null);
+  const eligeOportunidad = opportunityId === undefined && oportunidades !== undefined;
+  const contexto = elegida && contextos ? contextos[elegida.countryCode] : undefined;
+  const zonaActiva = contexto?.zona ?? zona;
+  const zonaEtiquetaActiva = contexto?.zonaEtiqueta ?? zonaEtiqueta;
+  const usuariosActivos = contexto?.usuarios ?? usuarios;
+
+  const buscarOportunidad = useCallback(
+    async (texto: string): Promise<Sugerencia[]> => {
+      const termino = texto.toLocaleLowerCase("es");
+      return (oportunidades ?? [])
+        .filter((o) => `${o.folio} ${o.name} ${o.organizacion}`.toLocaleLowerCase("es").includes(termino))
+        .slice(0, MAXIMO_DE_SUGERENCIAS)
+        .map((o) => ({ id: o.id, nombre: `${o.folio} · ${o.name}`, detalle: o.organizacion }));
+    },
+    [oportunidades],
+  );
 
   // Editar arranca con la actividad; nueva arranca con «ahora», pero eso se
   // calcula al abrir y no al renderizar, para que el servidor y el navegador
@@ -161,7 +215,7 @@ export function ComposerDeActividad({
   const [estado, despachar] = useReducer(reducir, inicialDeEdicion ?? CERRADO);
 
   function estadoFresco(): EstadoDeActividad {
-    return inicialDeEdicion ?? estadoInicial({ tipo: tipos[0], ...ahoraRedondeado(zona) });
+    return inicialDeEdicion ?? estadoInicial({ tipo: tipos[0], ...ahoraRedondeado(zonaActiva) });
   }
 
   const [resultadoCrudo, enviar, enviando] = useActionState(
@@ -172,6 +226,7 @@ export function ComposerDeActividad({
         return r;
       }
       setAbierto(false);
+      setElegida(null);
       despachar({ tipo: "LIMPIAR", inicial: estadoFresco() });
       avisarResultado(r.datos, { editando, hecha: estado.hecha });
       return r;
@@ -189,6 +244,7 @@ export function ComposerDeActividad({
   const pideConfirmacion = resultado != null && !resultado.ok && resultado.motivo === "CONFIRMACION";
 
   function abrir() {
+    setElegida(null);
     despachar({ tipo: "LIMPIAR", inicial: estadoFresco() });
     problemas.reiniciar();
     setAbierto(true);
@@ -261,9 +317,27 @@ export function ComposerDeActividad({
           onChange={problemas.alCambiar}
           className="flex flex-col gap-5"
         >
-          <input type="hidden" name="opportunityId" value={opportunityId} />
+          <input type="hidden" name="opportunityId" value={opportunityId ?? elegida?.id ?? ""} />
           {actividad && <input type="hidden" name="activityId" value={actividad.id} />}
           <input type="hidden" name="typeId" value={estado.tipoId} />
+
+          {/* §55 · sin oportunidad fija, se elige primero: de ella salen la zona
+              y los responsables de más abajo. Solo las abiertas al alcance. */}
+          {eligeOportunidad && (
+            <Campo etiqueta="Oportunidad" htmlFor="oportunidad" problema={problemas.problema("opportunityId")}>
+              <Autocompletado
+                id="oportunidad"
+                placeholder="Busca por nombre, folio o cuenta"
+                buscar={buscarOportunidad}
+                permitirNueva={false}
+                problema={problemas.problema("opportunityId")}
+                alElegir={(e) => {
+                  setElegida(e.tipo === "EXISTENTE" ? (oportunidades?.find((o) => o.id === e.id) ?? null) : null);
+                  problemas.corregir("opportunityId");
+                }}
+              />
+            </Campo>
+          )}
 
           {/* El asunto va primero y sin etiqueta: es el título de lo que se
               captura, y llega sugerido por el tipo. */}
@@ -303,7 +377,7 @@ export function ComposerDeActividad({
             estado={estado}
             despachar={despachar}
             problema={problemas.problema}
-            zonaEtiqueta={zonaEtiqueta}
+            zonaEtiqueta={zonaEtiquetaActiva}
           />
 
           <Campo
@@ -312,12 +386,14 @@ export function ComposerDeActividad({
             problema={problemas.problema("userId")}
           >
             <Seleccion
+              // Cambiar de país cambia la lista: la llave vuelve a aplicar el valor inicial.
+              key={zonaActiva}
               id="userId"
               name="userId"
               defaultValue={actividad?.userId ?? usuarioActual}
               problema={problemas.problema("userId")}
             >
-              {usuarios.map((u) => (
+              {usuariosActivos.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.id === usuarioActual ? `${u.name} (tú)` : u.name}
                 </option>

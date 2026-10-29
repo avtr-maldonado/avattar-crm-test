@@ -7,12 +7,13 @@ import { requireSession } from "@/lib/auth/session";
 import { editarActividad, registrarActividad } from "@/lib/domain/activity";
 import {
   cambiarEtapa,
+  cambiarFechaGanada,
   editarOportunidad,
   marcarGanada,
   marcarPerdida,
   reabrirOportunidad,
 } from "@/lib/domain/opportunity";
-import { cambioDeCampo } from "@/lib/domain/opportunityField";
+import { cambioDeCampo, fechaGanadaDe } from "@/lib/domain/opportunityField";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
 import { duracionEnMinutos, instanteEn } from "@/lib/tiempo";
 import { getOpportunityDetail } from "@/lib/scope/opportunityDetail";
@@ -158,13 +159,18 @@ export async function editarCampoAccion(
   campo: string,
   valor: string,
 ): Promise<ResultadoAccion> {
-  const cambio = cambioDeCampo(campo, valor);
+  // §55 · la fecha ganada es el único dato de una cerrada que se corrige, y va
+  // por su propio servicio; los demás pasan por `editarOportunidad`.
+  const cambio = campo === "actualCloseDate" ? fechaGanadaDe(valor) : cambioDeCampo(campo, valor);
   if (!cambio.ok) return cambio;
 
   const { session, detalle, umbrales } = await cargar(opportunityId);
   if (!detalle || !umbrales) return falla("AUTORIZACION", NO_ALCANZA);
 
-  const r = await editarOportunidad(session, detalle, cambio.datos, umbrales);
+  const r =
+    cambio.datos instanceof Date
+      ? await cambiarFechaGanada(session, detalle, cambio.datos)
+      : await editarOportunidad(session, detalle, cambio.datos, umbrales);
   if (!r.ok) return r;
 
   revalidatePath(`/oportunidades/${opportunityId}`);
@@ -175,7 +181,8 @@ export async function editarCampoAccion(
 const HORA = /^\d{2}:\d{2}$/;
 
 const esquemaActividad = z.object({
-  opportunityId: z.string().min(1),
+  // Desde Actividades la oportunidad se elige en el formulario (§55): sin ella, el campo lo dice.
+  opportunityId: z.string().min(1, "Elige la oportunidad."),
   /** Presente cuando se edita una que ya existe. */
   activityId: z.string().optional(),
   typeId: z.string().min(1, "Elige el tipo de actividad."),

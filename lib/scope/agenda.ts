@@ -1,5 +1,6 @@
 import type { CountryCode } from "@prisma/client";
 import type { Session } from "@/lib/auth/permissions";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { fechaEn, instanteEn, lunesDe, sumarDias } from "@/lib/tiempo";
 import { actividadEnOficina, activityScope } from "./activities";
@@ -87,12 +88,29 @@ async function conAccesoAOportunidad<A extends ConOportunidad>(session: Session,
   );
 }
 
+/**
+ * El filtro «solo las mías» · §52.
+ *
+ * El alcance de un vendedor ya incluye las actividades de sus oportunidades
+ * aunque el responsable sea otro (§2.3), y eso se queda: ver lo que pasa en una
+ * oportunidad propia es parte de trabajarla. Lo que faltaba era poder recortar
+ * a lo que a uno le toca hacer.
+ *
+ * Recorta **dentro** del alcance y nunca lo amplía: se agrega al `AND` que ya
+ * lleva `activityScope`, igual que la oficina activa (§16).
+ */
+function soloDe(session: Session, soloMias: boolean): Prisma.ActivityWhereInput {
+  return soloMias ? { userId: session.userId } : {};
+}
+
 export async function bandejaDeTrabajo(
   session: Session,
   ahora = new Date(),
   pais?: CountryCode,
   /** La zona de la oficina: «hoy» es el día de esa ciudad, no el de UTC. */
   zona = "UTC",
+  /** Solo lo que esta sesión tiene a su cargo (§52). */
+  soloMias = false,
 ) {
   const enOficina = pais ? actividadEnOficina(pais) : {};
   const { inicio: inicioDeHoy, fin: finDeHoy } = diaEn(fechaEn(ahora, zona), zona);
@@ -105,6 +123,7 @@ export async function bandejaDeTrabajo(
           activityScope(session),
           { completedAt: null, startsAt: { lt: inicioDeHoy } },
           enOficina,
+          soloDe(session, soloMias),
         ],
       },
       select: SELECCION_DE_AGENDA,
@@ -118,6 +137,7 @@ export async function bandejaDeTrabajo(
           activityScope(session),
           { completedAt: null, startsAt: { gte: inicioDeHoy, lte: finDeHoy } },
           enOficina,
+          soloDe(session, soloMias),
         ],
       },
       select: SELECCION_DE_AGENDA,
@@ -176,6 +196,15 @@ export async function tableroDeActividades(
   ahora = new Date(),
   pais?: CountryCode,
   zona = "UTC",
+  /** Solo lo que esta sesión tiene a su cargo (§52). */
+  soloMias = false,
+  /**
+   * El lapso de la URL (§55): con él, lo que **empieza** dentro del rango,
+   * hecho o pendiente, y la regla de «pendientes más dos semanas» se apaga. Es
+   * un recorte distinto, no uno más: por eso cambia la consulta y no se filtra
+   * en memoria.
+   */
+  rango?: { desde: Date; hasta: Date },
 ) {
   const enOficina = pais ? actividadEnOficina(pais) : {};
   const { inicio: inicioDeHoy } = diaEn(fechaEn(ahora, zona), zona);
@@ -183,7 +212,14 @@ export async function tableroDeActividades(
 
   const actividades = await prisma.activity.findMany({
     where: {
-      AND: [activityScope(session), { OR: [{ completedAt: null }, { completedAt: { gte: desde } }] }, enOficina],
+      AND: [
+        activityScope(session),
+        rango
+          ? { startsAt: { gte: rango.desde, lte: rango.hasta } }
+          : { OR: [{ completedAt: null }, { completedAt: { gte: desde } }] },
+        enOficina,
+        soloDe(session, soloMias),
+      ],
     },
     select: SELECCION_DE_AGENDA,
     orderBy: { startsAt: "asc" },
@@ -207,6 +243,8 @@ export async function agendaSemanal(
   zona = "UTC",
   /** El lunes de la semana que se quiere ver, `YYYY-MM-DD`; sin él, la de hoy (decisiones §44). */
   semana?: string,
+  /** Solo lo que esta sesión tiene a su cargo (§52). */
+  soloMias = false,
 ) {
   // La semana arranca en lunes: es una agenda de trabajo, no un calendario.
   // Se calcula sobre la fecha local de la oficina, y cada cubeta va de la
@@ -225,6 +263,7 @@ export async function agendaSemanal(
         activityScope(session),
         { startsAt: { gte: lunes, lte: domingo } },
         pais ? actividadEnOficina(pais) : {},
+        soloDe(session, soloMias),
       ],
     },
     select: {
@@ -263,3 +302,29 @@ function diaEn(fecha: string, zona: string) {
   const fin = new Date(instanteEn(sumarDias(fecha, 1), "00:00", zona).getTime() - 1);
   return { inicio, fin };
 }
+
+/**
+ * Las oportunidades a las que esta sesión puede agendarle una actividad desde
+ * la pantalla de Actividades (§55): las **abiertas** a su alcance —el mismo
+ * `opportunityScope` de siempre, así que Preventa ve las que apoya— y, con
+ * oficina activa, solo las de esa oficina, que recorta y nunca amplía (§16).
+ * Trae lo que el campo «Oportunidad» muestra y lo que el composer necesita
+ * para elegir zona y responsables: el país.
+ */
+export async function oportunidadesParaAgendar(session: Session, pais?: CountryCode) {
+  return prisma.opportunity.findMany({
+    where: {
+      AND: [opportunityScope(session), { status: "ABIERTA", countryCode: pais }],
+    },
+    select: {
+      id: true,
+      folio: true,
+      name: true,
+      countryCode: true,
+      organization: { select: { name: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+}
+
+export type OportunidadParaAgendar = Awaited<ReturnType<typeof oportunidadesParaAgendar>>[number];
