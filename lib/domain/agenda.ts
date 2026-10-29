@@ -73,3 +73,32 @@ export function semanaElegida(parametro: string | string[] | undefined, hoy: str
   }
   return lunesDe(hoy);
 }
+
+// ───────────────────────────────────────────── Los filtros de Actividades · §55
+
+export type FiltrosDeAgenda = {
+  /** Vacío es «todos», como en cualquier filtro de la URL. */
+  estados: readonly EstadoDeAgenda[];
+  tipos: readonly string[];
+  oportunidades: readonly string[];
+};
+
+type Filtrable = Agendable & { type: { id: string }; opportunity: { id: string } | null };
+
+/**
+ * Estado, tipo y oportunidad recortan **en memoria, después del alcance**,
+ * como la bandera de riesgo del pipeline: el estado se calcula (INV-11) y no
+ * hay columna que consultar, y los otros dos van con él para que la pantalla
+ * filtre una sola vez. Vacío es «todos»; varios se combinan con Y.
+ */
+export function filtrarAgenda<T extends Filtrable>(actividades: readonly T[], f: FiltrosDeAgenda, reloj: RelojDeAgenda): T[] {
+  const estados = new Set(f.estados);
+  const tipos = new Set(f.tipos);
+  const oportunidades = new Set(f.oportunidades);
+  return actividades.filter(
+    (a) =>
+      (estados.size === 0 || estados.has(estadoDeAgenda(a, reloj))) &&
+      (tipos.size === 0 || tipos.has(a.type.id)) &&
+      (oportunidades.size === 0 || (a.opportunity !== null && oportunidades.has(a.opportunity.id))),
+  );
+}

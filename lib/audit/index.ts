@@ -69,6 +69,8 @@ export type AuditAction =
   // trimestre no cerró como se prometió.
   | "EDITAR_COTIZACION"
   | "CAMBIAR_CIERRE_ESTIMADO"
+  /** La fecha ganada de una cerrada se corrige a mano (decisiones §55). */
+  | "CAMBIAR_FECHA_GANADA"
   /** Persona compartida o descompartida (decisiones §29). Entidad `Person`. */
   | "COMPARTIR_CONTACTO";
 

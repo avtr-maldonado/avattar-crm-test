@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { CountryCode } from "@/lib/dto";
 import { requireSession } from "@/lib/auth/session";
 import { listActivities } from "@/lib/scope";
 import {
@@ -8,9 +9,10 @@ import {
   type DetalleOportunidad,
 } from "@/lib/scope/opportunityDetail";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
-import { ciudadDe, etiquetaDeDuracion, fechaCortaEn, horaEn } from "@/lib/tiempo";
-import { estadoDeAgenda, relojDeAgenda, type RelojDeAgenda } from "@/lib/domain/agenda";
-import { PastillaDeEstado } from "@/components/actividades/comun";
+import { ciudadDe } from "@/lib/tiempo";
+import { relojDeAgenda, type RelojDeAgenda } from "@/lib/domain/agenda";
+import { VistaLista } from "@/components/actividades/VistaLista";
+import { formatos, type ActividadDeTablero } from "@/components/actividades/formato";
 import { cotizacionVigente } from "@/lib/scope/cotizaciones";
 import { bitacoraDeOportunidad } from "@/lib/scope/bitacora";
 import { listProductos } from "@/lib/scope/productos";
@@ -71,7 +73,7 @@ import { CerrarOportunidad } from "@/components/oportunidad/CerrarOportunidad";
 import { ReabrirOportunidad } from "@/components/oportunidad/ReabrirOportunidad";
 import { catalogosParaAlta, motivosDePerdida, tiposDeActividad } from "@/lib/scope/configuracion";
 import { destinatariosValidos, preventasValidos, requisitosParaGanar } from "@/lib/domain/opportunity";
-import { preventaDe } from "@/lib/domain/opportunityAccess";
+import { preventaDe, puedeEditarOportunidad } from "@/lib/domain/opportunityAccess";
 import { can, type Session } from "@/lib/auth/permissions";
 import { administraPersona } from "@/lib/domain/personAccess";
 import {
@@ -253,6 +255,12 @@ export default async function DetalleOportunidadPage({
           ) : pestanaActiva === "actividades" ? (
             <TabActividades
               actividades={actividades}
+              oportunidad={{
+                id: oportunidad.id,
+                folio: oportunidad.folio,
+                name: oportunidad.name,
+                countryCode: oportunidad.countryCode,
+              }}
               zona={pais.timezone}
               reloj={reloj}
               composer={oportunidad.status === "ABIERTA" ? composer : null}
@@ -308,10 +316,9 @@ function Encabezado({
   // pregunta para no ofrecer un botón que el servidor va a rechazar; la
   // autorización de verdad vive en `lib/domain`.
   const puedeEditar = o.status === "ABIERTA" && (o.owner.id === sesion.userId || puedeReasignar);
-  // RN-18 enmendada (§32): quien pudo cerrarla la reabre; Administración también.
-  const puedeReabrir =
-    o.status !== "ABIERTA" &&
-    (o.owner.id === sesion.userId || puedeReasignar || can(sesion, "REABRIR_OPORTUNIDAD"));
+  // La matriz manda (§52, enmienda a §32): sin el permiso no se ofrece el botón,
+  // porque el servidor lo va a rechazar.
+  const puedeReabrir = o.status !== "ABIERTA" && can(sesion, "REABRIR_OPORTUNIDAD");
 
   const cotizacion = cotizacionConLineas(o);
   // `grossMargin` solo viene si el usuario tiene VER_MARGEN: el selector lo
@@ -525,6 +532,17 @@ function TabResumen({
               valor={o.expectedCloseDate.toISOString().slice(0, 10)}
               texto={FECHA.format(o.expectedCloseDate)}
               editable={puedeEditar}
+              guardar={guardarCampo}
+            />
+            {/* §55 · en blanco mientras no esté ganada; ganada, se corrige aunque esté
+                cerrada, por su propio servicio, y queda en la bitácora. */}
+            <DatoEditable
+              etiqueta="Fecha ganada"
+              campo="actualCloseDate"
+              tipo="date"
+              valor={o.status === "GANADA" && o.actualCloseDate ? o.actualCloseDate.toISOString().slice(0, 10) : ""}
+              texto={o.status === "GANADA" && o.actualCloseDate ? FECHA.format(o.actualCloseDate) : "—"}
+              editable={o.status === "GANADA" && puedeEditarOportunidad(sesion, o)}
               guardar={guardarCampo}
             />
             <DatoEditable
@@ -950,11 +968,14 @@ type PropsDelComposer = Omit<
 
 function TabActividades({
   actividades,
+  oportunidad,
   zona,
   reloj,
   composer,
 }: {
   actividades: Awaited<ReturnType<typeof listActivities>>;
+  /** La de todas las filas: la tabla de Actividades pide saber de cuál es cada una (§46), y aquí es siempre esta. */
+  oportunidad: { id: string; folio: string; name: string; countryCode: CountryCode };
   /** La zona de la oportunidad: las horas se leen como en la captura. */
   zona: string;
   /** Para la pastilla de estado: la misma de la pantalla de Actividades (§49). */
@@ -980,55 +1001,45 @@ function TabActividades({
     );
   }
 
-  const fecha = fechaCortaEn(zona);
+  // §55 · la misma tabla que la pantalla de Actividades, con sus estados y su
+  // lápiz; sin la línea de la oportunidad, que aquí sería repetir el título.
+  const filas: ActividadDeTablero[] = actividades.map((a) => ({
+    id: a.id,
+    subject: a.subject,
+    notes: a.notes,
+    outcome: a.outcome,
+    startsAt: a.startsAt,
+    durationMin: a.durationMin,
+    completedAt: a.completedAt,
+    externalEventId: a.externalEventId,
+    type: a.type,
+    user: a.user,
+    opportunity: { ...oportunidad, accesible: true },
+  }));
+
+  const editorDe = (a: ActividadDeTablero) =>
+    composer ? (
+      <ComposerDeActividad
+        {...composer}
+        actividad={{
+          id: a.id,
+          typeId: a.type.id,
+          subject: a.subject,
+          notes: a.notes,
+          outcome: a.outcome,
+          startsAt: a.startsAt.toISOString(),
+          durationMin: a.durationMin,
+          hecha: a.completedAt != null,
+          userId: a.user.id,
+          enCalendario: a.externalEventId != null,
+        } satisfies ActividadEditable}
+      />
+    ) : null;
 
   return (
     <>
       {nueva && <div className="mb-4 flex justify-end">{nueva}</div>}
-      <ol className="space-y-3">
-        {actividades.map((a) => {
-          const fin = a.durationMin
-            ? new Date(a.startsAt.getTime() + a.durationMin * 60_000)
-            : null;
-          return (
-            <li key={a.id} className="rounded-md border border-borde bg-superficie-tarjeta p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <PastillaDeEstado estado={estadoDeAgenda(a, reloj)} />
-                <Pastilla>{a.type.name}</Pastilla>
-                <p className="text-sm font-medium text-texto-titulo">{a.subject}</p>
-                <span className="tabular ml-auto text-xs text-texto-tenue">
-                  {fecha.format(a.startsAt)} · {horaEn(a.startsAt, zona)}
-                  {fin && `–${horaEn(fin, zona)}`}
-                  {a.durationMin ? ` · ${etiquetaDeDuracion(a.durationMin)}` : ""}
-                </span>
-                {composer && (
-                  <ComposerDeActividad
-                    {...composer}
-                    actividad={{
-                      id: a.id,
-                      typeId: a.type.id,
-                      subject: a.subject,
-                      notes: a.notes,
-                      outcome: a.outcome,
-                      startsAt: a.startsAt.toISOString(),
-                      durationMin: a.durationMin,
-                      hecha: a.completedAt != null,
-                      userId: a.user.id,
-                      enCalendario: a.externalEventId != null,
-                    } satisfies ActividadEditable}
-                  />
-                )}
-              </div>
-              {a.notes && <p className="mt-2 text-sm text-texto-cuerpo">{a.notes}</p>}
-              {a.outcome && <p className="mt-1 text-sm text-texto-cuerpo">{a.outcome}</p>}
-              <p className="mt-2 text-xs text-texto-tenue">
-                {a.user.name}
-                {a.externalEventId && " · en el calendario"}
-              </p>
-            </li>
-          );
-        })}
-      </ol>
+      <VistaLista actividades={filas} reloj={reloj} f={formatos(zona)} editorDe={editorDe} mostrarOportunidad={false} />
     </>
   );
 }

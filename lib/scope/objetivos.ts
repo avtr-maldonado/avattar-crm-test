@@ -211,6 +211,9 @@ export async function aniosConObjetivos(
   });
 
   const anios = new Set(filas.map((f) => f.fiscalYear));
+  // El en curso y el siguiente siempre: las cuotas del año que viene se fijan
+  // antes de que empiece (decisiones §55). De menor a mayor, como se leen.
   anios.add(anioEnCurso);
-  return [...anios].sort((a, b) => b - a);
+  anios.add(anioEnCurso + 1);
+  return [...anios].sort((a, b) => a - b);
 }

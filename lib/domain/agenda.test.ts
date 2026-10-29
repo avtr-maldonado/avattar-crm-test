@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agruparPorEstado, estadoDeAgenda, semanaElegida, relojDeAgenda } from "./agenda";
+import { agruparPorEstado, estadoDeAgenda, filtrarAgenda, semanaElegida, relojDeAgenda } from "./agenda";
 
 /**
  * El estado de una actividad en la agenda · decisiones §42.
@@ -96,5 +96,34 @@ describe("relojDeAgenda · §49", () => {
     const base = { durationMin: 30, completedAt: null };
     expect(estadoDeAgenda({ ...base, startsAt: new Date("2026-10-07T04:00:00Z") }, reloj)).toBe("vencida");
     expect(estadoDeAgenda({ ...base, startsAt: new Date("2026-10-07T20:00:00Z") }, reloj)).toBe("por_realizar");
+  });
+});
+
+describe("filtrarAgenda · los filtros de Actividades recortan en memoria, después del alcance (§55)", () => {
+  const lista = [
+    { id: "a", type: { id: "llamada" }, opportunity: { id: "op-1" }, ...actividad({ startsAt: "2026-09-29T10:00:00Z" }) },
+    { id: "b", type: { id: "reunion" }, opportunity: { id: "op-2" }, ...actividad({ startsAt: "2026-10-01T15:45:00Z", durationMin: 30 }) },
+    { id: "c", type: { id: "llamada" }, opportunity: null, ...actividad({ startsAt: "2026-10-02T09:00:00Z" }) },
+    { id: "d", type: { id: "correo" }, opportunity: { id: "op-1" }, ...actividad({ startsAt: "2026-09-28T09:00:00Z", completedAt: "2026-09-28T10:00:00Z" }) },
+  ];
+  const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+
+  it("sin filtros devuelve todo, en el mismo orden", () => {
+    expect(ids(filtrarAgenda(lista, { estados: [], tipos: [], oportunidades: [] }, reloj))).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("por estado, con el reloj: vencidas y realizadas", () => {
+    expect(ids(filtrarAgenda(lista, { estados: ["vencida"], tipos: [], oportunidades: [] }, reloj))).toEqual(["a"]);
+    expect(ids(filtrarAgenda(lista, { estados: ["realizada", "en_progreso"], tipos: [], oportunidades: [] }, reloj))).toEqual(["b", "d"]);
+  });
+
+  it("por tipo y por oportunidad; una sin oportunidad no pasa un filtro de oportunidad", () => {
+    expect(ids(filtrarAgenda(lista, { estados: [], tipos: ["llamada"], oportunidades: [] }, reloj))).toEqual(["a", "c"]);
+    expect(ids(filtrarAgenda(lista, { estados: [], tipos: [], oportunidades: ["op-1"] }, reloj))).toEqual(["a", "d"]);
+  });
+
+  it("los filtros se combinan con Y", () => {
+    expect(ids(filtrarAgenda(lista, { estados: ["vencida"], tipos: ["llamada"], oportunidades: ["op-1"] }, reloj))).toEqual(["a"]);
+    expect(ids(filtrarAgenda(lista, { estados: ["realizada"], tipos: ["llamada"], oportunidades: [] }, reloj))).toEqual([]);
   });
 });

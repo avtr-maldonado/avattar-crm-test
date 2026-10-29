@@ -66,7 +66,7 @@ export async function crearUsuarioAccion(
   });
   if (!r.ok) return r;
 
-  revalidatePath("/admin");
+  revalidatePath("/configuracion");
   return ok(r.datos);
 }
 
@@ -91,7 +91,7 @@ export async function editarUsuarioAccion(
   });
   if (!r.ok) return r;
 
-  revalidatePath("/admin");
+  revalidatePath("/configuracion");
   return ok(null);
 }
 
@@ -113,7 +113,7 @@ export async function darAccesoAccion(
   });
   if (!r.ok) return r;
 
-  revalidatePath("/admin");
+  revalidatePath("/configuracion");
   return ok(r.datos);
 }
 
@@ -144,7 +144,7 @@ export async function cambiarPermisoAccion(_previo: ResultadoAccion | null, form
   });
   if (r.ok) {
     invalidarPermisosEnCache();
-    revalidatePath("/admin");
+    revalidatePath("/configuracion");
   }
   return r;
 }

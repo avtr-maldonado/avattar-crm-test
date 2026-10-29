@@ -173,7 +173,13 @@ export function Panel({
   subtitulo?: ReactNode;
   abierto: boolean;
   alCerrar: () => void;
-  ancho?: "md" | "lg";
+  /**
+   * `md` y `lg` son anchos fijos para formularios. `contenido` (§56) deja que
+   * lo de adentro mande: el panel crece con una tabla ancha desde el ancho de
+   * `lg` hasta el viewport menos los márgenes, y solo entonces la tabla hace
+   * scroll horizontal.
+   */
+  ancho?: "md" | "lg" | "contenido";
   pie?: ReactNode;
   /** Solo para paneles sin captura: un clic en el fondo cierra. */
   cerrarAlFondo?: boolean;
@@ -242,9 +248,14 @@ export function Panel({
         // `text-left` a propósito: el <dialog> se dibuja en la capa superior
         // pero hereda del DOM donde se montó. Abierto desde una celda con
         // `text-right`, el título y el subtítulo salían corridos.
-        "w-full rounded-lg bg-superficie-tarjeta p-0 text-left text-texto-cuerpo shadow-md",
+        "rounded-lg bg-superficie-tarjeta p-0 text-left text-texto-cuerpo shadow-md",
         "backdrop:bg-navy-950/45 backdrop:backdrop-blur-[2px]",
-        ancho === "lg" ? "max-w-3xl" : "max-w-xl",
+        // El <dialog> nativo ya es `fit-content`; `w-full` lo ancla a su máximo.
+        ancho === "contenido"
+          ? "w-fit min-w-[min(48rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]"
+          : ancho === "lg"
+            ? "w-full max-w-3xl"
+            : "w-full max-w-xl",
       )}
     >
       <header className="flex items-start justify-between gap-4 border-b border-borde px-6 py-5">

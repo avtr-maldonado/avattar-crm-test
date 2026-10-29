@@ -19,9 +19,6 @@ import {
 
 type ResultadoDeUsuario = ResultadoAccion<{ id: string } | null>;
 
-const ROLES: Role[] = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA"];
-const PAISES: CountryCode[] = ["MX", "CO", "CL"];
-
 export type UsuarioDelFormulario = {
   id: string;
   email: string;
@@ -43,6 +40,13 @@ type Props = {
   accion: (previo: ResultadoDeUsuario | null, form: FormData) => Promise<ResultadoDeUsuario>;
   variante?: "primario" | "secundario" | "fantasma";
   etiquetaBoton?: string;
+  /**
+   * Lo que esta sesión puede asignar (§55): los cinco roles y los tres países
+   * para Administración; vendedor y preventa en sus países para Gerencia. Lo
+   * decide `rolesQueAdministra` y `paisesQueAdministra`; aquí solo se ofrece.
+   */
+  roles: Role[];
+  paises: CountryCode[];
 } & (
   | { modo: "alta" }
   | { modo: "edicion"; usuario: UsuarioDelFormulario }
@@ -67,7 +71,7 @@ type Props = {
  *   oportunidades y actividades siguen a su nombre.
  */
 export function FormularioDeUsuario(props: Props) {
-  const { accion, variante, etiquetaBoton } = props;
+  const { accion, variante, etiquetaBoton, roles, paises } = props;
   const [abierto, setAbierto] = useState(false);
 
   const usuario = props.modo === "edicion" ? props.usuario : null;
@@ -113,8 +117,8 @@ export function FormularioDeUsuario(props: Props) {
 
   const correo = usuario?.email ?? pendiente?.email ?? "";
   const nombreInicial = usuario?.name ?? pendiente?.name ?? "";
-  const rolInicial = usuario?.role ?? "VENDEDOR";
-  const paisesIniciales = usuario?.countryCodes ?? ["MX"];
+  const rolInicial = usuario?.role ?? roles[0];
+  const paisesIniciales = new Set(usuario?.countryCodes ?? paises.slice(0, 1));
 
   return (
     <>
@@ -207,7 +211,7 @@ export function FormularioDeUsuario(props: Props) {
                 disabled={usuario?.esYo}
                 problema={problemaDe(resultado, "role")}
               >
-                {ROLES.map((r) => (
+                {roles.map((r) => (
                   <option key={r} value={r}>
                     {ETIQUETA_ROL[r]}
                   </option>
@@ -223,13 +227,13 @@ export function FormularioDeUsuario(props: Props) {
               problema={problemaDe(resultado, "countryCodes")}
             >
               <div className="flex flex-wrap gap-4 py-2">
-                {PAISES.map((p) => (
+                {paises.map((p) => (
                   <Casilla
                     key={p}
                     id={campo(`pais-${p}`)}
                     name="countryCodes"
                     value={p}
-                    defaultChecked={paisesIniciales.includes(p)}
+                    defaultChecked={paisesIniciales.has(p)}
                     etiqueta={NOMBRE_PAIS[p]}
                   />
                 ))}

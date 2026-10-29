@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { Panel } from "@/components/ui/formulario";
+import { PanelDeDesglose } from "@/components/ui/PanelDeDesglose";
 
 export type OportunidadDeEtapa = {
   id: string;
@@ -34,6 +33,7 @@ export type EtapaDetallada = {
  * qué oportunidades sale esa cifra, con su importe, la probabilidad de la
  * etapa y el ponderado (importe × probabilidad, RN-01). Es el mismo dato que
  * el kanban, leído por etapa y con la suma a la vista: nada se calcula aquí.
+ * Lo pinta `PanelDeDesglose`, el mismo molde que las gráficas de Análisis (§55).
  */
 export function DetalleDeEtapa({ etapa, children }: { etapa: EtapaDetallada; children: ReactNode }) {
   const [abierto, setAbierto] = useState(false);
@@ -50,62 +50,28 @@ export function DetalleDeEtapa({ etapa, children }: { etapa: EtapaDetallada; chi
         {children}
       </button>
 
-      <Panel
+      <PanelDeDesglose
         titulo={`${etapa.nombre} · ${etapa.valor}`}
-        subtitulo={`${etapa.cuantas} ${etapa.cuantas === 1 ? "oportunidad abierta" : "oportunidades abiertas"} · probabilidad de etapa ${etapa.probabilidad} · ponderado ${etapa.ponderado}`}
+        subtitulo={etapa.leyendaDePaso}
+        resumen={[
+          { etiqueta: "Oportunidades abiertas", texto: String(etapa.cuantas) },
+          { etiqueta: "Probabilidad de etapa", texto: etapa.probabilidad },
+          { etiqueta: "Ponderado", texto: etapa.ponderado },
+        ]}
+        encabezados={{ principal: "Oportunidad", nota: "Propietario", cifras: ["Importe", "Ponderado"] }}
+        filas={etapa.oportunidades.map((o) => ({
+          clave: o.id,
+          titulo: o.nombre,
+          subtitulo: `${o.cuenta} · ${o.folio}`,
+          href: `/oportunidades/${o.id}`,
+          nota: o.propietario,
+          cifras: [{ texto: o.importe }, { texto: o.ponderado }],
+        }))}
+        total={{ etiqueta: `Total · ${etapa.cuantas}`, cifras: [etapa.valor, etapa.ponderado] }}
+        vacio="No hay oportunidades abiertas en esta etapa con los filtros actuales."
         abierto={abierto}
         alCerrar={() => setAbierto(false)}
-        ancho="lg"
-        cerrarAlFondo
-      >
-
-        {etapa.oportunidades.length === 0 ? (
-          <p className="mt-4 rounded-sm border border-dashed border-borde px-4 py-6 text-center text-sm text-texto-tenue">
-            No hay oportunidades abiertas en esta etapa con los filtros actuales.
-          </p>
-        ) : (
-          <div className="mt-4 overflow-x-auto rounded-md border border-borde">
-            <table className="w-full border-collapse text-sm">
-              <thead className="bg-superficie-sutil">
-                <tr className="text-left">
-                  <th className="eyebrow px-3 py-2 font-medium">Folio</th>
-                  <th className="eyebrow px-3 py-2 font-medium">Oportunidad</th>
-                  <th className="eyebrow px-3 py-2 font-medium">Propietario</th>
-                  <th className="eyebrow px-3 py-2 text-right font-medium">Importe</th>
-                  <th className="eyebrow px-3 py-2 text-right font-medium">Ponderado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {etapa.oportunidades.map((o) => (
-                  <tr key={o.id} className="border-t border-borde hover:bg-superficie-sutil">
-                    <td className="px-3 py-2">
-                      <Link href={`/oportunidades/${o.id}`} className="font-medium text-acento hover:underline">
-                        {o.folio}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2">
-                      <p className="font-medium text-texto-titulo">{o.nombre}</p>
-                      <p className="text-xs text-texto-tenue">{o.cuenta}</p>
-                    </td>
-                    <td className="px-3 py-2 text-texto-cuerpo">{o.propietario}</td>
-                    <td className="tabular px-3 py-2 text-right text-texto-titulo">{o.importe}</td>
-                    <td className="tabular px-3 py-2 text-right text-texto-titulo">{o.ponderado}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-borde-fuerte bg-superficie-sutil font-semibold">
-                  <td className="px-3 py-2" colSpan={3}>
-                    Total · {etapa.cuantas}
-                  </td>
-                  <td className="tabular px-3 py-2 text-right">{etapa.valor}</td>
-                  <td className="tabular px-3 py-2 text-right">{etapa.ponderado}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
-      </Panel>
+      />
     </>
   );
 }

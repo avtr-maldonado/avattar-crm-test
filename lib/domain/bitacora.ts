@@ -158,6 +158,16 @@ function eventoDeAuditoria(
         titulo: `Cierre estimado: ${fecha(antes.expectedCloseDate)} → ${fecha(despues.expectedCloseDate)}`,
       };
 
+    // §55 · la fecha ganada se corrigió después de cerrar: mueve el avance de cuota.
+    case "CAMBIAR_FECHA_GANADA":
+      return {
+        id: a.id,
+        tipo: "GANADA",
+        cuando: a.at,
+        quien: a.byUser.name,
+        titulo: `Fecha ganada: ${fecha(antes.actualCloseDate)} → ${fecha(despues.actualCloseDate)}`,
+      };
+
     // El resultado de la oportunidad (§25): con el importe o el motivo, y desde
     // qué etapa se cerró, porque ganar o perder no mueve de columna.
     case "MARCAR_GANADA":

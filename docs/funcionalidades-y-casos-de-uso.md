@@ -26,10 +26,12 @@ sobre qué datos (`RN-14`). Toda lectura pasa por ese alcance antes que por cual
 | **Vendedor** | Sus oportunidades (donde es propietario, no creador · `RN-31`, `Q-01`), sus actividades, su renglón de objetivos, las cuentas donde es propietario o tiene una oportunidad propia | Ve margen, **no ve costo ni utilidad de cotización** (`INV-02`). No se le ofrece el filtro «Vendedor» (`AC-24`). No entra a Análisis (403). Sus indicadores se calculan solo sobre lo suyo (§2.3) |
 | **Preventa** | Las oportunidades donde es **responsable de preventa** (se le asigna al dar de alta o al editar · §39) y sus actividades | Las ve en solo lectura y les registra actividades. No crea, edita, mueve, cotiza ni califica. Ve margen, no costo (`Q-03`) |
 | **Gerente de país** | Las oportunidades, actividades y objetivos de su oficina (puede llevar más de un país) y **todas las cuentas y personas** (§18) | Ve costo y utilidad, tabla de objetivos del equipo, Análisis; puede asignar propietario al crear y reasignar |
-| **Dirección** | Los tres países | Lo del gerente, más la pestaña de política comercial en Administración |
-| **Administración** | Los tres países | Todo lo anterior, más editar catálogos, fijar objetivos y administrar usuarios |
+| **Dirección** | Los tres países | Lo del gerente, más la pestaña de política comercial en Configuración |
+| **Administración** | Los tres países | Todo lo anterior, más editar catálogos, fijar objetivos, editar la matriz y administrar a cualquier usuario |
 
-Los permisos son **datos** (`F-1005`): la matriz se ve en Administración › Roles y permisos y se
+Desde el 29-oct-2026 **Gerencia administra a su equipo** (§55): da de alta y edita vendedores y preventas de sus países, y a nadie más.
+
+Los permisos son **datos** (`F-1005`): la matriz se ve en Configuración › Roles y permisos y se
 puede cambiar en la base sin desplegar. Los códigos que gobiernan lo anterior:
 `VER_OPORTUNIDADES_OFICINA`, `VER_MARGEN`, `VER_COSTO`, `VER_OBJETIVOS_EQUIPO`, `VER_ANALISIS`,
 `EDITAR_CATALOGOS`, `EDITAR_POLITICA_COMERCIAL`, `ADMINISTRAR_USUARIOS`.
@@ -59,7 +61,7 @@ que Administración haya creado su perfil o le haya dado acceso (diseño §3.2).
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-01.1 Primer ingreso con perfil precargado | Cualquier rol | Administración ya creó el perfil con su correo. Entra con Microsoft | El CRM vincula el perfil con su identidad de Microsoft (comparando el correo sin distinguir mayúsculas, §15) y lo lleva al pipeline. De ahí en adelante el vínculo es por identidad, no por correo |
-| CU-01.2 Ingreso sin perfil | Persona de Avattar sin alta | Entra con Microsoft correctamente, pero ningún perfil tiene su correo | Cae en **Acceso no configurado**, que le explica que el alta la hace Administración. Su ingreso queda registrado y aparece en Administración › Usuarios para que le den acceso (F-36) |
+| CU-01.2 Ingreso sin perfil | Persona de Avattar sin alta | Entra con Microsoft correctamente, pero ningún perfil tiene su correo | Cae en **Acceso no configurado**, que le explica que el alta la hace Administración. Su ingreso queda registrado y aparece en Configuración › Usuarios para que le den acceso (F-36) |
 | CU-01.3 Usuario desactivado | Perfil con `active = false` | Entra con Microsoft | La sesión exige perfil activo: cae en Acceso no configurado |
 | CU-01.4 Microsoft o la base fallan | Cualquiera | Microsoft devuelve error, o el CRM no puede consultar su base al vincular | Vuelve a la pantalla de login con la causa concreta escrita. Nunca un 500 en blanco |
 | CU-01.5 Ruta protegida sin sesión | Cualquiera | Abre `/oportunidades` sin sesión | Redirige a `/login`; al entrar, regresa a donde iba |
@@ -118,7 +120,7 @@ no vuelve a la base. La vista, los filtros y el pipeline viven en la URL.
 | CU-07.1 Abrir el pipeline | Cualquier rol | Entra a Oportunidades | Abre en Kanban, en el pipeline de venta de la oficina activa. Arriba, el selector de vistas, un botón de embudo que muestra u oculta la fila de filtros —**cerrada al entrar**, con un punto cuando hay filtros activos— y «Nueva oportunidad»; debajo, al abrirla, los filtros (F-09). Si la oficina no tiene pipeline, lo dice |
 | CU-07.2 Kanban | Cualquier rol | — | Una columna por etapa, **incluidas las vacías**, con conteo, probabilidad, total y ponderado; el total y el ponderado suman **solo las abiertas** (`RN-12`). Todas caben en el ancho sin scroll horizontal; las tarjetas se compactan según la columna. Cada tarjeta: nombre, cuenta y cierre, propietario, importe, margen (como cifra; solo la pérdida en coral, §33), puntaje MEDDIC y el triángulo de riesgo si aplica. Con el filtro de estatus, las **ganadas** llevan borde verde y relleno verde tenue, y las **perdidas** borde coral y relleno coral tenue, más una pastilla, debajo de las abiertas, y no se arrastran |
 | CU-07.3 Tabla | Cualquier rol | Pulsa «Tabla» | Las mismas oportunidades renglón a renglón, con la etapa como columna |
-| CU-07.4 Embudo | Cualquier rol | Pulsa «Embudo» | Una barra por etapa con el valor abierto contra la etapa mayor, y debajo la **tasa de paso** de los últimos 90 días: de las que entraron a la etapa anterior, cuántas llegaron a esta o más lejos (§17). A la derecha, la cola de riesgo ordenada por valor con la razón concreta. Pulsar una barra abre qué oportunidades la suman; el popup se cierra con Escape, la ✕ o un clic fuera (§44) |
+| CU-07.4 Embudo | Cualquier rol | Pulsa «Embudo» | Una barra por etapa con el valor abierto contra la etapa mayor, y debajo la **tasa de paso** de los últimos 90 días: de las que entraron a la etapa anterior, cuántas llegaron a esta o más lejos (§17). A la derecha, la cola de riesgo ordenada por valor con la razón concreta. Pulsar una barra abre qué oportunidades la suman, en **el mismo molde** que los desgloses de Análisis (§55): resumen arriba, tabla con oportunidad, propietario, importe y ponderado, y total; el popup toma el ancho de la tabla hasta llenar la ventana, y solo en una más angosta la tabla se desplaza (§56); el popup se cierra con Escape, la ✕ o un clic fuera (§44) |
 | CU-07.4b Qué suma la barra | Cualquier rol | Pulsa la barra de una etapa | Se abre el detalle: las oportunidades abiertas de esa etapa con folio, cuenta, propietario, importe y ponderado (importe × probabilidad de la etapa, `RN-01`), el total y la explicación de la tasa de paso. Cada folio lleva a la oportunidad |
 | CU-07.5 Embudo sin movimientos | Cualquier rol | Nadie entró a la etapa anterior en la ventana | La leyenda dice «no hay con qué medirlo», no «0 %» |
 | CU-07.6 Forecast | Cualquier rol | Pulsa «Forecast» y elige meses o trimestres fiscales | Un tablero de columnas como el kanban, pero la columna es **cuándo**: cada oportunidad mostrada va en la columna de su cierre estimado, con la misma tarjeta; los trimestres se nombran **Q1–Q4** del año fiscal. La cabecera de cada columna trae cuántas, el total abierto, el ponderado por etapa (`RN-01`) y una barra con la mezcla por categoría de pronóstico (el juicio del vendedor · `RN-15`), cuyo desglose sale al pasar el cursor —la leyenda de colores de abajo se quitó el 29-sep-2026—; lo omitido cuenta en el total y no en la barra; las cerradas se ven pero no suman (`RN-12`) y van debajo de las abiertas |
@@ -212,7 +214,8 @@ destildar (`INV-11`, `RN-13`).
 |---|---|---|---|
 | CU-13.1 Abrir el detalle | Quien la alcance | Pulsa la tarjeta o el resultado del buscador | Barra superior con el nombre, el folio y la cuenta; estado, pipeline y banderas; a la derecha «Ver cuenta», **«Ganada»** (verde) y **«Perdida»** (coral) (F-38); la barra de etapas; y las pestañas Resumen, Actividades, Cotización, MEDDIC, Hitos, Documentos y Bitácora, con su conteo. El historial de etapas vive en Bitácora, no en Resumen. La pestaña vive en la URL |
 | CU-13.2 Oportunidad fuera del alcance | Vendedor | Pega el enlace de una que no es suya | **404**, igual que si no existiera. Distinguir «no existe» de «no es tuya» le confirmaría que la del compañero existe |
-| CU-13.3 Estado de cada actividad | Quien la alcance | Abre la pestaña Actividades | Cada actividad lleva la pastilla de estado de la pantalla de Actividades —Por realizar, En progreso, Realizada en verde, Vencida en coral—, calculada con «hoy» a la medianoche de la zona de la oportunidad (§49). Sustituye al texto «realizada / pendiente» |
+| CU-13.3 La pestaña Actividades es la tabla de Actividades (§55) | Quien la alcance | Abre la pestaña Actividades | **La misma tabla que la pantalla de Actividades**: qué, estado (Por realizar, En progreso, Realizada en verde, Vencida en coral, con «hoy» a la medianoche de la zona de la oportunidad, §49), tipo, fecha y hora, responsable y el lápiz. Sin la línea de la oportunidad, que sería repetir el título. Notas y resultado se leen al abrir el lápiz |
+| CU-13.4 Fecha ganada (§55) | Quien la alcance | Mira «Datos de la oportunidad» | «Fecha ganada» va **en blanco** mientras no esté ganada. Ganada, muestra el cierre real: el día que mide el avance de cuota (§10.2) |
 
 ### F-14 · Editar los datos comerciales
 
@@ -220,8 +223,9 @@ destildar (`INV-11`, `RN-13`).
 |---|---|---|---|
 | CU-14.1 Editar la propia | Propietario, o quien tenga alcance de oficina (`Q-13`) | Pulsa el **lápiz** en el título de «Datos de la oportunidad»; cambia nombre, importe estimado, cierre, categoría, persona principal u origen | Se guarda con las reglas de negocio: «Compromiso» exige el mínimo MEDDIC (`RN-29`); reasignar es de Gerencia. Lo que el dato quiere decir se explica en el propio campo |
 | CU-14.2 Reasignar | Gerente, Dirección, Administración | Cambia el propietario | Solo a un usuario activo que opere en el país de la oportunidad (`Q-14`). El anterior deja de verla si era vendedor |
-| CU-14.3 Cerrada | Cualquiera | Intenta editar una ganada o perdida | No se edita mientras está cerrada. «Reabrir» la devuelve a abierta (F-43, `RN-18` enmendada) |
+| CU-14.3 Cerrada | Cualquiera | Intenta editar una ganada o perdida | No se edita mientras está cerrada, **salvo la fecha ganada** (CU-14.5). «Reabrir» la devuelve a abierta (F-43, `RN-18` enmendada) |
 | CU-14.4 Corregir un dato sin abrir nada | Ídem que CU-14.1 | Pulsa el tipo de negocio, el pronóstico, el cierre estimado, el origen o el propietario en «Datos de la oportunidad» | El dato se vuelve control ahí mismo y guarda al elegir; Esc cancela. Rigen las mismas reglas que el panel completo: «Compromiso» exige puntaje MEDDIC y reasignar es de Gerencia. Si el servidor lo rechaza, el dato se queda como estaba y un aviso dice por qué (decisiones §19) |
+| CU-14.5 Corregir la fecha ganada (§55) | Propietario, o quien tenga alcance de oficina, **aunque esté cerrada** | Pulsa «Fecha ganada» en una ganada y elige el día | Se guarda por su propio servicio, no por la edición general: solo mueve el cierre real, y el avance de cuota se recalcula con él. Queda en la bitácora con la fecha anterior y la nueva. **No puede ser futura**; sí anterior a la creación en el CRM (lo importado se ganó antes de existir aquí). El mismo día no escribe nada |
 
 ### F-38 · Marcar ganada o perdida
 
@@ -245,14 +249,14 @@ Botón «Reabrir» en la cabecera de una ganada o perdida (decisiones §32, `RN-
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-43.1 Reabrir | Propietario, Gerencia con alcance de oficina, Administración | Pulsa «Reabrir» y confirma | Vuelve a **abierta en la etapa donde se cerró**, con el mismo folio (`INV-12`). Se borran el cierre real y el motivo de pérdida; cotización, hitos, MEDDIC y actividades se quedan. Queda en la bitácora quién y desde qué estatus (`INV-09`) |
-| CU-43.2 Quien no la alcanza | Vendedor que no es propietario | Intenta reabrir | El botón no aparece y el servidor rechaza |
+| CU-43.1 Reabrir | Quien tenga el permiso `REABRIR_OPORTUNIDAD` en la matriz; con la matriz sembrada, Administración (§52) | Pulsa «Reabrir» y confirma | Vuelve a **abierta en la etapa donde se cerró**, con el mismo folio (`INV-12`). Se borran el cierre real y el motivo de pérdida; cotización, hitos, MEDDIC y actividades se quedan. Queda en la bitácora quién y desde qué estatus (`INV-09`) |
+| CU-43.2 Quien no la alcanza | Cualquiera sin el permiso, **incluido el propietario** | Intenta reabrir | El botón no aparece y el servidor rechaza, diciendo que el permiso se concede en Configuración › Roles y permisos. Antes ser el dueño bastaba y apagar la celda no surtía efecto (§52) |
 | CU-43.3 Ya abierta | Cualquiera | — | No hay nada que reabrir: el botón solo existe en cerradas |
 
 
 ### F-15 · Agendar o registrar una actividad
 
-Desde la pestaña Actividades del detalle, con «Nueva actividad». Es el flujo que decide la
+Desde la pestaña Actividades del detalle, con «Nueva actividad», y desde la pantalla de Actividades eligiendo la oportunidad (CU-29.11, §55). Es el flujo que decide la
 adopción (§12.4). Por omisión la actividad se **agenda**; «Marcar como hecha», en el pie, la
 convierte en el registro de algo que ya pasó. Lleva fecha, hora de inicio y de fin, y un
 responsable; las horas son **de la ciudad del país de la oportunidad** (decisiones §20). Si el
@@ -394,12 +398,15 @@ oficina. Lo que tiene propietario y se recorta son las personas.
 |---|---|---|---|
 | CU-23.1 Desde Personas | Cualquier rol | «Nueva persona»: elige la empresa, nombre, cargo, correo, teléfono, rol en el comité | Nace siendo de quien la captura (§29); se comparte o transfiere después |
 | CU-23.2 Desde la ficha de la cuenta | Cualquier rol | «Agregar persona» en el comité de compra | Nace ligada a esa cuenta |
+| CU-23.3 Sin rol en el comité | Cualquier rol | Deja «Sin declarar» y guarda | La persona se crea; el rol es opcional (CU-23.1). Antes reventaba, porque la escritura pedía desconectar una relación que al crear no existe (§52) |
 
 ### F-24 · Editar organización y persona
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-24.1 Editar la cuenta | Propietario, o Gerencia con alcance de oficina (`Q-15`) | Desde su ficha | Mismo formulario del alta con los datos cargados, sede incluida. Reasignar la cuenta admite cualquier usuario activo: no hay país que lo limite (§18). Un error al guardar conserva lo editado (§48) |
+| CU-24.1b Nombre repetido al editar | Quien edita la cuenta | Le pone el nombre de otra cuenta que ya existe | Se rechaza igual que al crear (§52): el duplicado partía el histórico y se conseguía renombrando. Guardar sin tocar el nombre sigue pasando |
+| CU-24.1c Cambiar el propietario de una cuenta con sede | Gerencia, Administración | Elige otro propietario y guarda | Se guarda. Antes la pantalla reventaba: la escritura mezclaba la llave del país con la relación del propietario y Prisma la rechazaba entera (§52) |
 | CU-24.2 Editar una persona | Quien la administra: su propietario, el gerente de su país, Dirección, Administración (§29) | Desde Personas, desde el comité de la ficha de cuenta o desde el comité en el detalle de oportunidad (§47) | Ídem. A quien se la compartieron, o la ve por tener negocio en la cuenta, no se le ofrece «Editar»: en Personas aparece «Solo lectura» y en el detalle de oportunidad la fila dice «de quién es» sin lápiz. El servidor rechaza la edición de todos modos |
 
 ### F-25 · Ficha de la cuenta
@@ -447,6 +454,8 @@ la administra. Un panel con el propietario y las casillas de con quién se compa
 |---|---|---|---|
 | CU-28.1 Alta | Administración (`EDITAR_CATALOGOS`) | SKU, nombre, familia, unidad, modelo de precio; precio y costo **opcionales, pero juntos** | El SKU se fija al crear, como el folio: lo referencian líneas y reportes. Con precio y costo nace la primera vigencia; con los dos vacíos el producto queda **sin lista** y precio y costo se fijan en cada cotización (CU-16.2b). Uno sin el otro se rechaza: una lista con uno solo no significa nada (decisiones §22) |
 | CU-28.1b Estrenar lista | Administración | Edita un producto sin lista y captura precio y costo | Nace su primera vigencia desde hoy. Dejar los dos vacíos al editar no toca la lista; quitar una lista existente no está previsto |
+| CU-28.1c Reabrir el formulario tras crear | Administración | Crea un producto y vuelve a pulsar «Nuevo producto» | Abre **vacío**, precio y costo incluidos (§52) |
+| CU-28.1d Falta un campo obligatorio | Administración | Guarda sin SKU o sin nombre | Señala el campo y **conserva todo lo demás** capturado (§48 aplicado aquí el 13-oct) |
 | CU-28.2 Cambiar precio | Administración | Edita el precio | Nace una vigencia nueva; las anteriores se conservan |
 | CU-28.3 Dar de baja | Administración | Desactiva | Nada se borra (`INV-15`). Un producto inactivo no se ofrece al cotizar |
 | CU-28.4 Carga masiva | — | — | **Pendiente** |
@@ -468,11 +477,15 @@ y no termina) o por realizar.
 |---|---|---|---|
 | CU-29.1 Lista | Cualquier rol | Entra a Actividades | Una fila por actividad pendiente o hecha en las últimas dos semanas: qué, estado, tipo, fecha y hora, responsable y el lápiz. Primero las vencidas, al final las hechas. Debajo, las oportunidades sin próximo paso (`RN-10`) con «Agendar» |
 | CU-29.2 Editar en el sitio | Cualquier rol que alcance la oportunidad | Pulsa el lápiz | El mismo composer de la ficha, en la zona del país de la oportunidad (§20): marcar hecha, reprogramar, cambiar responsable. Al guardar, la actividad cambia de estado y de columna |
+| CU-29.8 Solo mis actividades (§52) | Cualquier rol | Pulsa «Solo mías» junto al selector de vistas | Quedan las actividades donde es el responsable; las tres vistas y los tres indicadores lo respetan. Vive en la URL (`mias=1`) y se conserva al cambiar de vista o de semana. El contador del menú sigue contando todo |
 | CU-29.7 Oportunidad que ya no se alcanza (§46) | Preventa al que le quitaron el apoyo; vendedor que dejó de ser propietario | Mira su historial | La actividad sigue ahí, pero el nombre de la oportunidad va apagado con «Sin acceso» y «Ya no tienes acceso a esta oportunidad» al pasar el cursor; sin enlace y sin lápiz. Igual en lista, kanban y semana |
 | CU-29.3 Kanban | Cualquier rol | Pulsa «Kanban» | Cuatro columnas: por realizar, en progreso, realizadas (verde) y vencidas (coral), con su cuenta. No se arrastra: el estado se calcula, se cambia desde el lápiz |
 | CU-29.4 Semana | Cualquier rol | Pulsa «Semana» | Lunes a domingo, hoy marcado; cada actividad como bloque con su rango de horas, verde lo hecho y coral lo vencido; la cabecera suma las horas del día |
 | CU-29.5 Vendedor | Vendedor | — | Solo sus actividades y las de sus oportunidades (§2.3); las oportunidades sin próximo paso son las suyas |
 | CU-29.6 Vacío | Cualquier rol | Nada pendiente ni hecho | Estado vacío que invita al pipeline |
+| CU-29.9 Filtrar por estado, tipo y oportunidad (§55) | Cualquier rol | Pulsa el botón de filtros junto a las vistas —**cerrados al entrar**, como en el pipeline; con filtros aplicados y ocultos lleva un punto (§57)—, marca uno o varios en las pastillas y aplica | Recortan dentro del alcance, en las tres vistas; viven en la URL y se conservan al cambiar de vista o de semana. Las oportunidades que se ofrecen son las que aparecen en lo que se está viendo. Los indicadores de arriba siguen a tipo y oportunidad |
+| CU-29.10 Lapso (§55) | Cualquier rol, en lista o kanban | Elige año fiscal, trimestre, mes o rango en la pastilla «Lapso» | Cambia **qué se lee**: lo que empieza dentro del lapso, hecho o pendiente, en vez de «pendientes y hechas en dos semanas». «Pendientes y hechas en dos semanas» devuelve al reposo. En la semana no hay lapso: la semana ya lo es |
+| CU-29.11 Nueva actividad desde aquí (§55) | Cualquier rol con alguna oportunidad abierta al alcance | Pulsa «Nueva actividad» y elige la oportunidad buscando por nombre, folio o cuenta | El mismo composer de la ficha con un campo más al principio: solo las **abiertas** al alcance del rol y de la oficina activa. Al elegirla, la hora pasa a la ciudad de **su** país y los responsables son los de ese país (§20). Sin elegir, el campo dice «Elige la oportunidad». Sin ninguna abierta al alcance, el botón no aparece |
 
 ### F-30 · Agenda semanal
 
@@ -498,7 +511,7 @@ medición. Los trimestres se nombran **Q1 a Q4**.
 | CU-31.1 Vista Objetivos | Cualquier rol | Entra a Objetivos (vista por omisión) | Cuatro indicadores de dos líneas con **el año**: cuota (suma de Q1 a Q4), logrado, cumplimiento y cobertura. Debajo, la cuadrícula por vendedor y trimestre con el total anual y el total compañía |
 | CU-31.2 Vista Avance | Cualquier rol | Pulsa «Avance» y un trimestre de la tira | Los mismos cuatro indicadores con lo **acumulado al Q** elegido; tira Q1 a Q4 con lo de cada trimestre solo. Nada que arrastrar en el año completo |
 | CU-31.3 Venta o utilidad | Quien tenga `VER_MARGEN` | Conmuta la métrica | La utilidad se mide con la utilidad de la cotización congelada de cada ganada (§10.2). Para un vendedor no revela nada que no tuviera: venta × margen, ambos ya visibles para él (§17) |
-| CU-31.4 Cambiar de año | Cualquier rol | Elige el año fiscal | Solo se ofrecen años con cuota, más el año en curso |
+| CU-31.4 Cambiar de año | Cualquier rol | Elige el año fiscal | Se ofrecen los años con cuota, **el en curso y el siguiente** (§55): las cuotas del año que viene se fijan antes de que empiece |
 | CU-31.5 Vendedor | Vendedor | — | Ve **solo su renglón** (§2.3): ni la cuota ni el avance de sus compañeros |
 | CU-31.6 Sin cuota fijada | Cualquier rol | La oficina no tiene objetivos ese año | En Objetivos, la cuadrícula vacía invita a agregar al primer vendedor; en Avance, estado vacío con el enlace a Objetivos |
 | CU-31.7 Una anual previa no suma los trimestres | Cualquier rol | Alguien conserva una cuota anual fijada antes de la cuadrícula | Aviso en Avance: para el año manda la anual (`RN-32`); volver a guardar sus trimestres la retira (§34) |
@@ -514,7 +527,10 @@ medición. Los trimestres se nombran **Q1 a Q4**.
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
 | CU-33.1 Capturar la hoja | Administración (`EDITAR_CATALOGOS` · §17) | Teclea Q1 a Q4 de cada vendedor en las celdas y pulsa «Guardar cambios» una sola vez | Solo viaja lo que cambió; **cada cuota que cambia** queda en bitácora con la cifra anterior (`INV-09`). Se captura una métrica a la vez (venta o utilidad, el conmutador de arriba); la otra se conserva. El total anual es la suma de los trimestres: la cuota anual ya no se captura aparte (§34) |
-| CU-33.2 Utilidad mayor que la venta | Administración | — | Se rechaza cuando ese trimestre tiene venta: sería un margen arriba del 100 %. Con venta en cero se acepta, para poder capturar la utilidad antes |
+| CU-33.1b Atar los cuatro trimestres | Administración | Pulsa el eslabón junto al nombre de un vendedor y teclea en cualquier Q | La cifra se escribe en los cuatro al momento (§53). Atar **no** pisa lo que ya estaba: lo que propaga es teclear, así que un clic por error no borra nada. Vale igual en Venta y en Utilidad de venta |
+| CU-33.1c Soltar un trimestre | Administración | Con la fila atada, pulsa el eslabón de un Q | Ese trimestre queda suelto: conserva su cifra, no recibe lo que se teclea en los atados, y lo que se teclee en él no toca a los demás. Se vuelve a atar con el mismo eslabón. El de la fila completa el vínculo; con los cuatro atados, lo suelta |
+| CU-33.2 Utilidad mayor que la venta | Administración | Teclea una utilidad por encima de la venta del mismo trimestre | La hoja lo dice al momento: un renglón por vendedor con sus trimestres («Paulina Estrada · Q2, Q3»), las celdas en coral y **el guardado apagado**, porque el servidor rechazaría la hoja entera (§54). Con venta en cero se acepta, para poder capturar la utilidad antes |
+| CU-33.2b El aviso se va al corregir o al descartar | Administración | Corrige la última celda señalada, o pulsa «Descartar» | El aviso desaparece y vuelve a ofrecerse guardar (§54). Lo que el servidor haya rechazado también se deja de mostrar en cuanto se teclea: hablaba de cifras que ya cambiaron |
 | CU-33.5 Agregar vendedor | Administración | «+ Agregar vendedor», elige a alguien activo del país sin fila | Nace con los cuatro trimestres en cero; se guarda con los demás cambios |
 | CU-33.6 Eliminar vendedor | Administración | «Eliminar» en su fila y guardar | Borra sus cuotas del año, de venta y utilidad, trimestrales y anual; cada una queda en bitácora con las cifras que tenía |
 | CU-33.7 Guardar sin cambios | Administración | Nada cambió de valor | «Nada que guardar»: no se escribe nada |
@@ -524,28 +540,33 @@ medición. Los trimestres se nombran **Q1 a Q4**.
 
 ---
 
-## 8. Administración · P-11
+## 8. Configuración · P-11
+
+Hasta el 29-oct-2026 era «Administración» y solo entraba Administración. Desde §55 vive en
+`/configuracion` (la ruta vieja redirige), es de **todo rol**, y cada pestaña decide quién la ve.
 
 ### F-34 · Consultar la configuración
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-34.1 Pipelines y etapas | Administración | Pestaña | Por pipeline: etapas con probabilidad, días para estancada, requisitos de entrada y modo (advertencia o bloqueante). **Solo lectura**: se edita en la base |
-| CU-34.2 Catálogos | Administración | Pestaña | Orígenes, roles de comité, motivos de pérdida, familias. Solo lectura |
+| CU-34.1 Pipelines y etapas | **Cualquier rol** (§55) | Pestaña | Por pipeline: etapas con probabilidad, días para estancada, requisitos de entrada y modo (advertencia o bloqueante). **Solo lectura**: se edita en la base |
+| CU-34.2 Catálogos | **Cualquier rol** (§55) | Pestaña | Tipos de actividad y de documento, motivos de pérdida, roles de comité, orígenes y familias, con sus usos. Solo lectura |
 | CU-34.4 Política comercial | Dirección, Administración | Pestaña | Umbrales de descuento, mínimos y pesos MEDDIC, SLA, por país. Solo lectura |
-| CU-34.5 Roles y permisos | Administración (`EDITAR_CATALOGOS`) | Pestaña | La matriz de §5.2 leída de la base: cada permiso por rol, con el tope donde lo hay, y cuántos usuarios activos tiene cada rol |
+| CU-34.5 Roles y permisos | Rol **Administrador**, por rol y no por permiso (§40, §55) | Pestaña | La matriz de §5.2 leída de la base: cada permiso por rol, con el tope donde lo hay, y cuántos usuarios activos tiene cada rol |
 | CU-34.6 Editar la matriz | Rol **Administrador** (§40, §43) | Pulsa «Editar permisos» arriba de la tabla; marca o desmarca una celda; en «Autorizar descuento» fija el tope en por ciento; «Terminar edición» vuelve a la lectura | La matriz se abre siempre en lectura (`—`, `✓`, «hasta 30 %»). En edición cada cambio guarda al instante, queda en la bitácora e invalida la caché de permisos. La columna de Administración no se edita desde aquí. Otro rol no ve el botón |
 
 ### F-35 · Administrar usuarios
 
-Pestaña Usuarios, solo con `ADMINISTRAR_USUARIOS`. Cada operación deja bitácora.
+Pestaña Usuarios, con `ADMINISTRAR_USUARIOS`: Administración y, desde §55, Gerencia. Cada operación deja bitácora.
 
 | Caso | Quién | Qué pasa | Resultado |
 |---|---|---|---|
-| CU-35.1 Alta previa | Administración | Correo, nombre, rol y países | El perfil queda listo, sin vincular; el primer ingreso con Microsoft lo vincula por correo (F-01) |
-| CU-35.2 Editar | Administración | Cambia rol, países, nombre o estado | Desactivar es quitar el acceso. **Nadie se quita a sí mismo** el acceso ni el rol de administrador (§15) |
+| CU-35.1 Alta previa | Administración; Gerencia solo vendedores y preventas de sus países | Correo, nombre, rol y países | El perfil queda listo, sin vincular; el primer ingreso con Microsoft lo vincula por correo (F-01) |
+| CU-35.2 Editar | Administración; Gerencia a su equipo | Cambia rol, países, nombre o estado | Desactivar es quitar el acceso. **Nadie se quita a sí mismo** el acceso ni el rol de administrador (§15) |
 | CU-35.2b Cerrar sin guardar | Administración | Abre «Editar», cambia el rol o los países, no guarda, cierra y vuelve a abrir | Vuelve con **lo guardado**, no con lo que se dejó a medias (§51). Antes el desplegable conservaba la opción elegida y parecía guardada |
-| CU-35.3 Dar acceso a quien ya entró | Administración | En la lista de quienes entraron con Microsoft sin perfil, asigna rol y país | Se crea el perfil ya vinculado, o se vincula el que existía con ese correo |
+| CU-35.3 Dar acceso a quien ya entró | Administración; Gerencia con rol y país de su equipo | En la lista de quienes entraron con Microsoft sin perfil, asigna rol y país | Se crea el perfil ya vinculado, o se vincula el que existía con ese correo |
+| CU-35.4 Gerencia administra a su equipo (§55) | Gerente de país | Abre Usuarios | Ve a quienes operan en alguno de sus países —ahí aparecen Dirección y Administración, que operan en todos—, pero «Editar» solo en vendedores y preventas de sus países; el formulario solo le ofrece esos roles y esos países. El servidor rechaza ascender a alguien fuera del equipo o moverlo a otra oficina: se comprueba a quien es hoy y a quien quedaría |
+| CU-35.5 Filtrar por estado y rol (§55) | Administración, Gerencia | Pastillas «Estado» (con acceso, sin acceso) y «Rol» | Viven en la URL y recortan después del alcance. «Limpiar filtros» vuelve a todos |
 
 ---
 
@@ -576,7 +597,7 @@ queda en la URL. Las tablas se quedaron en Forecast y Actividad.
 | CU-39.5 Margen | Dirección, Administración (`VER_COSTO`) | Misma agrupación que Rentabilidad | Barras de 0 a 100 % con el por ciento al final, de mayor a menor margen; un margen negativo se dibuja en cero y se lee en coral |
 | CU-39.6 Rentabilidad sin permiso | Gerente sin `VER_COSTO` | Abre la pestaña | El costo no viaja (`INV-02`): el histórico no lleva línea de utilidad y la tarjeta de rentabilidad y margen muestra un aviso, no ceros |
 | CU-39.7 Muchos registros | Cualquiera con acceso | Decenas de clientes o productos | Las barras verticales crecen a lo ancho con scroll; las horizontales crecen a lo alto con scroll a partir de trece filas. Sin registros, la tarjeta dice qué falta |
-| CU-39.8 Detalle al pulsar (§43) | Gerente, Dirección | Pulsa una barra (ganado o cuota), un periodo del histórico o un segmento de rentabilidad o margen | El tooltip se queda y además dice «Clic para ver el detalle». Se abre un popup con los renglones del tooltip y la lista de ventas que suman esa barra: folio · nombre con enlace a la ficha, cuenta · vendedor, y la cifra que **esa venta puso ahí** (por producto, su línea; en rentabilidad, venta con costo y utilidad; en margen, su margen) con la fecha de cierre. Un trimestre sin ventas abre el popup vacío: «Nada que listar con los filtros actuales». El popup se cierra con Escape, la ✕ o un clic fuera (§44); igual en Forecast y en Actividad y MEDDIC |
+| CU-39.8 Detalle al pulsar (§43) | Gerente, Dirección | Pulsa una barra (ganado o cuota), un periodo del histórico o un segmento de rentabilidad o margen | En el mismo molde que el embudo del pipeline (§55: resumen arriba, tabla con dos líneas por ítem, detalle y valor, cada fila con enlace a la ficha; el popup toma el ancho de la tabla hasta llenar la ventana, §56), el tooltip se queda y además dice «Clic para ver el detalle». Se abre un popup con los renglones del tooltip y la lista de ventas que suman esa barra: folio · nombre con enlace a la ficha, cuenta · vendedor, y la cifra que **esa venta puso ahí** (por producto, su línea; en rentabilidad, venta con costo y utilidad; en margen, su margen) con la fecha de cierre. Un trimestre sin ventas abre el popup vacío: «Nada que listar con los filtros actuales». El popup se cierra con Escape, la ✕ o un clic fuera (§44); igual en Forecast y en Actividad y MEDDIC |
 
 ### F-40 · Forecast (reportes 4 a 6, en gráficas · §37)
 

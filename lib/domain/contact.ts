@@ -45,8 +45,14 @@ export type DatosDePersona = {
  */
 function datosDePersona(
   entrada: DatosDePersona,
-): { ok: true; datos: Prisma.PersonUpdateInput } | { ok: false; campo: string; mensaje: string } {
-  const datos: Prisma.PersonUpdateInput = {};
+):
+  | { ok: true; datos: Prisma.PersonUncheckedUpdateInput }
+  | { ok: false; campo: string; mensaje: string } {
+  // Escalares, no relaciones · §52. Prisma no deja mezclar en una misma
+  // escritura la llave de una relación con el objeto anidado de otra, y esta
+  // función alimenta tanto al alta —que conecta organización y propietario—
+  // como a la edición. Con escalares las dos escrituras son del mismo tipo.
+  const datos: Prisma.PersonUncheckedUpdateInput = {};
 
   if (entrada.name !== undefined) {
     const nombre = entrada.name.trim();
@@ -70,10 +76,12 @@ function datosDePersona(
     datos.email = correo;
   }
 
+  // Sin rol es un valor, no un olvido: el rol en el comité es opcional
+  // (CU-23.1) y la pantalla lo ofrece como «Sin declarar». Antes esto pedía
+  // desconectar una relación que al crear todavía no existe, y el alta reventaba
+  // en vez de guardar (§52).
   if (entrada.committeeRoleId !== undefined) {
-    datos.committeeRole = entrada.committeeRoleId
-      ? { connect: { id: entrada.committeeRoleId } }
-      : { disconnect: true };
+    datos.committeeRoleId = entrada.committeeRoleId || null;
   }
 
   return { ok: true, datos };
@@ -96,12 +104,12 @@ export async function crearPersona(
 
   const persona = await prisma.person.create({
     data: {
-      ...(traducido.datos as Prisma.PersonCreateInput),
+      ...(traducido.datos as Prisma.PersonUncheckedCreateInput),
       name: entrada.name.trim(),
       initials: iniciales(entrada.name),
-      organization: { connect: { id: organizacion.id } },
+      organizationId: organizacion.id,
       // Es de quien la captura (§29); se comparte o transfiere después.
-      owner: { connect: { id: session.userId } },
+      ownerId: session.userId,
     },
     select: { id: true },
   });
@@ -435,7 +443,34 @@ export async function editarOrganizacion(
   if (!traducido.ok) {
     return falla("VALIDACION", { campo: traducido.campo, mensaje: traducido.mensaje });
   }
-  const datos: Prisma.OrganizationUpdateInput = { ...traducido.campos };
+  // Escalares, no relaciones · §52. `countryCode` es la llave de una relación y
+  // el propietario es otra: en una misma escritura Prisma no deja mezclar la
+  // llave de una con el objeto anidado de la otra, y cambiar de propietario una
+  // cuenta con sede —lo que manda la pantalla, que envía todos los campos—
+  // reventaba la operación entera.
+  const datos: Prisma.OrganizationUncheckedUpdateInput = { ...traducido.campos };
+
+  // Un solo nombre para toda la operación, también al editar · §52. Al crear ya
+  // se rechazaba el homónimo (§14, §18); al editar no se miraba, así que el
+  // duplicado que el alta impide entraba por la puerta de atrás y partía el
+  // histórico igual. La propia cuenta no cuenta: guardar sin tocar el nombre
+  // tiene que pasar.
+  if (traducido.campos.name !== undefined) {
+    const homonima = await prisma.organization.findFirst({
+      where: {
+        deletedAt: null,
+        id: { not: organizacion.id },
+        name: { equals: traducido.campos.name, mode: "insensitive" },
+      },
+      select: { id: true },
+    });
+    if (homonima) {
+      return falla("VALIDACION", {
+        campo: "name",
+        mensaje: `Ya existe una cuenta llamada «${traducido.campos.name}». Si es la misma empresa, trabaja sobre ella; si es otra, distingue el nombre.`,
+      });
+    }
+  }
 
   if (entrada.ownerId !== undefined && entrada.ownerId !== organizacion.owner.id) {
     if (!can(session, "VER_OPORTUNIDADES_OFICINA")) {
@@ -451,10 +486,10 @@ export async function editarOrganizacion(
     if (!valido) {
       return falla("VALIDACION", {
         campo: "ownerId",
-        mensaje: `Ese usuario no está activo o no opera en ${organizacion.countryCode}.`,
+        mensaje: "Ese usuario ya no está activo. Elige a alguien más.",
       });
     }
-    datos.owner = { connect: { id: entrada.ownerId } };
+    datos.ownerId = entrada.ownerId;
   }
 
   if (Object.keys(datos).length === 0) return ok(null);

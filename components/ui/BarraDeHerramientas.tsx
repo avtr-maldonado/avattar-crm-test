@@ -5,21 +5,25 @@ import clsx from "clsx";
 import { Icono } from "@/components/ui/iconos";
 
 /**
- * La barra de herramientas del pipeline · dos filas.
+ * La barra de herramientas de una pantalla con vistas y filtros · dos filas.
  *
- * Arriba, lo que se decide primero: qué vista, si se quieren ver los filtros,
- * y el alta a la derecha. Abajo, los filtros, que se pueden ocultar para dejar
- * el tablero respirar; el estado de esa fila es de pantalla, no de la URL —los
- * filtros sí viven en la URL (INV-10), el que se vean o no, no—. Cuando están
- * ocultos y hay alguno activo, el botón lleva un punto: el recorte sigue ahí
- * aunque no se vea.
+ * Nació en el pipeline y desde el 29-oct-2026 la usa también Actividades
+ * (decisiones §57), así que vive aquí. Arriba, lo que se decide primero: qué
+ * vista, si se quieren ver los filtros, y el alta a la derecha. Abajo, los
+ * filtros, que se pueden ocultar para dejar el tablero respirar; el estado de
+ * esa fila es de pantalla, no de la URL —los filtros sí viven en la URL
+ * (INV-10), el que se vean o no, no—. Cuando están ocultos y hay alguno
+ * activo, el botón lleva un punto: el recorte sigue ahí aunque no se vea.
  */
 export function BarraDeHerramientas({
+  id = "filtros-del-pipeline",
   vistas,
   filtros,
   alta,
   hayFiltrosActivos,
 }: {
+  /** El `id` de la fila de filtros, al que apunta el botón; uno por pantalla. */
+  id?: string;
   vistas: ReactNode;
   filtros: ReactNode;
   alta: ReactNode;
@@ -36,7 +40,7 @@ export function BarraDeHerramientas({
         <button
           type="button"
           aria-pressed={mostrarFiltros}
-          aria-controls="filtros-del-pipeline"
+          aria-controls={id}
           title={mostrarFiltros ? "Ocultar filtros" : "Mostrar filtros"}
           onClick={() => setMostrarFiltros((v) => !v)}
           className={clsx(
@@ -59,7 +63,7 @@ export function BarraDeHerramientas({
       </div>
 
       {mostrarFiltros ? (
-        <div id="filtros-del-pipeline" className="flex flex-wrap items-center gap-2">
+        <div id={id} className="flex flex-wrap items-center gap-2">
           {filtros}
         </div>
       ) : null}

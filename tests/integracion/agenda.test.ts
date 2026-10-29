@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
-import { agendaSemanal, bandejaDeTrabajo, tableroDeActividades } from "@/lib/scope/agenda";
+import { agendaSemanal, bandejaDeTrabajo, oportunidadesParaAgendar, tableroDeActividades } from "@/lib/scope/agenda";
 
 /**
  * P-07 contra los datos reales.
@@ -227,5 +227,68 @@ describe("acceso a la oportunidad desde la agenda · decisiones §46", () => {
     for (const a of conOportunidad) {
       expect(a.opportunity!.accesible).toBe(apoyadas.has(a.opportunity!.id));
     }
+  });
+});
+
+describe("solo las mías · el filtro de responsable (§52)", () => {
+  it("recorta a las actividades de quien mira, sin tocar el alcance", async () => {
+    // El alcance de un vendedor incluye las actividades de sus oportunidades
+    // aunque el responsable sea otro (§2.3). Eso se queda: lo que se agrega es
+    // poder recortarlo a lo propio, que es con lo que se trabaja el día.
+    const jorge = await sesionDe("jm@avattar.com");
+
+    const todas = await tableroDeActividades(jorge, AHORA, undefined, "UTC");
+    const mias = await tableroDeActividades(jorge, AHORA, undefined, "UTC", true);
+
+    expect(mias.actividades.length).toBeLessThanOrEqual(todas.actividades.length);
+    for (const a of mias.actividades) expect(a.user.id).toBe(jorge.userId);
+
+    // Y no amplía: lo filtrado es un subconjunto de lo alcanzado.
+    const alcanzadas = new Set(todas.actividades.map((a) => a.id));
+    for (const a of mias.actividades) expect(alcanzadas.has(a.id)).toBe(true);
+  });
+
+  it("la bandeja y la semana lo respetan igual", async () => {
+    const jorge = await sesionDe("jm@avattar.com");
+
+    const bandeja = await bandejaDeTrabajo(jorge, AHORA, undefined, "UTC", true);
+    for (const a of [...bandeja.vencidas, ...bandeja.hoy]) expect(a.user.id).toBe(jorge.userId);
+
+    const semana = await agendaSemanal(jorge, AHORA, undefined, "UTC", undefined, true);
+    for (const d of semana.dias) {
+      for (const a of d.actividades) expect(a.user.id).toBe(jorge.userId);
+    }
+  });
+});
+
+describe("tablero con lapso · los filtros de Actividades (§55)", () => {
+  it("con un rango trae lo que empieza dentro, hecho o pendiente, y nada fuera", async () => {
+    const admin = await sesionDe("as@avattar.com");
+    const desde = new Date("2026-09-01T00:00:00Z");
+    const hasta = new Date("2026-09-10T23:59:59Z");
+    const t = await tableroDeActividades(admin, AHORA, undefined, "UTC", false, { desde, hasta });
+    expect(t.actividades.length).toBeGreaterThan(0);
+    for (const a of t.actividades) {
+      expect(a.startsAt >= desde && a.startsAt <= hasta).toBe(true);
+    }
+    expect(t.actividades.some((a) => a.completedAt !== null)).toBe(true);
+  });
+});
+
+describe("oportunidadesParaAgendar · el campo «Oportunidad» de la actividad nueva (§55)", () => {
+  it("solo abiertas, dentro del alcance, y la oficina activa recorta", async () => {
+    const [direccion, paulina] = await Promise.all([sesionDe("dc@avattar.com"), sesionDe("pe@avattar.com")]);
+    const todas = await oportunidadesParaAgendar(direccion);
+    expect(todas.length).toBeGreaterThan(0);
+    const estatus = await prisma.opportunity.findMany({ where: { id: { in: todas.map((o) => o.id) } }, select: { status: true } });
+    expect(estatus.every((o) => o.status === "ABIERTA")).toBe(true);
+
+    const deMX = await oportunidadesParaAgendar(direccion, "MX");
+    expect(deMX.every((o) => o.countryCode === "MX")).toBe(true);
+    expect(deMX.length).toBeLessThanOrEqual(todas.length);
+
+    const suyas = await oportunidadesParaAgendar(paulina);
+    const propietarios = await prisma.opportunity.findMany({ where: { id: { in: suyas.map((o) => o.id) } }, select: { ownerId: true } });
+    expect(propietarios.every((o) => o.ownerId === paulina.userId)).toBe(true);
   });
 });

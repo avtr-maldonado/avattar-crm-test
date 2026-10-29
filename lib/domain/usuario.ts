@@ -5,6 +5,7 @@ import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { iniciales } from "@/lib/etiquetas";
 import type { UsuarioAdministrable } from "@/lib/scope/usuarios";
+import { administraUsuario } from "./userAccess";
 
 /**
  * Usuarios del CRM · alta previa, edición y acceso · P-11.
@@ -33,7 +34,9 @@ import type { UsuarioAdministrable } from "@/lib/scope/usuarios";
  * Entra: es lo que `getSessionResult` compara con `claims.sub`. El nombre de la
  * columna es deuda (decisiones-pendientes §15).
  */
-const SIN_PERMISO = "Administrar usuarios es de Administración.";
+const SIN_PERMISO = "Administrar usuarios es de Administración y Gerencia.";
+/** §55 · Gerencia administra a vendedores y preventas de sus países; nada más. */
+const FUERA_DE_SU_EQUIPO = "Solo administras a vendedores y preventas de tus países.";
 const FORMA_DE_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type DatosDeUsuario = {
@@ -98,6 +101,7 @@ export async function crearUsuario(
 
   const v = validar(entrada);
   if (!v.ok) return falla("VALIDACION", { campo: v.campo, mensaje: v.mensaje });
+  if (!administraUsuario(session, entrada)) return falla("AUTORIZACION", FUERA_DE_SU_EQUIPO);
 
   const email = correoNormalizado(entrada.email);
   if (await perfilPorCorreo(email)) {
@@ -140,6 +144,12 @@ export async function editarUsuario(
 
   const v = validar(cambios);
   if (!v.ok) return falla("VALIDACION", { campo: v.campo, mensaje: v.mensaje });
+
+  // §55 · a quien es hoy y a quien quedaría: ni ascenderlo fuera del equipo ni moverlo de oficina.
+  const comoQueda = { role: cambios.role ?? usuario.role, countryCodes: cambios.countryCodes ?? usuario.countryCodes };
+  if (!administraUsuario(session, usuario) || !administraUsuario(session, comoQueda)) {
+    return falla("AUTORIZACION", FUERA_DE_SU_EQUIPO);
+  }
 
   const esYo = usuario.id === session.userId;
   if (esYo && cambios.active === false) {
@@ -214,6 +224,8 @@ export async function darAcceso(
 
   const v = validar(entrada);
   if (!v.ok) return falla("VALIDACION", { campo: v.campo, mensaje: v.mensaje });
+
+  if (!administraUsuario(session, entrada)) return falla("AUTORIZACION", FUERA_DE_SU_EQUIPO);
 
   const email = correoNormalizado(entrada.email);
 
