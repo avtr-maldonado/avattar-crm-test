@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { Toaster } from "sileo";
 import "sileo/styles.css";
+import { ID_CAPA_DE_AVISOS } from "./avisos";
 
 /**
  * Avisos efímeros · el único lugar donde se configura Sileo.
@@ -32,20 +34,37 @@ import "sileo/styles.css";
  * del grupo. Eso permite avisar **antes** de cambiar de pantalla y que el aviso
  * siga ahí al llegar: es lo que hace posible confirmar un alta y aun así llevar
  * al usuario al detalle de lo que acaba de crear.
+ *
+ * ## Por qué va dentro de una capa `popover` (§59)
+ *
+ * Un `Panel` abierto es un `<dialog>` modal y vive en el top layer, por encima
+ * de cualquier `z-index`; los avisos quedaban detrás de su fondo oscurecido.
+ * La capa es un popover manual, que también va al top layer, y `avisar` la
+ * vuelve a mostrar antes de cada aviso para quedar encima de lo abierto. Se
+ * abre al montar; sin soporte de `popover`, el `div` se queda como estaba.
  */
 export function Notificaciones() {
+  const capa = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = capa.current;
+    if (!el || typeof el.showPopover !== "function") return;
+    if (!el.matches(":popover-open")) el.showPopover();
+  }, []);
+
   return (
-    <Toaster
-      // Abajo a la derecha: arriba compite con la barra superior fija, que ya
-      // lleva el título de la pantalla y el buscador.
-      position="bottom-right"
-      theme="light"
-      offset={{ bottom: 24, right: 24 }}
-      options={{
-        // Tiempo suficiente para leer dos renglones sin releer a las carreras.
-        duration: 5000,
-        roundness: 8,
-      }}
-    />
+    <div ref={capa} id={ID_CAPA_DE_AVISOS} popover="manual" className="capa-de-avisos">
+      <Toaster
+        // Abajo a la derecha: arriba compite con la barra superior fija, que ya
+        // lleva el título de la pantalla y el buscador.
+        position="bottom-right"
+        theme="light"
+        offset={{ bottom: 24, right: 24 }}
+        options={{
+          // Tiempo suficiente para leer dos renglones sin releer a las carreras.
+          duration: 5000,
+          roundness: 8,
+        }}
+      />
+    </div>
   );
 }

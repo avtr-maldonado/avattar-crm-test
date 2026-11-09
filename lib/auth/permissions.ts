@@ -26,9 +26,14 @@ export type PermissionCode =
   | "VER_ANALISIS"
   | "VER_OBJETIVOS_EQUIPO"
   | "EDITAR_POLITICA_COMERCIAL"
-  | "ADMINISTRAR_USUARIOS";
+  | "ADMINISTRAR_USUARIOS"
+  // §58 · prospectos: verlos, gestionarlos (crear, importar, validar, asignar,
+  // descartar) y convertirlos en oportunidad.
+  | "VER_PROSPECTOS"
+  | "GESTIONAR_PROSPECTOS"
+  | "CONVERTIR_PROSPECTO";
 
-/** Los doce permisos, para sembrarlos y para recorrerlos en Administración. */
+/** Los dieciséis permisos, para sembrarlos y para recorrerlos en Configuración. */
 export const PERMISOS: readonly PermissionCode[] = [
   "VER_OPORTUNIDADES_PROPIAS",
   "VER_OPORTUNIDADES_OFICINA",
@@ -43,6 +48,9 @@ export const PERMISOS: readonly PermissionCode[] = [
   "VER_OBJETIVOS_EQUIPO",
   "EDITAR_POLITICA_COMERCIAL",
   "ADMINISTRAR_USUARIOS",
+  "VER_PROSPECTOS",
+  "GESTIONAR_PROSPECTOS",
+  "CONVERTIR_PROSPECTO",
 ] as const;
 
 /**

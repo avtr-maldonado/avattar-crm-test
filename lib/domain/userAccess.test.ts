@@ -62,7 +62,7 @@ describe("administraUsuario", () => {
 
 describe("rolesQueAdministra y paisesQueAdministra · lo que el formulario ofrece", () => {
   it("para administración, los cinco roles y los tres países", () => {
-    expect(rolesQueAdministra(sesion({ role: "ADMINISTRADOR" }))).toEqual(["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA"]);
+    expect(rolesQueAdministra(sesion({ role: "ADMINISTRADOR" }))).toEqual(["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA", "MARKETING"]);
     expect(paisesQueAdministra(sesion({ role: "ADMINISTRADOR", countryCodes: ["MX"] }))).toEqual(["MX", "CO", "CL"]);
   });
 
@@ -72,8 +72,13 @@ describe("rolesQueAdministra y paisesQueAdministra · lo que el formulario ofrec
     expect(paisesQueAdministra(jorge)).toEqual(["MX", "CL"]);
   });
 
-  it("para los demás, nada", () => {
+  it("para los demás, nada; Marketing tampoco administra a nadie (§58)", () => {
     expect(rolesQueAdministra(sesion({ role: "VENDEDOR" }))).toEqual([]);
     expect(paisesQueAdministra(sesion({ role: "PREVENTA" }))).toEqual([]);
+    expect(rolesQueAdministra(sesion({ role: "MARKETING" }))).toEqual([]);
+    expect(administraUsuario(sesion({ role: "MARKETING" }), vendedorMX)).toBe(false);
+  });
+  it("administración ofrece también el rol Marketing", () => {
+    expect(rolesQueAdministra(sesion({ role: "ADMINISTRADOR" }))).toContain("MARKETING");
   });
 });

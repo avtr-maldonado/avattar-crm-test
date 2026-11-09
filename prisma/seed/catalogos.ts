@@ -1,10 +1,13 @@
 import type { MeddicComponent, PrismaClient } from "@prisma/client";
 import { PERMISOS_POR_ROL } from "./permisos";
 import {
+  CAMPANAS_DE_PROSPECTO,
+  CANALES_DE_PROSPECTO,
   ETAPAS_RENOVACION,
   ETAPAS_VENTA,
   FAMILIAS_PRODUCTO,
   GATE_MODE_INICIAL,
+  MOTIVOS_DE_DESCARTE,
   MOTIVOS_PERDIDA,
   ORIGENES,
   PAISES,
@@ -117,6 +120,19 @@ export async function sembrarCatalogos(prisma: PrismaClient) {
   }
   for (const name of FAMILIAS_PRODUCTO) {
     await prisma.productFamily.upsert({ where: { name }, update: {}, create: { name } });
+  }
+  // §58 · prospectos: canales, campañas (ligadas a su canal) y motivos de descarte.
+  const canales = new Map<string, string>();
+  for (const name of CANALES_DE_PROSPECTO) {
+    const c = await prisma.leadChannel.upsert({ where: { name }, update: {}, create: { name }, select: { id: true } });
+    canales.set(name, c.id);
+  }
+  for (const c of CAMPANAS_DE_PROSPECTO) {
+    const channelId = canales.get(c.canal) ?? null;
+    await prisma.leadCampaign.upsert({ where: { name: c.name }, update: { channelId }, create: { name: c.name, channelId } });
+  }
+  for (const name of MOTIVOS_DE_DESCARTE) {
+    await prisma.leadDiscardReason.upsert({ where: { name }, update: {}, create: { name } });
   }
   console.log(
     `  catálogos: ${TIPOS_ACTIVIDAD.length} tipos de actividad, ${TIPOS_DOCUMENTO.length} de documento, ` +

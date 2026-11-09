@@ -42,6 +42,7 @@ function userScope(session: Session): Prisma.UserWhereInput {
     case "GERENTE_PAIS":
     case "VENDEDOR":
     case "PREVENTA":
+    case "MARKETING":
       return { ...base, countryCodes: { hasSome: session.countryCodes } };
   }
 }

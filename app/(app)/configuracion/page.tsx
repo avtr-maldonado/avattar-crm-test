@@ -64,7 +64,7 @@ const PESTANAS_DE_TODOS = [
   { clave: "catalogos", etiqueta: "Catálogos" },
 ] as const;
 
-const ROLES = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA"] as const;
+const ROLES = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA", "MARKETING"] as const;
 
 export default async function ConfiguracionPage({
   searchParams,

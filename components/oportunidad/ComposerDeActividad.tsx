@@ -157,10 +157,13 @@ export function ComposerDeActividad({
   actividad,
   oportunidades,
   contextos,
+  leadId,
   accion,
 }: {
   /** Ausente: la actividad nace sin oportunidad y se elige en el formulario. */
   opportunityId?: string;
+  /** §58 · la actividad es de un prospecto, no de una oportunidad: viaja `leadId` en vez de `opportunityId`. */
+  leadId?: string;
   tipos: TipoDeActividad[];
   usuarios: { id: string; name: string }[];
   usuarioActual: string;
@@ -178,7 +181,7 @@ export function ComposerDeActividad({
 
   // La oportunidad elegida en el formulario, cuando no viene fija.
   const [elegida, setElegida] = useState<OportunidadElegible | null>(null);
-  const eligeOportunidad = opportunityId === undefined && oportunidades !== undefined;
+  const eligeOportunidad = opportunityId === undefined && leadId === undefined && oportunidades !== undefined;
   const contexto = elegida && contextos ? contextos[elegida.countryCode] : undefined;
   const zonaActiva = contexto?.zona ?? zona;
   const zonaEtiquetaActiva = contexto?.zonaEtiqueta ?? zonaEtiqueta;
@@ -317,7 +320,11 @@ export function ComposerDeActividad({
           onChange={problemas.alCambiar}
           className="flex flex-col gap-5"
         >
-          <input type="hidden" name="opportunityId" value={opportunityId ?? elegida?.id ?? ""} />
+          {leadId ? (
+            <input type="hidden" name="leadId" value={leadId} />
+          ) : (
+            <input type="hidden" name="opportunityId" value={opportunityId ?? elegida?.id ?? ""} />
+          )}
           {actividad && <input type="hidden" name="activityId" value={actividad.id} />}
           <input type="hidden" name="typeId" value={estado.tipoId} />
 

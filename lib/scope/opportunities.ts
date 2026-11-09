@@ -28,6 +28,10 @@ export function opportunityScope(session: Session): Prisma.OpportunityWhereInput
       return base;
     case "PREVENTA":
       return { ...base, supportUsers: { some: { userId: session.userId } } };
+    case "MARKETING":
+      // §58 · Marketing trabaja prospectos, no oportunidades: alcance vacío a
+      // propósito, en vez de omitir el caso y que TypeScript lo deje pasar.
+      return { ...base, id: { in: [] } };
   }
 }
 

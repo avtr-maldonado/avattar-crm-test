@@ -22,13 +22,13 @@ describe("iniciales", () => {
 });
 
 describe("etiquetas · INV-14", () => {
-  it("los cinco roles tienen texto en español", () => {
+  it("los seis roles tienen texto en español", () => {
     for (const [clave, texto] of Object.entries(ETIQUETA_ROL)) {
       expect(texto, `${clave} sin etiqueta`).toBeTruthy();
       // Un valor visible que sea el enum en crudo es lo que INV-14 prohíbe.
       expect(texto).not.toBe(clave);
     }
-    expect(Object.keys(ETIQUETA_ROL)).toHaveLength(5);
+    expect(Object.keys(ETIQUETA_ROL)).toHaveLength(6);
   });
 
   it("las dos banderas de riesgo tienen texto (el margen dejó de serlo · §27)", () => {

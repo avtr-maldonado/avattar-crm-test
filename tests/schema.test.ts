@@ -44,13 +44,14 @@ describe("schema.prisma · decisiones de negocio", () => {
     expect(lista).toMatch(/@@unique\(\[productId, validFrom\]\)/);
   });
 
-  it("conserva cinco roles, no siete (Q-12)", () => {
+  it("conserva los cinco roles de Q-12 más Marketing (decisiones §58), no los siete del esquema anterior", () => {
     expect(valoresDeEnum("Role")).toEqual([
       "VENDEDOR",
       "GERENTE_PAIS",
       "DIRECCION",
       "ADMINISTRADOR",
       "PREVENTA",
+      "MARKETING",
     ]);
   });
 
@@ -65,8 +66,8 @@ describe("schema.prisma · decisiones de negocio", () => {
     expect(valoresDeEnum("OpportunityStatus")).toEqual(["ABIERTA", "GANADA", "PERDIDA"]);
   });
 
-  it("deja fuera Prospectos y copropietarios, que el esquema anterior traía", () => {
-    expect(schema).not.toMatch(/model Lead\b|model Prospect/);
+  it("deja fuera a los copropietarios; Prospectos volvió como módulo propio el 9-nov-2026 (§58)", () => {
+    expect(schema).toMatch(/model Lead\b/);
     expect(schema).not.toMatch(/model OpportunityCoOwner|copropietario/i);
   });
 });
@@ -176,9 +177,12 @@ describe("schema.prisma · invariantes", () => {
 });
 
 describe("schema.prisma · cobertura del modelo", () => {
-  it("están los 32 modelos que el spec §6.2 exige, más PersonShare (§29)", () => {
+  it("están los 32 modelos que el spec §6.2 exige, más PersonShare (§29) y los seis de Prospectos (§58)", () => {
     const encontrados = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]);
-    expect(encontrados).toHaveLength(33);
+    expect(encontrados).toHaveLength(39);
+    for (const lead of ["Lead", "LeadStageTransition", "LeadFolioCounter", "LeadChannel", "LeadCampaign", "LeadDiscardReason"]) {
+      expect(encontrados).toContain(lead);
+    }
     // Los que el esquema anterior no tenía y el spec sí pide.
     for (const nuevo of [
       "StageTransition",

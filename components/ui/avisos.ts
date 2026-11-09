@@ -29,6 +29,46 @@ import type { ResultadoAccion } from "@/lib/acciones";
  */
 
 /** Cuánto dura cada tipo. Un error se lee más despacio que una confirmación. */
+/** El `id` de la capa donde `Notificaciones` monta los avisos. */
+export const ID_CAPA_DE_AVISOS = "capa-de-avisos";
+
+/**
+ * Sube la capa de avisos al frente · decisiones §59.
+ *
+ * Un `Panel` abierto es un `<dialog>` modal: vive en el top layer del
+ * navegador, por encima de cualquier `z-index`, y los avisos se pintaban detrás
+ * de su fondo oscurecido («Etapa actualizada» no se veía con el popup del
+ * prospecto abierto). La capa de avisos es un `popover` manual, que también va
+ * al top layer, y el top layer ordena por llegada: volver a mostrarla la pone
+ * encima de lo que esté abierto. Lo llaman cada aviso y el `Panel` al abrir.
+ *
+ * Ocultar y mostrar en el mismo tick **no reordena**: el navegador deja el
+ * elemento en el top layer, en su sitio, hasta el siguiente frame (para las
+ * animaciones de salida). Por eso se vuelve a mostrar dos frames después; la
+ * capa parpadea un instante que no se ve. Sin un diálogo modal abierto no hay
+ * nada que subir, y sin soporte de `popover` la capa es un `div` normal.
+ */
+export function elevarCapaDeAvisos() {
+  if (typeof document === "undefined") return;
+  const capa = document.getElementById(ID_CAPA_DE_AVISOS);
+  if (!capa || typeof capa.showPopover !== "function") return;
+  if (!document.querySelector("dialog:modal")) return;
+  try {
+    if (capa.matches(":popover-open")) capa.hidePopover();
+  } catch {
+    return;
+  }
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      try {
+        if (!capa.matches(":popover-open")) capa.showPopover();
+      } catch {
+        // Un popover sin conexión al documento: se queda donde está.
+      }
+    }),
+  );
+}
+
 const DURACION = {
   exito: 4000,
   advertencia: 7000,
@@ -46,11 +86,13 @@ const DURACION = {
 export const avisar = {
   /** Una operación terminó y la pantalla no lo deja ver por sí sola. */
   exito(titulo: string, detalle?: string) {
+    elevarCapaDeAvisos();
     return sileo.success({ title: titulo, description: detalle, duration: DURACION.exito });
   },
 
   /** Pasó algo que el usuario necesita saber, pero que no lo detiene. */
   advertencia(titulo: string, detalle?: string) {
+    elevarCapaDeAvisos();
     return sileo.warning({
       title: titulo,
       description: detalle,
@@ -60,10 +102,12 @@ export const avisar = {
 
   /** Falló y no hay nada que corregir en el formulario. */
   error(titulo: string, detalle?: string) {
+    elevarCapaDeAvisos();
     return sileo.error({ title: titulo, description: detalle, duration: DURACION.error });
   },
 
   informacion(titulo: string, detalle?: string) {
+    elevarCapaDeAvisos();
     return sileo.info({
       title: titulo,
       description: detalle,

@@ -47,15 +47,33 @@ export default async function AppLayout({
   // un rubro que lleva a un 404 enseña a desconfiar del menú. Al volver, va con
   // `contador: contadores.then((c) => c.autorizaciones)` y `urgente`, porque
   // tienen SLA corriendo (RN-21); el lector ya calcula ese conteo.
+  // §58 y §59 · Oportunidades, Contactos, Productos y Objetivos solo para quien
+  // tiene algún permiso de ver oportunidades: Marketing no lo tiene y su menú
+  // queda en Prospectos y Actividades. Prospectos va en su propia sección.
+  const veOportunidades = can(session, "VER_OPORTUNIDADES_PROPIAS") || can(session, "VER_OPORTUNIDADES_OFICINA");
+  const marketing: Rubro[] = can(session, "VER_PROSPECTOS")
+    ? [
+        {
+          href: "/prospectos",
+          etiqueta: "Prospectos",
+          icono: "prospectos" as const,
+          contador: contadores.then((c) => c.prospectos),
+        },
+      ]
+    : [];
   const comercial: Rubro[] = [
-    {
-      href: "/oportunidades",
-      etiqueta: "Oportunidades",
-      icono: "oportunidades",
-      contador: contadores.then((c) => c.oportunidades),
-    },
-    { href: "/contactos", etiqueta: "Contactos", icono: "contactos" },
-    { href: "/productos", etiqueta: "Productos", icono: "productos" },
+    ...(veOportunidades
+      ? [
+          {
+            href: "/oportunidades",
+            etiqueta: "Oportunidades",
+            icono: "oportunidades" as const,
+            contador: contadores.then((c) => c.oportunidades),
+          },
+          { href: "/contactos", etiqueta: "Contactos", icono: "contactos" as const },
+          { href: "/productos", etiqueta: "Productos", icono: "productos" as const },
+        ]
+      : []),
     {
       href: "/actividades",
       etiqueta: "Actividades",
@@ -64,7 +82,7 @@ export default async function AppLayout({
     },
     // Sin contador: un objetivo no es un pendiente que se resuelve, y un número
     // al lado se leería como «tienes 4 cosas que atender».
-    { href: "/objetivos", etiqueta: "Objetivos", icono: "objetivos" },
+    ...(veOportunidades ? [{ href: "/objetivos", etiqueta: "Objetivos", icono: "objetivos" as const }] : []),
     ...(can(session, "VER_ANALISIS")
       ? [{ href: "/analisis", etiqueta: "Análisis", icono: "analisis" as const }]
       : []),
@@ -73,6 +91,7 @@ export default async function AppLayout({
   const sistema = SISTEMA;
 
   const secciones: SeccionNavegacion[] = [
+    { titulo: "Marketing", rubros: marketing },
     { titulo: "Comercial", rubros: comercial },
     { titulo: "Sistema", rubros: sistema },
   ];
@@ -99,7 +118,7 @@ export default async function AppLayout({
         <BarraLateral secciones={secciones} usuario={usuario} colapsadoInicial={colapsado} />
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <NavegacionAngosta rubros={[...comercial, ...sistema]} />
+          <NavegacionAngosta rubros={[...marketing, ...comercial, ...sistema]} />
           {children}
         </div>
 

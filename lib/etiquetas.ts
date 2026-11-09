@@ -25,6 +25,7 @@ export const ETIQUETA_ROL: Record<Role, string> = {
   DIRECCION: "Dirección",
   ADMINISTRADOR: "Administración",
   PREVENTA: "Preventa",
+  MARKETING: "Marketing",
 };
 
 export const NOMBRE_PAIS: Record<CountryCode, string> = {

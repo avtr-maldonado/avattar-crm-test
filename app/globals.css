@@ -136,3 +136,18 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* La capa de avisos (§59): un popover manual sin la caja que le pone el navegador,
+   para que el toaster se posicione él solo contra el viewport. */
+.capa-de-avisos:popover-open {
+  position: fixed;
+  inset: auto;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  color: inherit;
+}
