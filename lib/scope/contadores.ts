@@ -4,6 +4,7 @@ import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { actividadEnOficina, activityScope } from "./activities";
 import { opportunityScope } from "./opportunities";
+import { contarProspectosPendientes } from "./leads";
 
 /**
  * Los contadores de la barra lateral · §13.5.
@@ -31,6 +32,8 @@ export type Contadores = {
   oportunidades: number;
   actividades: number;
   autorizaciones: number;
+  /** §58 · prospectos abiertos sin asignar o con el SLA de primer contacto vencido. */
+  prospectos: number;
 };
 
 export const contadoresDeNavegacion = cache(
@@ -47,7 +50,7 @@ export const contadoresDeNavegacion = cache(
       ),
     );
 
-    const [oportunidades, actividades, autorizaciones] = await Promise.all([
+    const [oportunidades, actividades, autorizaciones, prospectos] = await Promise.all([
       // Solo abiertas: las cerradas no piden nada.
       prisma.opportunity.count({
         where: { AND: [opportunityScope(session), { status: "ABIERTA", countryCode: pais }] },
@@ -70,9 +73,13 @@ export const contadoresDeNavegacion = cache(
       // RN-04 · nadie autoriza su propia solicitud, así que al solicitante no
       // le corresponde el contador: es del que tiene que resolver.
       contarAutorizacionesPendientes(session, pais),
+
+      // §58 · lo que pide acción en prospectos: sin vendedor, o con el primer
+      // contacto vencido. Mismo recorte que la pantalla: alcance y oficina.
+      contarProspectosPendientes(session, pais, ahora),
     ]);
 
-    return { oportunidades, actividades, autorizaciones };
+    return { oportunidades, actividades, autorizaciones, prospectos };
   },
 );
 

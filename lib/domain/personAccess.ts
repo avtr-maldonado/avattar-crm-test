@@ -29,6 +29,7 @@ export function administraPersona(session: Session, persona: PersonaAdministrabl
     }
     case "VENDEDOR":
     case "PREVENTA":
+    case "MARKETING":
       return false;
   }
 }

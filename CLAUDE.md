@@ -66,6 +66,9 @@ improvisar. Detalle en `docs/CRM-AVTR-SPEC.md` §3.
     estancada; el margen bajo dejó de ser bandera (decisiones §27) y se ve en la tarjeta.
 12. **INV-12** El folio es inmutable, incluso al reabrir. Consecutivo **por año**.
 13. **INV-13** Las etapas son datos, no `enum`. Un `switch` por nombre de etapa es un defecto.
+    **Excepción razonada (§58):** las nueve etapas de un prospecto (`LeadStage`) son valores fijos
+    porque cada una tiene comportamiento propio, como `OpportunityStatus`; la tabla de transiciones
+    es pura y con prueba (`lib/domain/leadStages.ts`).
 14. **INV-14** La UI siempre en español. Identificadores en inglés.
 15. **INV-15** Nada se borra en duro: `deletedAt`, y las consultas lo excluyen por omisión. Aplica a
     Organization, Person, Opportunity, Activity y User (§6). `Document` y `Milestone` se borran en
@@ -78,8 +81,8 @@ Híbrido: **identificadores en inglés, valores de negocio en español.**
 ```
 opportunities.stage_id · quotes.gross_margin        // tablas y campos en inglés
 stage.name = "Negociación" · lossReason = "Precio"  // valores visibles en español
-Role = VENDEDOR | GERENTE_PAIS | DIRECCION | ADMINISTRADOR | PREVENTA
-rutas: /oportunidades /contactos /objetivos          // visibles → español
+Role = VENDEDOR | GERENTE_PAIS | DIRECCION | ADMINISTRADOR | PREVENTA | MARKETING
+rutas: /oportunidades /prospectos /contactos /objetivos   // visibles → español
 componentes y funciones: OpportunityCard, computeMeddicScore   // inglés
 ```
 
@@ -111,7 +114,11 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     analisis (P-09: ganadas con cotización vigente y actividades hechas dentro de un rango de fechas
                     —el lapso, §45—, abiertas con etapa y MEDDIC, objetivos de varios países; costo solo con VER_COSTO),
                     people (personScope: propietario, compartidas y cuentas con oportunidad → §29;
-                    usuariosParaCompartir) · organizations (todas las cuentas para todos → §29)
+                    usuariosParaCompartir) · organizations (todas las cuentas para todos → §29) ·
+                    leads (§58: leadScope —vendedor los asignados **y desde Asignado** (§59), Marketing y Gerencia sus
+                    países, Dirección y Administración todo, Preventa nada—, listLeads, getLeadDetail, auditoriaDeProspecto,
+                    catalogosDeProspectos, vendedoresParaAsignar, contarProspectosPendientes, correosConProspectoAbierto,
+                    coincidenciasParaConvertir: la cuenta homónima, sus contactos y la persona por correo → §59)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
                     riskFlags (banderas + evidencia con su número), folio, funnel (embudo y tasa de
                     paso), forecast (columnas por periodo de cierre estimado, ventana fija que avanza,
@@ -129,12 +136,21 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     vendedores y preventas de sus países, nada más; lo aplican crear, editar y dar acceso → §55),
                     opportunityAccess (puedeEditarOportunidad: propietario u oficina, lo aplican los siete servicios que
                     mutan una oportunidad; preventaDe: el responsable de preventa → §39),
+                    leadStages (las nueve etapas, su etiqueta y tono, puedeTransitar → §58) · leadSla (estadoDeSla: cumplido,
+                    en tiempo, por vencer, vencido; venceEn → §58) · leadAccess (gestionaProspecto, decideComoVentas,
+                    convierteProspecto → §58; etapasQueVe: el vendedor desde Asignado, lo aplican alcance, columnas y
+                    filtro → §59) · leadMetrics (los cinco indicadores) · leadFolio (PRO-AAAA-NNNNN, contador
+                    propio) · csv (parseCsv, aCsv: RFC 4180 sin librería) · leadImport (validarFilas: la previsualización,
+                    fila por fila, con cabeceras en español → §58),
                     agenda (estadoDeAgenda y agruparPorEstado: realizada, vencida por día, en progreso, por realizar → §42;
                     filtrarAgenda: estado, tipo y oportunidad recortan en memoria después del alcance → §55;
                     semanaElegida: el lunes que pide la URL, o el de hoy → §44; relojDeAgenda: «hoy» empieza a la
                     medianoche de la zona, lo usa también la pestaña Actividades del detalle → §49).
                     Servicios con transacción:
                     opportunity (cambiarFechaGanada: la única corrección de una cerrada, con bitácora → §55),
+                    lead (crear, editar, cambiarEtapa, asignar masivo, descartar con motivo, actividades del prospecto,
+                    importar, convertir: cuenta y persona reutilizadas o creadas, oportunidad por crearOportunidad,
+                    actividades re-apuntadas → §58),
                     activity (registrar y editar; responsable, duración y calendario por
                     parámetro), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
                     product, quoteService, milestoneService, meddicService, document,
@@ -163,7 +179,9 @@ lib/filters/        definición y parseo de filtros → INV-10 · analisis.ts: l
                     la cuota solo se compara con un año o un trimestre fiscal completos)
 lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
-components/ui/      primitivas del sistema de diseño · formulario (Panel sobre <dialog>; `cerrarAlFondo` solo en los
+components/ui/      primitivas del sistema de diseño · Notificaciones + avisos (el Toaster dentro de una capa `popover`;
+                    `elevarCapaDeAvisos` la vuelve a mostrar dos frames después antes de cada aviso y al abrir un Panel, para
+                    quedar encima del `<dialog>` en el top layer → §59) · formulario (Panel sobre <dialog>; `cerrarAlFondo` solo en los
                     paneles que muestran y no capturan → §44; **cada apertura remonta los hijos**, porque
                     cerrar un <dialog> oculta pero no desmonta → §51; useEnvioQueConserva envía
                     desde onSubmit para que React no reinicie el formulario cuando la acción devuelve VALIDACION;
@@ -174,7 +192,9 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     salieron de BarraDeFiltros el 30-sep-2026 porque Análisis las usa igual)
                     · SelectorDeVarios (elegir varios de una lista corta buscando por nombre; fichas con «quitar» y
                     un hidden por elegido, la acción lo lee con form.getAll) · el Panel lleva text-left: el <dialog>
-                    hereda la alineación del DOM donde se montó
+                    hereda la alineación del DOM donde se montó · **un panel que puede montarse dos veces en la misma
+                    página toma el id de su formulario y de sus campos de `useId`** (§58): con ids fijos el botón del pie
+                    envía el formulario equivocado y «no pasa nada»
                     · AyudaEmergente (<details> con un icono junto a la etiqueta; lo usa el campo «Pronóstico»)
                     · BarraDeHerramientas (dos filas: vistas, el botón que muestra u oculta los filtros —cerrados al
                     entrar, §31, con un punto si hay alguno aplicado— y el alta; la usan el pipeline y Actividades → §57)
@@ -186,7 +206,15 @@ components/ui/      primitivas del sistema de diseño · formulario (Panel sobre
                     contraíble; el ancho inicial llega del servidor por cookie, sin parpadeo) · FilaEnlazada (la fila
                     de cuentas lleva a la ficha al pulsar cualquier celda; el enlace del nombre sigue siendo el
                     control, el oyente va al DOM como en Panel.cerrarAlFondo → §49)
-components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,analisis,actividades}/   por pantalla
+components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,analisis,actividades,prospectos}/   por pantalla
+                    prospectos (§58): TablaDeProspectos (casillas, asignación masiva, menú «…» por fila con solo lo que la
+                    sesión puede) · KanbanDeProspectos (seis columnas abiertas, arrastre nativo) · TarjetaProspecto ·
+                    PastillaDeEtapa/PastillaDeSla/Puntaje · FiltrosDeProspectos (etapa, canal, campaña, vendedor, ingreso) ·
+                    BuscadorDeProspectos (`q`) · NuevoProspecto · AsignarProspectos · DescartarProspecto · ConvertirProspecto
+                    (§59: tres bloques en un envío —cuenta, contacto, oportunidad— prellenados con lo que el lector encontró;
+                    estadoDeConversion es su reductor puro: cambiar de cuenta reinicia al contacto) · ImportarProspectos (dos pasos) · PopupDeProspecto + DetalleDeProspecto (popup en la URL, `p=<id>`, tres
+                    pestañas; la fila entera y la tarjeta lo abren) · EditarProspecto (dentro del popup, para quien gestiona) · AccionesDeProspecto ·
+                    MenuDeAcciones · formato (DatosDeProspecto, formateadoresDe por zona)
                     actividades: VistaLista · VistaKanban (cuatro columnas de estado, sin arrastre) · VistaSemana (verde
                     hecho, coral vencido, horas por día) · comun (ActividadDeTablero, formatos, PastillaDeEstado) → §42
                     · NavegacionDeSemana (flechas y «Hoy» como enlaces; la semana en la URL `semana=YYYY-MM-DD`) ·
@@ -256,7 +284,9 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     cada punto lleva `items` y las agrupadas `itemsPorSerie`, resueltos por id contra la lista acotada)
 app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.ts al lado; el acciones.ts
                     del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion.
-                    /configuracion es de todo rol y cada pestaña decide quién la ve; /admin redirige → §55
+                    /configuracion es de todo rol y cada pestaña decide quién la ve; /admin redirige → §55.
+                    /prospectos (VER_PROSPECTOS): page + acciones + datos.ts (aDatosDeProspecto, historiaDe) + loading;
+                    /prospectos/exportar y /prospectos/plantilla son Route Handlers que devuelven CSV → §58
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
 app/salud/          GET público de diagnóstico: ¿base alcanzable? ¿qué variables existen? (lib/domain/salud)
 app/error.tsx       lo que ve el usuario ante una excepción no atrapada: en español y con el digest
@@ -318,6 +348,15 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   nuevas que no están en el spec): precio de lista y costo estándar **van juntos o no van**; sin
   ellos el producto existe y se fija precio y costo en cada cotización. La suma de
   hitos **no supera el neto** al guardar, con las cifras; sin cotización con líneas no hay tope.
+- **Marketing capta; ventas convierte** (decisiones §58, módulo nuevo que no está en el spec): el rol
+  `MARKETING` gestiona prospectos y **no ve oportunidades ni objetivos** (alcance vacío explícito en cada
+  `switch` por rol); su menú es Prospectos (sección **Marketing**), Actividades y Configuración (§59).
+  `GESTIONAR_PROSPECTOS` crea, valida, asigna, descarta e importa; `CONVERTIR_PROSPECTO` abre la oportunidad
+  con la cuenta y la persona que quien convierte eligió o completó en el panel —prellenadas con lo que existe
+  (§59)—, re-apuntando las actividades; una cuenta nueva homónima se rechaza. **El vendedor ve sus prospectos
+  desde Asignado** (`etapasQueVe`, §59). El SLA de primer contacto es de la política comercial
+  (`leadFirstContactSlaHours`) y su estado se calcula. Descartar exige motivo del catálogo. Convertido y
+  Descartado son terminales.
 - **Gerencia administra a su equipo, y nada más** (decisiones §55, regla nueva que no está en el spec):
   `ADMINISTRAR_USUARIOS` lo tiene también `GERENTE_PAIS`, y `administraUsuario` lo acota a vendedores y
   preventas de sus países. Ni otro rol ni otro país, ni al editar: se comprueba a quien es hoy y a quien
@@ -404,7 +443,13 @@ corregir** (§54, 13-oct): se evalúa en la hoja, nombra vendedor y trimestres, 
 bitácora; la pestaña Actividades es la tabla de P-07; Objetivos ofrece el año siguiente; un solo molde para los
 desgloses del embudo y de Análisis; «Nueva actividad» desde Actividades eligiendo la oportunidad, con filtros
 de estado, tipo, oportunidad y lapso; y Administración pasó a ser **Configuración**, de todo rol, donde
-**Gerencia administra a su equipo** (vendedores y preventas de sus países) y Usuarios se filtra por estado y rol. **Un panel que se reabre empieza de cero** (§51, 12-oct): `Panel` remonta sus hijos en cada apertura y
+**Gerencia administra a su equipo** (vendedores y preventas de sus países) y Usuarios se filtra por estado y rol.
+**Prospectos** desde el 9-nov-2026 (§58): rol Marketing, pipeline propio de nueve etapas fijas, alcance por rol,
+lista con asignación masiva, kanban, detalle lateral, SLA de primer contacto, conversión que reutiliza cuenta y
+persona, importación y exportación CSV. Migraciones `rol_marketing` y `prospectos` aplicadas en desarrollo;
+en producción pendientes de aprobación. **Cuatro ajustes** el mismo día (§59): el vendedor ve sus prospectos
+desde Asignado; convertir pide cuenta, contacto y oportunidad en tres bloques prellenados; Prospectos va en la
+sección Marketing del menú y Marketing solo ve Prospectos y Actividades; los avisos quedan encima de los popups. **Un panel que se reabre empieza de cero** (§51, 12-oct): `Panel` remonta sus hijos en cada apertura y
 el resultado de la acción se descarta al cerrar, así que ningún formulario vuelve con lo que no se guardó ni
 con los avisos de la vez pasada. **Cuatro correcciones de uso** el 7-oct (§49): la fila de cuentas lleva a la ficha, editar una
 actividad y marcarla hecha no pregunta por el siguiente paso, el cierre estimado solo se anota en la bitácora
@@ -433,7 +478,8 @@ pnpm react-doctor           # calidad de las pantallas · NO `pnpm doctor`, ese 
 lee `.env.local`; `luujtoutcpswhewsxmja` es producción y lo lee `.env.production.local`, que **no se
 versiona y no lo lee la aplicación local**. Producción ya tiene el esquema, los catálogos, dos
 administradores, el bucket y el acceso con Microsoft (mismo registro de Entra que desarrollo, con su
-propio callback); le falta el despliegue en Vercel y el dominio. Los dos comandos que escriben en una base reciben el
+propio callback), y va al día en migraciones (la décima, de datos, el 29-oct-2026); le falta el despliegue
+en Vercel y el dominio. Los dos comandos que escriben en una base reciben el
 ambiente por `--env`, imprimen a qué host van antes de tocar nada y aceptan `--dry-run`. Nunca
 copiar las cadenas de producción a `.env.local`.
 

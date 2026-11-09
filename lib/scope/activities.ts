@@ -45,6 +45,12 @@ export function activityScope(session: Session): Prisma.ActivityWhereInput {
           { organization: { countryCode: { in: session.countryCodes }, deletedAt: null } },
         ],
       };
+    case "MARKETING":
+      // §58 · las propias y las de los prospectos de sus países.
+      return {
+        ...base,
+        OR: [{ userId: session.userId }, { lead: { countryCode: { in: session.countryCodes }, deletedAt: null } }],
+      };
     case "DIRECCION":
     case "ADMINISTRADOR":
       return base;

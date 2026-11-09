@@ -72,7 +72,14 @@ export type AuditAction =
   /** La fecha ganada de una cerrada se corrige a mano (decisiones §55). */
   | "CAMBIAR_FECHA_GANADA"
   /** Persona compartida o descompartida (decisiones §29). Entidad `Person`. */
-  | "COMPARTIR_CONTACTO";
+  | "COMPARTIR_CONTACTO"
+  // Prospectos (decisiones §58). Entidad `Lead`. Cambiar de etapa no está aquí:
+  // la transición es su propio registro, como en las oportunidades.
+  | "CREAR_PROSPECTO"
+  | "ASIGNAR_PROSPECTO"
+  | "DESCARTAR_PROSPECTO"
+  | "CONVERTIR_PROSPECTO"
+  | "IMPORTAR_PROSPECTOS";
 
 export type AuditEntry = {
   /** El modelo, en singular y como lo llama Prisma: "Opportunity", "Quote". */

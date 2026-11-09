@@ -2784,8 +2784,8 @@ mañana); **sí** puede ser anterior a la creación en el CRM, porque lo importa
 existir aquí. El mismo día no escribe ni anota, como el cierre estimado (§49).
 
 **Gerencia administra a su equipo.** `ADMINISTRAR_USUARIOS` se concede a `GERENTE_PAIS` en la
-matriz (migración `gerencia_administra_usuarios`, aplicada en desarrollo; **pendiente en
-producción**). A quién puede administrar lo decide `administraUsuario` (`lib/domain/userAccess`,
+matriz (migración `gerencia_administra_usuarios`, aplicada en desarrollo y en producción el
+29-oct-2026; verificado leyendo la celda y el historial de migraciones). A quién puede administrar lo decide `administraUsuario` (`lib/domain/userAccess`,
 puro, con pruebas): vendedores y preventas de sus países, ni otro rol ni otro país, porque dar de
 alta a un administrador o mover a alguien a otra oficina sería ampliar el alcance de quien lo hace.
 El lector (`lib/scope/usuarios`) le muestra a quienes operan en alguno de sus países —ahí aparecen
@@ -2884,3 +2884,168 @@ toque muestra las cuatro pastillas y otro las oculta; cada barra apunta a su pro
 **Costo de volver:** devolver la fila a la página.
 
 Dónde vive: `components/ui/BarraDeHerramientas.tsx`, `app/(app)/actividades/page.tsx`.
+
+## 58. Prospectos: un pipeline propio antes de la oportunidad (9 de noviembre de 2026)
+
+**Decisión del negocio:** Marketing capta prospectos desde varios canales, los valida y califica y
+los asigna a un vendedor, que los acepta o rechaza y, si procede, los convierte en un contacto con
+una oportunidad. Se construyó como módulo propio —`/prospectos`— con los patrones de Oportunidades.
+Spec en `docs/superpowers/specs/2026-11-09-prospectos-design.md`; plan en
+`docs/superpowers/plans/2026-11-09-prospectos.md`. Cuatro decisiones del negocio, tomadas el mismo
+día: rol Marketing, etapas fijas, CSV para importar y exportar, y el SLA en la política comercial.
+
+### Las reglas que no estaban en el spec
+
+**Un rol nuevo: `MARKETING`.** Capta, valida, califica, asigna, descarta e importa prospectos.
+**No ve oportunidades ni objetivos**: su alcance de oportunidades es vacío a propósito (un caso
+explícito en cada `switch` por rol, no una omisión), ve todas las cuentas como todos (§29), las
+personas que posee o le comparten, y sus actividades y las de los prospectos de sus países. En el
+menú, Oportunidades y Objetivos aparecen solo con algún permiso de ver oportunidades: eso lo decide
+la matriz, no el rol. Tres permisos nuevos: `VER_PROSPECTOS` (todos menos Preventa; el vendedor ve
+los asignados), `GESTIONAR_PROSPECTOS` (Marketing, Gerencia, Dirección, Administración) y
+`CONVERTIR_PROSPECTO` (ventas y Gerencia; Marketing no, porque convertir abre una oportunidad).
+
+**Etapas como valores fijos, excepción razonada a INV-13.** El invariante pide etapas como datos
+para el pipeline de oportunidades, porque ahí la configuración cambia por país y por negocio. Las
+nueve etapas de un prospecto —Nuevo, En validación, Contactado, Calificado, Asignado, Aceptado,
+Rechazado, Convertido, Descartado— tienen cada una comportamiento propio: Asignado exige vendedor,
+Aceptado y Rechazado los decide ventas, Convertido y Descartado son terminales y solo llegan por su
+servicio. Son como `OpportunityStatus`, no como `Stage`. La tabla de transiciones es pura
+(`lib/domain/leadStages.ts`) y tiene prueba; Rechazado solo vuelve a Asignado (reasignar) o se
+descarta.
+
+**El SLA de primer contacto vive en la política comercial** (`leadFirstContactSlaHours`, 24 horas
+corridas por omisión, por país; INV-05). El estado —cumplido, en tiempo, por vencer bajo el 25 %
+del plazo, vencido— se calcula al leer (INV-11), nunca se guarda. Una actividad hecha, o llegar a
+Contactado, sella `contactedAt` y lo apaga.
+
+**Convertir reutiliza lo que existe.** La cuenta por nombre sin distinguir mayúsculas, la persona
+por correo dentro de esa cuenta (o por nombre si no hay correo); lo que no existe se crea con el
+vendedor como propietario. La oportunidad la abre `crearOportunidad`: mismo folio, misma compuerta,
+mismo propietario válido. Las actividades del prospecto reciben la oportunidad y conservan `leadId`.
+Desde Aceptado convierte el asignado o quien gestiona; desde Calificado o Asignado solo quien
+gestiona, saltándose la aceptación. **Riesgo conocido:** cuenta y persona van en una transacción, la
+oportunidad en la suya y el cierre del prospecto en otra; si la última fallara, la oportunidad
+existiría sin el prospecto marcado. Es fallo de base, no de regla, y un segundo intento encontraría
+cuenta y persona ya hechas.
+
+**Las actividades de un prospecto no van al calendario de Microsoft 365** en esta entrega: el
+adaptador de Graph recibe una oportunidad. Tampoco preguntan por el siguiente paso (§12.4): un
+prospecto sin agenda no es una oportunidad abandonada, y el indicador «sin seguimiento» ya lo dice.
+
+### Lo que se construyó
+
+- **Modelo:** `Lead` con folio `PRO-AAAA-NNNNN` (contador propio), `LeadStageTransition`,
+  `Activity.leadId`, catálogos `LeadChannel`, `LeadCampaign`, `LeadDiscardReason`. Migraciones
+  `rol_marketing` (el enum, en su propio archivo) y `prospectos` (tablas, RLS deny-all, permisos con
+  su matriz de seis roles, catálogos). Aplicadas en desarrollo; **en producción quedaron pendientes:
+  el ensayo las listó, y aplicarlas pide la aprobación de quien opera**.
+- **Alcance:** `lib/scope/leads.ts`. Vendedor → asignados; Marketing y Gerencia → sus países;
+  Dirección y Administración → todo; Preventa → nada. La oficina activa recorta.
+- **Pantalla:** lista con casillas y asignación masiva, kanban con arrastre nativo, detalle lateral
+  en la URL (`p=<id>`) con actividades, información e historia, cinco indicadores sobre la lista
+  acotada, filtros en la URL (etapa, canal, campaña, vendedor, ingreso, míos, buscador), cerrados al
+  entrar como en el pipeline. Importar en dos pasos (revisión fila por fila, luego solo las válidas)
+  y exportar lo que se ve.
+- **Pruebas:** transiciones, SLA, acceso, métricas, folio, CSV, validación de importación
+  (unitarias); alcance, alta, asignación, descarte, actividades, conversión e importación
+  (integración, `tests/integracion/prospectos.test.ts`). Maqueta en navegador de tabla, kanban,
+  alta, filtros, detalle, conversión e importación.
+
+**Costo de volver:** el módulo es aditivo; quitarlo es quitar la carpeta, el rol y las tablas. Lo
+que toca lo existente es pequeño: el caso `MARKETING` en los alcances, `leadId` en actividades,
+el SLA en la política y el composer que admite `leadId`.
+
+**Corrección del mismo día (9-nov-2026):** la pantalla pinta el alta dos veces —en la barra y en el
+estado vacío— y los dos paneles compartían el `id` del formulario; el botón del pie enviaba el
+formulario cerrado y «no pasaba nada». Regla que queda: **un panel que puede montarse más de una vez
+en la misma página toma su `id` de `useId`**, también el de sus campos. Aplica a los cinco paneles de
+prospectos (alta, importar, asignar, descartar, convertir); asignar y descartar se montan a la vez en
+la tabla y en el detalle. La prueba de acciones (`tests/integracion/prospectos-acciones.test.ts`)
+cubre desde entonces la capa que faltaba: la acción con el `FormData` tal como viaja del formulario.
+
+**Ajustes del 9-nov-2026, tarde:** Prospectos va antes que Oportunidades en el menú (es el inicio del
+flujo). El detalle dejó de ser una columna lateral: es un **popup** (`PopupDeProspecto` sobre `Panel`)
+que sigue viviendo en la URL (`p=<id>`), así que el enlace se comparte y cerrarlo navega sin el
+parámetro. La fila entera de la lista lo abre (`FilaEnlazada`, §49) y la tarjeta del kanban también.
+Dentro, «Editar» abre el panel con los datos del prospecto —todo menos el país y el vendedor— para
+quien gestiona; usa `editarProspectoAccion`.
+
+**Pendiente:** calendario de Microsoft para actividades de prospecto; campañas editables desde
+Configuración (hoy catálogo sembrado); actualizar `docs/plan-de-pruebas.md` con el bloque de
+prospectos; dar de alta al usuario de Marketing en cada ambiente (el seed trae uno para desarrollo).
+
+## 59. El vendedor entra en Asignado, la conversión se completa a mano y los avisos quedan encima (9 de noviembre de 2026)
+
+**Decisión del negocio:** cuatro ajustes al módulo de Prospectos pedidos tras usarlo. Ninguno está
+en el spec; los tres primeros son reglas nuevas y el cuarto es una corrección de la interfaz.
+
+### El vendedor ve sus prospectos a partir de Asignado
+
+Un prospecto que lleva el nombre de un vendedor pero sigue en Nuevo, En validación, Contactado o
+Calificado **no es suyo todavía**: Marketing sigue decidiendo. La regla es pura —`etapasQueVe(rol)`
+en `lib/domain/leadAccess.ts`— y la aplican tres lugares para que cuenten lo mismo: `leadScope`
+(`assignedToId` **y** `stage in` desde Asignado), las columnas del kanban (al vendedor le quedan
+Asignado y Aceptado) y las opciones del filtro de etapa. Los demás roles ven las nueve. Como el
+alcance es por fila, al vendedor tampoco se le abre el detalle (`getLeadDetail` devuelve `null`).
+
+### Convertir pide la cuenta, el contacto y la oportunidad, prellenados
+
+Antes la conversión decidía sola: cuenta por nombre, persona por correo, y creaba lo que no
+encontrara con los datos del prospecto tal cual. Ahora el panel tiene **tres bloques en un envío**:
+
+- **Cuenta.** El lector `coincidenciasParaConvertir` busca la homónima (sin distinguir mayúsculas,
+  en cualquier país como el homónimo de §29). Si existe, arranca elegida y anotada «existente»; si
+  no, arranca como nueva con el nombre, el giro prellenado, el tipo (Prospecto por omisión) y la
+  ciudad por completar. El mismo `Autocompletado` del alta permite elegir otra cuenta o crearla.
+- **Contacto.** Con cuenta existente, un desplegable con sus contactos —los que la sesión alcanza
+  por `personScope`, más la persona encontrada por correo aunque no la alcance, porque reutilizarla
+  es lo que evita el duplicado— y «Nuevo contacto». Con cuenta nueva o contacto nuevo: nombre,
+  cargo, correo, teléfono y rol en el comité, prellenados desde el prospecto. Cambiar de cuenta
+  reinicia al contacto (reductor puro `estadoDeConversion`, con pruebas, como `estadoDeAlta`).
+- **Oportunidad.** Lo de antes: nombre sugerido, pipeline del país, etapa de entrada, importe,
+  cierre, tipo y propietario para quien reasigna.
+
+El servicio `convertirProspecto` recibe `cuenta: {id} | {nueva}` y `persona: {id} | {nueva}` y
+**vuelve a comprobar**: una cuenta nueva con el nombre de una que existe se rechaza con el dato
+(«Ya existe la cuenta «X»: elígela en lugar de crearla»), una persona elegida tiene que ser de la
+cuenta elegida, y el rol del comité tiene que estar en el catálogo. Lo que se crea es del vendedor
+(propietario), como antes. La cuenta nueva toma su sede del país del prospecto.
+
+Un prospecto convertido **sale de la vista** sin regla nueva: la lista y el kanban muestran por
+omisión solo las etapas abiertas (§58) y Convertido es terminal; con el filtro de etapa se sigue
+pudiendo ver y su detalle enlaza a la oportunidad.
+
+### Marketing en su propia sección del menú
+
+El menú lateral tiene tres secciones: **Marketing** (Prospectos), **Comercial** (Oportunidades,
+Contactos, Productos, Actividades, Objetivos, Análisis) y **Sistema** (Configuración). Contactos y
+Productos se recortan con el mismo permiso que Oportunidades (`VER_OPORTUNIDADES_PROPIAS` u
+`OFICINA`), así que al rol Marketing le quedan Prospectos y Actividades, más Configuración, que es de
+todo rol desde §55 (los catálogos de prospectos viven ahí). Las secciones vacías no se pintan. Como
+siempre, ocultar un enlace no autoriza: `/contactos` y `/productos` siguen respondiendo a quien
+escriba la URL; si hubiera que cerrarlos a Marketing, sería un permiso nuevo, no un `if` por rol.
+
+### Los avisos se ven con un popup abierto
+
+Un `Panel` es un `<dialog>` modal y vive en el **top layer** del navegador, por encima de cualquier
+`z-index`; los avisos de Sileo se pintaban en el DOM normal y quedaban detrás del fondo oscurecido
+(«Etapa actualizada» no se veía con el popup del prospecto abierto). La solución, sin librería nueva:
+`Notificaciones` monta el `Toaster` dentro de una capa `popover="manual"`, que también va al top
+layer, y `elevarCapaDeAvisos()` (`components/ui/avisos.ts`) la vuelve a mostrar antes de cada aviso
+y cuando `Panel` abre, porque el top layer ordena por llegada. Dos detalles que costaron:
+
+- Ocultar y mostrar en el mismo tick **no reordena**: el navegador deja el elemento en el top layer
+  hasta el siguiente frame (para animaciones de salida). Se vuelve a mostrar dos frames después.
+- `document.elementFromPoint` **no sirve para probarlo**: fuera de un diálogo modal todo es inerte y
+  el hit-test lo salta aunque esté pintado encima. La prueba es de píxeles (la palomita verde sale
+  viva encima del fondo y apagada debajo); el mock la hace en `sonda3.cjs`.
+
+Sin soporte de `popover` la capa es un `div` normal y nada cambia. Abrir el panel de convertir
+desde la URL (`accion=convertir`) espera un tick antes de `showModal()`: los efectos de los hijos
+corren antes que los del padre y el panel habría quedado debajo del popup del prospecto.
+
+**Costo de volver:** la vista del vendedor es una línea en `etapasQueVe`; la conversión guiada es el
+panel y el tipo de entrada del servicio (la versión automática vive en la historia); la capa de
+avisos es un `div` con atributo y una función. **Pendiente:** lo de §58 (Graph para prospectos,
+campañas editables, plan de pruebas, Marketing en PROD, migraciones de §58 en PROD).

@@ -46,6 +46,23 @@ enum Role {
   DIRECCION
   ADMINISTRADOR
   PREVENTA
+  /// §58 · capta, valida y califica prospectos; no ve oportunidades ni objetivos.
+  MARKETING
+}
+
+/// §58 · el pipeline de prospectos. Valores fijos y no una tabla, a diferencia
+/// de las etapas de oportunidad (INV-13): cada uno tiene comportamiento propio,
+/// como OpportunityStatus. Excepción razonada en decisiones §58.
+enum LeadStage {
+  NUEVO
+  EN_VALIDACION
+  CONTACTADO
+  CALIFICADO
+  ASIGNADO
+  ACEPTADO
+  RECHAZADO
+  CONVERTIDO
+  DESCARTADO
 }
 
 enum CountryCode {
@@ -181,6 +198,9 @@ model User {
   objectives           Objective[]
   auditEntries         AuditLog[]
   savedViews           SavedView[]
+  assignedLeads        Lead[]                      @relation("LeadAssignee")
+  createdLeads         Lead[]                      @relation("LeadCreator")
+  leadTransitions      LeadStageTransition[]
 
   @@index([role, active])
   @@map("users")
@@ -202,6 +222,7 @@ model Country {
   organizations    Organization[]
   opportunities    Opportunity[]
   objectives       Objective[]
+  leads            Lead[]
 
   @@map("countries")
 }
@@ -216,6 +237,8 @@ model CommercialPolicy {
   discountThresholdDir  Decimal     @map("discount_threshold_dir") @db.Decimal(7, 4)
   /// Q-09 · horas hábiles (RN-21).
   approvalSlaHours      Int         @default(24) @map("approval_sla_hours")
+  /// §58 · horas corridas desde el alta de un prospecto para el primer contacto.
+  leadFirstContactSlaHours Int      @default(24) @map("lead_first_contact_sla_hours")
   meddicMinToClosing    Int         @default(70) @map("meddic_min_to_closing")
   meddicMinToWin        Int         @default(80) @map("meddic_min_to_win")
   meddicMinToCommit     Int         @default(70) @map("meddic_min_to_commit")
@@ -310,6 +333,7 @@ model Organization {
   opportunities Opportunity[]
   activities    Activity[]
   documents     Document[]
+  leads         Lead[]
 
   @@index([countryCode, type])
   @@index([ownerId])
@@ -343,6 +367,7 @@ model Person {
   shares            PersonShare[]
   primaryFor        Opportunity[]
   meddicAssessments MeddicComponentAssessment[]
+  leads             Lead[]
 
   @@index([organizationId])
   @@index([committeeRoleId])
@@ -441,6 +466,8 @@ model Opportunity {
   approvals    DiscountApprovalRequest[]
   stageHistory StageTransition[]
   supportUsers OpportunitySupport[]
+  /// §58 · el prospecto del que nació, si nació de uno.
+  lead         Lead?
 
   @@index([ownerId, status])
   @@index([countryCode, status, expectedCloseDate])
@@ -728,6 +755,8 @@ model Activity {
 
   organizationId String? @map("organization_id")
   opportunityId  String? @map("opportunity_id")
+  /// §58 · colgada de un prospecto. Al convertir recibe además la oportunidad y conserva esto.
+  leadId         String? @map("lead_id")
   userId         String  @map("user_id")
 
   /// F-605 · sincronía con el calendario de M365.
@@ -739,11 +768,135 @@ model Activity {
   user         User          @relation(fields: [userId], references: [id])
   organization Organization? @relation(fields: [organizationId], references: [id])
   opportunity  Opportunity?  @relation(fields: [opportunityId], references: [id])
+  lead         Lead?         @relation(fields: [leadId], references: [id])
 
   @@index([userId, startsAt])
   @@index([opportunityId])
   @@index([organizationId])
+  @@index([leadId])
   @@map("activities")
+}
+
+// ═══════════════════════════════════════════════════════════ Prospectos · §58
+
+/// Un prospecto (lead): lo que Marketing capta, valida, califica y asigna, y
+/// ventas acepta, rechaza o convierte. Su etapa es un valor fijo (LeadStage).
+/// Al convertir se referencian la cuenta y la persona reutilizadas o creadas y
+/// la oportunidad abierta; nunca se copian datos.
+model Lead {
+  id              String      @id @default(cuid())
+  /// PRO-AAAA-NNNNN · consecutivo por año con LeadFolioCounter. Inmutable.
+  folio           String      @unique
+  contactName     String      @map("contact_name")
+  email           String?
+  phone           String?
+  jobTitle        String?     @map("job_title")
+  companyName     String      @map("company_name")
+  companyIndustry String?     @map("company_industry")
+  /// La oficina que lo trabaja: decide alcance, SLA y vendedores válidos.
+  countryCode     CountryCode @map("country_code")
+  channelId       String      @map("channel_id")
+  campaignId      String?     @map("campaign_id")
+  stage           LeadStage   @default(NUEVO)
+  /// 0–100, lo pone Marketing al calificar.
+  score           Int?
+  notes           String?
+
+  assignedToId String? @map("assigned_to_id")
+  createdById  String  @map("created_by_id")
+
+  stageEnteredAt    DateTime  @map("stage_entered_at")
+  /// createdAt + SLA del país (INV-05). El estado del SLA se calcula, no se guarda.
+  firstContactDueAt DateTime  @map("first_contact_due_at")
+  /// Primera vez en Contactado, o primera actividad hecha. Apaga el SLA.
+  contactedAt       DateTime? @map("contacted_at")
+  lastActivityAt    DateTime? @map("last_activity_at")
+  nextActivityAt    DateTime? @map("next_activity_at")
+
+  discardReasonId String? @map("discard_reason_id")
+  organizationId  String? @map("organization_id")
+  personId        String? @map("person_id")
+  opportunityId   String? @unique @map("opportunity_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  country       Country            @relation(fields: [countryCode], references: [code])
+  channel       LeadChannel        @relation(fields: [channelId], references: [id])
+  campaign      LeadCampaign?      @relation(fields: [campaignId], references: [id])
+  assignedTo    User?              @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  createdBy     User               @relation("LeadCreator", fields: [createdById], references: [id])
+  discardReason LeadDiscardReason? @relation(fields: [discardReasonId], references: [id])
+  organization  Organization?      @relation(fields: [organizationId], references: [id])
+  person        Person?            @relation(fields: [personId], references: [id])
+  opportunity   Opportunity?       @relation(fields: [opportunityId], references: [id])
+
+  activities  Activity[]
+  transitions LeadStageTransition[]
+
+  @@index([countryCode, stage])
+  @@index([assignedToId, stage])
+  @@index([email])
+  @@index([campaignId])
+  @@map("leads")
+}
+
+/// Historial de etapas del prospecto, incluidos retrocesos y reasignaciones.
+model LeadStageTransition {
+  id        String     @id @default(cuid())
+  leadId    String     @map("lead_id")
+  fromStage LeadStage? @map("from_stage")
+  toStage   LeadStage  @map("to_stage")
+  atDate    DateTime   @default(now()) @map("at_date")
+  byUserId  String     @map("by_user_id")
+
+  lead   Lead @relation(fields: [leadId], references: [id])
+  byUser User @relation(fields: [byUserId], references: [id])
+
+  @@index([leadId, atDate])
+  @@map("lead_stage_transitions")
+}
+
+/// Contador propio del folio PRO-, para no tocar el de las oportunidades.
+model LeadFolioCounter {
+  year       Int @id
+  lastNumber Int @default(0) @map("last_number")
+
+  @@map("lead_folio_counters")
+}
+
+/// Canal por el que entró: Web, LinkedIn, Redes sociales, Evento, Referido.
+model LeadChannel {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  active    Boolean        @default(true)
+  leads     Lead[]
+  campaigns LeadCampaign[]
+
+  @@map("lead_channels")
+}
+
+/// Campaña de marketing. Opcionalmente ligada a un canal.
+model LeadCampaign {
+  id        String       @id @default(cuid())
+  name      String       @unique
+  channelId String?      @map("channel_id")
+  active    Boolean      @default(true)
+  channel   LeadChannel? @relation(fields: [channelId], references: [id])
+  leads     Lead[]
+
+  @@map("lead_campaigns")
+}
+
+/// Motivo tipificado de descarte. Obligatorio al descartar.
+model LeadDiscardReason {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+  leads  Lead[]
+
+  @@map("lead_discard_reasons")
 }
 
 model Document {

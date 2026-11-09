@@ -14,7 +14,7 @@ import type { Session } from "@/lib/auth/permissions";
  * Es pura: recibe lo que el lector ya trajo. Ver la lista es otra pregunta y
  * vive en `lib/scope/usuarios`.
  */
-const TODOS_LOS_ROLES: readonly Role[] = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA"];
+const TODOS_LOS_ROLES: readonly Role[] = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA", "MARKETING"];
 const TODOS_LOS_PAISES: readonly CountryCode[] = ["MX", "CO", "CL"];
 const EQUIPO_DE_GERENCIA: readonly Role[] = ["VENDEDOR", "PREVENTA"];
 
@@ -30,6 +30,7 @@ export function rolesQueAdministra(session: Session): Role[] {
       return [...EQUIPO_DE_GERENCIA];
     case "VENDEDOR":
     case "PREVENTA":
+    case "MARKETING":
       return [];
   }
 }
@@ -44,6 +45,7 @@ export function paisesQueAdministra(session: Session): CountryCode[] {
       return [...session.countryCodes];
     case "VENDEDOR":
     case "PREVENTA":
+    case "MARKETING":
       return [];
   }
 }

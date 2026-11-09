@@ -77,6 +77,8 @@ export const USUARIOS = [
   { clave: "GD", name: "Gabriel Duarte", role: "VENDEDOR", paises: ["MX"] },
   { clave: "VD", name: "Valeria Domínguez", role: "VENDEDOR", paises: ["MX"] },
   { clave: "IC", name: "Iván Cruz", role: "PREVENTA", paises: ["MX"] },
+  // §58 · Marketing capta y califica prospectos; no ve oportunidades.
+  { clave: "MK", name: "Marketing Avattar", role: "MARKETING", paises: ["MX"] },
   // §15 pide «un DIRECCION y un ADMINISTRADOR» sin nombrarlos. Se crean como
   // cuentas de rol, no como personas inventadas.
   { clave: "DC", name: "Dirección Comercial", role: "DIRECCION", paises: ["MX", "CO", "CL"] },
@@ -224,6 +226,17 @@ export const MOTIVOS_PERDIDA = [
 export const ROLES_COMITE = [
   "Decisor económico", "Decisor técnico", "Campeón", "Influenciador",
   "Usuario final", "Compras", "Bloqueador",
+] as const;
+
+// §58 · catálogos de prospectos.
+export const CANALES_DE_PROSPECTO = ["Web", "LinkedIn", "Redes sociales", "Evento", "Referido"] as const;
+export const CAMPANAS_DE_PROSPECTO = [
+  { name: "Demo CRM Q4", canal: "Web" },
+  { name: "Expo TIC 2026", canal: "Evento" },
+] as const;
+export const MOTIVOS_DE_DESCARTE = [
+  "Sin presupuesto", "Sin interés", "No es el perfil", "Datos inválidos",
+  "Duplicado", "Competencia", "Otro",
 ] as const;
 
 export const ORIGENES = [

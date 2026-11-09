@@ -34,7 +34,8 @@ export type NombreDeIcono =
   | "ayuda"
   | "filtro"
   | "vinculo"
-  | "vinculoRoto";
+  | "vinculoRoto"
+  | "prospectos";
 
 const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
   // Tres columnas de alturas distintas: el kanban.
@@ -49,6 +50,14 @@ const TRAZOS: Record<NombreDeIcono, React.ReactNode> = {
       <circle cx="7.5" cy="7" r="2.75" />
       <path d="M2.5 16.5c0-2.9 2.2-5 5-5s5 2.1 5 5" />
       <path d="M13 4.6a2.75 2.75 0 0 1 0 4.8M15 11.8c1.6.8 2.5 2.4 2.5 4.7" />
+    </>
+  ),
+  // Una persona y un signo de más: alguien que todavía no es contacto.
+  prospectos: (
+    <>
+      <circle cx="8" cy="7" r="2.75" />
+      <path d="M3 16.5c0-2.9 2.2-5 5-5s5 2.1 5 5" />
+      <path d="M15.5 6v5M13 8.5h5" />
     </>
   ),
   // Una caja en isométrico.

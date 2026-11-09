@@ -24,7 +24,7 @@ import { money } from "@/lib/money";
  * (INV-09). La caché de permisos del proceso la invalida la acción que llama
  * aquí: este módulo no conoce la sesión de Next.
  */
-const ROLES: readonly Role[] = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA"];
+const ROLES: readonly Role[] = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA", "MARKETING"];
 
 /** Los permisos que llevan tope: la matriz solo admite `limite` en ellos. */
 export const PERMISOS_CON_TOPE: ReadonlySet<string> = new Set(["AUTORIZAR_DESCUENTO"]);

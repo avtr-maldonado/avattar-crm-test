@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { startTransition, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { elevarCapaDeAvisos } from "./avisos";
 import {
   SIN_CORRECCIONES,
   corregir,
@@ -211,7 +212,11 @@ export function Panel({
     const el = dialogo.current;
     if (!el) return;
 
-    if (abierto && !el.open) el.showModal();
+    if (abierto && !el.open) {
+      el.showModal();
+      // El diálogo acaba de entrar al top layer: los avisos vuelven a subir (§59).
+      elevarCapaDeAvisos();
+    }
     if (!abierto && el.open) el.close();
   }, [abierto]);
 

@@ -16,7 +16,7 @@ import { getUsuario } from "@/lib/scope/usuarios";
  */
 export type ResultadoDeUsuario = ResultadoAccion<{ id: string } | null>;
 
-const ROLES = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA"] as const;
+const ROLES = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA", "MARKETING"] as const;
 const PAISES = ["MX", "CO", "CL"] as const;
 type Pais = (typeof PAISES)[number];
 

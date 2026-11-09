@@ -27,6 +27,7 @@ export function organizationScope(session: Session): Prisma.OrganizationWhereInp
   switch (session.role) {
     case "VENDEDOR":
     case "PREVENTA":
+    case "MARKETING":
     case "GERENTE_PAIS":
     case "DIRECCION":
     case "ADMINISTRADOR":

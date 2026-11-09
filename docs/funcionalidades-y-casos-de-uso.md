@@ -28,6 +28,7 @@ sobre qué datos (`RN-14`). Toda lectura pasa por ese alcance antes que por cual
 | **Gerente de país** | Las oportunidades, actividades y objetivos de su oficina (puede llevar más de un país) y **todas las cuentas y personas** (§18) | Ve costo y utilidad, tabla de objetivos del equipo, Análisis; puede asignar propietario al crear y reasignar |
 | **Dirección** | Los tres países | Lo del gerente, más la pestaña de política comercial en Configuración |
 | **Administración** | Los tres países | Todo lo anterior, más editar catálogos, fijar objetivos, editar la matriz y administrar a cualquier usuario |
+| **Marketing** | Sus países | Prospectos: capta, valida, califica, asigna, descarta e importa. No ve oportunidades ni objetivos (§58); su menú es Prospectos, Actividades y Configuración (§59) |
 
 Desde el 29-oct-2026 **Gerencia administra a su equipo** (§55): da de alta y edita vendedores y preventas de sus países, y a nadie más.
 
@@ -99,6 +100,8 @@ y los contadores del menú; no sobre contactos, porque las cuentas no son de un 
 | CU-05.1 Contadores del menú | Cualquier rol | — | Oportunidades muestra las abiertas y Actividades las pendientes (vencidas y de hoy), **de la oficina activa y del alcance del rol**. Un cero no se pinta |
 | CU-05.2 Contraer el menú | Cualquier rol | Pulsa el icono a la derecha de «CRM» | Quedan solo los iconos, con el nombre al pasar el cursor y el contador como insignia. Se recuerda entre sesiones sin parpadeo al cargar |
 | CU-05.3 Pantalla angosta | Cualquier rol | Abre en tableta o teléfono | El menú lateral se vuelve una tira horizontal con los mismos rubros; el kanban apila las etapas como franjas |
+| CU-05.4 Secciones del menú (§59) | Cualquier rol | — | Tres secciones: **Marketing** (Prospectos), **Comercial** (Oportunidades, Contactos, Productos, Actividades, Objetivos, Análisis) y **Sistema** (Configuración). Cada rubro sale solo con su permiso; una sección sin rubros no se pinta. Marketing ve Prospectos, Actividades y Configuración |
+| CU-05.5 Avisos sobre un popup (§59) | Cualquier rol | Mueve un prospecto de etapa, o cualquier acción que avisa, con un panel o popup abierto | El aviso se ve encima del fondo oscurecido, no detrás |
 
 ### F-06 · Diagnóstico del despliegue
 
@@ -635,7 +638,50 @@ las dos tablas originales, de menor jerarquía. Los filtros globales mueven todo
 
 ---
 
-## 10. Lo que no está construido
+## 10. Prospectos · P-12 (§58)
+
+Marketing capta prospectos por canal (Web, LinkedIn, Redes sociales, Evento, Referido), los valida y
+califica, y los asigna a un vendedor, que los acepta o rechaza y los convierte en contacto con
+oportunidad. Nueve etapas fijas: Nuevo → En validación → Contactado → Calificado → Asignado →
+Aceptado / Rechazado → Convertido / Descartado. El alcance sigue al rol: el vendedor ve los asignados **a
+partir de Asignado** (lo que Marketing todavía valida o califica no es suyo aunque lleve su nombre, §59),
+Marketing y Gerencia los de sus países, Dirección y Administración todos. La oficina activa recorta.
+
+### F-45 · Ver los prospectos
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-45.1 Lista | Cualquier rol con `VER_PROSPECTOS` | Entra a Prospectos | Una fila por prospecto: contacto, empresa, canal, campaña, etapa como pastilla de color, puntaje, vendedor, ingreso, días, próxima actividad y SLA; menú «…» con solo lo que puede hacer. Por omisión se ven las etapas abiertas |
+| CU-45.2 Kanban | Ídem | Pulsa «Kanban» | Seis columnas por etapa abierta con la tarjeta del pipeline adaptada; al vendedor solo Asignado y Aceptado (§59); arrastrar cambia de etapa con la tabla de transiciones; soltar en Asignado sin vendedor lo dice |
+| CU-45.3 Indicadores | Ídem | — | Abiertos, sin asignar, sin seguimiento, SLA de primer contacto vencido y tasa de conversión, sumados de la lista acotada |
+| CU-45.4 Filtros y buscador | Ídem | Botón de filtros (cerrados al entrar), pastillas de etapa, canal, campaña, vendedor e ingreso; «Solo los míos»; buscador por contacto, empresa, correo o teléfono | Todo vive en la URL y recorta después del alcance; el filtro de etapa solo ofrece las etapas que el rol ve (§59) |
+| CU-45.5 Detalle en popup | Ídem | Pulsa cualquier parte de la fila, o la tarjeta del kanban | Popup en la URL (`p=`), con datos, origen, etapa, puntaje, SLA, y tres pestañas: actividades, información e historia (transiciones, asignaciones, descarte, conversión). Cierra con Escape, la ✕ o fuera |
+| CU-45.5b Editar desde el popup | `GESTIONAR_PROSPECTOS` | «Editar» junto a las pestañas | Panel con contacto, cargo, correo, teléfono, empresa, giro, canal, campaña, puntaje y notas. País y vendedor no: el país decide alcance y el vendedor se cambia con «Asignar» |
+| CU-45.6 Vacíos y carga | Ídem | Sin prospectos, o filtros que dejan fuera todo | Dos vacíos distintos; esqueleto al cargar |
+| CU-45.7 Exportar | Ídem | «Exportar» | CSV de lo que se ve, con los mismos filtros y alcance |
+
+### F-46 · Captar y gestionar prospectos
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-46.1 Nuevo prospecto | `GESTIONAR_PROSPECTOS` (Marketing, Gerencia, Dirección, Administración) | Contacto, cargo, correo, teléfono, empresa, giro, país, canal, campaña, puntaje, notas y, si se sabe, vendedor | Folio `PRO-AAAA-NNNNN`, etapa Nuevo (Asignado si trae vendedor), SLA de primer contacto del país. Un rechazo no borra lo tecleado |
+| CU-46.2 Importar CSV | Ídem | «Importar», elige el archivo | Primero la revisión fila por fila (lista, o qué falta: canal, campaña, país, correo, duplicado contra la base o dentro del archivo); después «Importar N válidos» crea solo esos, con bitácora del conteo. Plantilla descargable |
+| CU-46.3 Validar y calificar | Ídem | Mueve entre Nuevo, En validación, Contactado y Calificado (kanban o «Mover» del detalle) | Libre en los dos sentidos. Llegar a Contactado sella el primer contacto y apaga el SLA |
+| CU-46.4 Asignar | Ídem | «Asignar» en la fila, en el detalle, o marca varios y «Asignar vendedor» | Solo vendedores o gerentes activos del país; pasa a Asignado; bitácora por prospecto. Rechazado se reasigna |
+| CU-46.5 Descartar | Quien gestiona, o el asignado | «Descartar» y el motivo del catálogo | Terminal, con bitácora. Sin motivo no se descarta |
+| CU-46.6 Registrar actividad | Quien gestiona, o el asignado | «Nueva actividad» en el detalle, o desde el menú de la fila | El mismo composer, en la zona del país del prospecto. Una hecha sella el primer contacto y, si estaba en Nuevo o En validación, lo pasa a Contactado. Sin calendario de Microsoft en esta entrega |
+
+### F-47 · Decidir y convertir
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-47.1 Aceptar o rechazar | El vendedor asignado, o quien gestiona | Desde Asignado, mueve a Aceptado o Rechazado | Rechazado vuelve a Marketing: solo se reasigna o se descarta |
+| CU-47.2 Convertir (§59) | `CONVERTIR_PROSPECTO` (ventas y Gerencia; Marketing no) | «Convertir a oportunidad»: tres bloques en un envío. **Cuenta**: si ya existe una con ese nombre viene elegida («existente»); si no, nueva con nombre y giro prellenados, tipo y ciudad por completar; se puede elegir otra o crearla. **Contacto**: con cuenta existente, sus contactos en un desplegable con la persona del correo del prospecto elegida si existe, o «Nuevo contacto»; nuevo: nombre, cargo, correo, teléfono y rol del comité prellenados. **Oportunidad**: nombre sugerido, pipeline del país, etapa de entrada, importe, cierre, tipo; propietario solo para quien reasigna | Crea lo nuevo con el vendedor como propietario y reutiliza lo elegido; una cuenta nueva con nombre de una existente se rechaza con el dato; un contacto tiene que ser de la cuenta elegida. Abre la oportunidad con la misma compuerta del alta; las actividades pasan a la oportunidad; el prospecto queda Convertido —sale de la lista y del kanban por omisión— y se navega a la oportunidad. Desde Aceptado el asignado o quien gestiona; desde Calificado o Asignado solo quien gestiona |
+| CU-47.3 Terminales | Cualquiera | Intenta mover un Convertido o Descartado | No se mueve; el detalle lleva a la oportunidad si la hay |
+
+---
+
+## 11. Lo que no está construido
 
 | Funcionalidad | Estado | Nota |
 |---|---|---|

@@ -45,6 +45,7 @@ export function personScope(session: Session): Prisma.PersonWhereInput {
       };
     case "VENDEDOR":
     case "PREVENTA":
+    case "MARKETING":
       return {
         ...base,
         OR: [{ ownerId: session.userId }, compartidaConmigo, deCuentaConOportunidad],

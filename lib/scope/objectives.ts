@@ -17,6 +17,7 @@ export function objectiveScope(session: Session): Prisma.ObjectiveWhereInput {
   switch (session.role) {
     case "VENDEDOR":
     case "PREVENTA":
+    case "MARKETING":
       return { userId: session.userId };
     case "GERENTE_PAIS":
       return { countryCode: { in: session.countryCodes } };
