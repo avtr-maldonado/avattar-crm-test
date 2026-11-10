@@ -237,6 +237,7 @@ async function TabCatalogos() {
           nombre: t.name,
           activo: t.active,
           usos: t._count.activities,
+          marca: t.hasTranscript ? "Transcripción" : undefined,
         }))}
       />
       <Catalogo

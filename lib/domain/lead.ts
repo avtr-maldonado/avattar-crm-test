@@ -5,7 +5,7 @@ import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import type { LeadDetail } from "@/lib/scope/leads";
 import { iniciales } from "@/lib/etiquetas";
-import type { RegistroDeActividad, EdicionDeActividad } from "./activity";
+import { transcripcionValida, type RegistroDeActividad, type EdicionDeActividad } from "./activity";
 import { convierteProspecto, decideComoVentas, gestionaProspecto } from "./leadAccess";
 import { crearOportunidad } from "./opportunity";
 import { nextFolioDeProspecto } from "./leadFolio";
@@ -515,6 +515,8 @@ export async function registrarActividadDeProspecto(session: Session, lead: Lead
   if (input.durationMin != null && input.durationMin <= 0) return falla("VALIDACION", { campo: "fin", mensaje: "La hora de fin tiene que ser posterior a la de inicio." });
   const responsable = await responsableValido(input.userId ?? session.userId, lead.countryCode);
   if (!responsable.ok) return responsable;
+  const transcripcion = await transcripcionValida(input.typeId, input.transcript);
+  if (!transcripcion.ok) return transcripcion;
 
   const hecha = input.hecha ?? true;
   const cuando = input.cuando ?? new Date();
@@ -525,6 +527,7 @@ export async function registrarActividadDeProspecto(session: Session, lead: Lead
         subject,
         notes: input.notes?.trim() || null,
         outcome: input.outcome?.trim() || null,
+        transcript: transcripcion.datos,
         startsAt: cuando,
         durationMin: input.durationMin ?? null,
         completedAt: hecha ? cuando : null,
@@ -541,8 +544,10 @@ export async function registrarActividadDeProspecto(session: Session, lead: Lead
 
 export async function editarActividadDeProspecto(session: Session, lead: LeadDetail, activityId: string, cambios: EdicionDeActividad): Promise<ResultadoAccion<{ id: string }>> {
   if (!puedeTocarActividades(session, lead)) return falla("AUTORIZACION", "Ese prospecto no está a tu cargo.");
-  const actual = await prisma.activity.findFirst({ where: { id: activityId, leadId: lead.id, deletedAt: null }, select: { id: true, completedAt: true, startsAt: true } });
+  const actual = await prisma.activity.findFirst({ where: { id: activityId, leadId: lead.id, deletedAt: null }, select: { id: true, typeId: true, transcript: true, completedAt: true, startsAt: true } });
   if (!actual) return falla("AUTORIZACION", "No encontramos esa actividad en este prospecto.");
+  const transcripcion = await transcripcionValida(cambios.typeId ?? actual.typeId, cambios.transcript === undefined ? actual.transcript : cambios.transcript);
+  if (!transcripcion.ok) return transcripcion;
   if (cambios.subject !== undefined && cambios.subject.trim().length < ASUNTO_MINIMO) return falla("VALIDACION", { campo: "subject", mensaje: "Escribe de qué se trata la actividad." });
   if (cambios.userId) {
     const r = await responsableValido(cambios.userId, lead.countryCode);
@@ -558,6 +563,7 @@ export async function editarActividadDeProspecto(session: Session, lead: LeadDet
         ...(cambios.subject !== undefined ? { subject: cambios.subject.trim() } : {}),
         ...(cambios.notes !== undefined ? { notes: cambios.notes?.trim() || null } : {}),
         ...(cambios.outcome !== undefined ? { outcome: cambios.outcome?.trim() || null } : {}),
+        transcript: transcripcion.datos,
         ...(cambios.durationMin !== undefined ? { durationMin: cambios.durationMin } : {}),
         ...(cambios.userId ? { userId: cambios.userId } : {}),
         startsAt: cuando,

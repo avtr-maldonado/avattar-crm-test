@@ -197,6 +197,9 @@ export const TIPOS_ACTIVIDAD = [
   "Evento o feria",
 ] as const;
 
+/** §60 · los tipos cuya actividad admite transcripción. */
+export const TIPOS_CON_TRANSCRIPCION: ReadonlySet<string> = new Set(["Llamada", "Videollamada"]);
+
 /** 9 tipos de documento; `isContract` en los dos que satisfacen la compuerta. */
 export const TIPOS_DOCUMENTO = [
   { name: "Propuesta comercial", isContract: false },

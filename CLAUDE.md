@@ -111,6 +111,9 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     por rol: Gerencia ve a quienes operan en sus países; filtros de estado y rol después → §55),
                     cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
                     bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta),
+                    insights (listInsights: las recomendaciones de una oportunidad al alcance → §61) · mcp (los lectores del
+                    servidor MCP: buscarOportunidades, actividadesDeOportunidad con cursor, actividadPorId, actividadesPorIds,
+                    etapas y usuarios por nombre; nunca costo → §61),
                     analisis (P-09: ganadas con cotización vigente y actividades hechas dentro de un rango de fechas
                     —el lapso, §45—, abiertas con etapa y MEDDIC, objetivos de varios países; costo solo con VER_COSTO),
                     people (personScope: propietario, compartidas y cuentas con oportunidad → §29;
@@ -146,21 +149,33 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     filtrarAgenda: estado, tipo y oportunidad recortan en memoria después del alcance → §55;
                     semanaElegida: el lunes que pide la URL, o el de hoy → §44; relojDeAgenda: «hoy» empieza a la
                     medianoche de la zona, lo usa también la pestaña Actividades del detalle → §49).
+                    insightFuentes (validarFuentes y citaAparece: cada actividad citada existe al alcance, es de esa
+                    oportunidad y contiene la cita → §61),
                     Servicios con transacción:
+                    insight (guardarRecomendacion: esquema, alcance, propietario o Gerencia, fuentes; fila nueva por guardado
+                    y GUARDAR_RECOMENDACION → §61),
                     opportunity (cambiarFechaGanada: la única corrección de una cerrada, con bitácora → §55),
                     lead (crear, editar, cambiarEtapa, asignar masivo, descartar con motivo, actividades del prospecto,
                     importar, convertir: cuenta y persona reutilizadas o creadas, oportunidad por crearOportunidad,
                     actividades re-apuntadas → §58),
                     activity (registrar y editar; responsable, duración y calendario por
-                    parámetro), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
+                    parámetro; transcripcionValida: la transcripción solo en tipos con `hasTranscript`,
+                    la comparte el prospecto → §60), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
                     product, quoteService, milestoneService, meddicService, document,
                     usuario, objetivo (fijar cuota), permisos (cambiarPermiso: la matriz de §5.2 editable por
                     Administración, nunca su propia columna → §40; la tabla se abre en lectura y la edición
                     se enciende con un botón → §43)
+lib/mcp/            el servidor MCP (§61): esquemas (Zod, fuente única: JSON Schema de entrada y salida estricta),
+                    cursor (opaco; el corrupto se rechaza), dto (puro, nunca costo ni margen), resultado (ResultadoAccion →
+                    respuesta de herramienta con qué hacer), auth (bearer → getClaims con JWKS → client_id obligatorio →
+                    sesionDesdeClaims; a Supabase solo se le piden openid email porque rechaza crm:*; crm:read/crm:write se
+                    exigen solo si el token los trajera, si no decide la matriz; desafío RFC 9728),
+                    alcances (etiquetas del consentimiento), servidor (cinco herramientas, registro de cada llamada)
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions · las reglas puras de qué
                     aviso se apaga y cuándo: corregir/problemaPendiente (al teclear) y darPorVisto (al cerrar el
                     panel → §51)
-lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red;
+lib/auth/           session (getSessionResult con React.cache, requireSession; identidad con getClaims, sin red) ·
+                    perfil (sesionDesdeClaims: de los claims al perfil y sus permisos, lo comparten la app y el MCP → §61;
                     permisos por rol en caché de proceso → invalidarPermisosEnCache al editar RolePermission;
                     oficinaActiva y menuColapsado leen las cookies de preferencia) · permissions (can)
 lib/preferencias.ts nombres y valores de las cookies crm-oficina y crm-menu (puro; lo importa también el cliente)
@@ -177,7 +192,8 @@ lib/filters/        definición y parseo de filtros → INV-10 · analisis.ts: l
                     lapso de Análisis —año fiscal, trimestre fiscal, mes o rango— en la URL como anio=, q=, mes=,
                     desde=/hasta=; rangoDeLapso, etiquetaDeLapso, enElLapso, anioFiscalDeLapso, trimestresDelLapso:
                     la cuota solo se compara con un año o un trimestre fiscal completos)
-lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada
+lib/audit/          auditedTransaction → INV-09. AuditAction es una unión cerrada · mcp (registrarLlamadaMcp: el registro de
+                    acceso de cada herramienta, fuera de la transacción, nunca tumba la respuesta → §61)
 lib/supabase/       clientes: server (anon + cookies), client, service_role (solo Storage/admin)
 components/ui/      primitivas del sistema de diseño · Notificaciones + avisos (el Toaster dentro de una capa `popover`;
                     `elevarCapaDeAvisos` la vuelve a mostrar dos frames después antes de cada aviso y al abrir un Panel, para
@@ -231,7 +247,8 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     VacioDePipeline (§46: dos vacíos; sin nada al alcance no se ofrece «Limpiar filtros») ·
                     NuevaOportunidad (`organizacionInicial`: el mismo modal abre desde la ficha de cuenta con la
                     cuenta puesta → §46; estadoDeAlta.estadoInicialCon)
-                    oportunidad: ComposerDeActividad (nueva o edición; sin `opportunityId` nace con el campo «Oportunidad»
+                    oportunidad: ComposerDeActividad (nueva o edición; «Transcripción» solo cuando el tipo elegido
+                    la admite → §60; sin `opportunityId` nace con el campo «Oportunidad»
                     y toma zona y responsables del país de la elegida → §55; agendar por omisión, «marcar como hecha»
                     en el pie, tipos en botones con icono y el resto en «Otro…», fecha + inicio + fin en la zona
                     de la oportunidad, responsable; estadoDeActividad es su reductor puro) ·
@@ -287,10 +304,14 @@ app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.t
                     /configuracion es de todo rol y cada pestaña decide quién la ve; /admin redirige → §55.
                     /prospectos (VER_PROSPECTOS): page + acciones + datos.ts (aDatosDeProspecto, historiaDe) + loading;
                     /prospectos/exportar y /prospectos/plantilla son Route Handlers que devuelven CSV → §58
-app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción)
+app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción),
+                    oauth/consent (el consentimiento OAuth del MCP: cliente, alcances en español, Autorizar/Rechazar → §61)
+app/mcp/            POST: el servidor MCP (bearer → sesión → McpServer por request, sin estado); GET y DELETE 405 → §61
+app/.well-known/    oauth-protected-resource (y /mcp): metadatos RFC 9728, públicos y con CORS → §61
 app/salud/          GET público de diagnóstico: ¿base alcanzable? ¿qué variables existen? (lib/domain/salud)
 app/error.tsx       lo que ve el usuario ante una excepción no atrapada: en español y con el digest
-middleware.ts       refresca la sesión de Supabase en cada request. NO autoriza
+middleware.ts       refresca la sesión de Supabase en cada request. NO autoriza. Deja pasar sin cookie /mcp, /.well-known/
+                    y /oauth/consent (§61)
 tests/arquitectura  verifica INV-01 leyendo el código · tests/integracion corre contra la base
 ```
 
@@ -339,6 +360,10 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   agendada, no hay nada que preguntar. `lastActivityAt` solo avanza con actividades hechas. **Al editar
   una actividad y marcarla hecha tampoco se pregunta** (§49): la pregunta solo vive al registrar una
   hecha nueva.
+- **La transcripción la admite el tipo, no el nombre** (decisiones §60, regla nueva que no está en el
+  spec): `ActivityType.hasTranscript` (Llamada y Videollamada) decide si el composer la ofrece y si el
+  servicio la acepta; en otro tipo es `VALIDACION` con el campo. Se guarda tal cual, para que un MCP la
+  lea después, y nunca viaja al calendario.
 - **Las horas de una actividad son de pared en la zona del país de la oportunidad** (decisiones
   §20): `startsAt` es instante, la zona sale de `Country.timezone`, y con ella se captura, se lee
   (pestaña y agenda) y se manda al calendario. Nunca la zona del servidor ni la del navegador. El
@@ -357,6 +382,13 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   desde Asignado** (`etapasQueVe`, §59). El SLA de primer contacto es de la política comercial
   (`leadFirstContactSlaHours`) y su estado se calcula. Descartar exige motivo del catálogo. Convertido y
   Descartado son terminales.
+- **El MCP corre con la identidad del token, no con RLS ni con service_role** (decisiones §61, módulo
+  nuevo que no está en el spec): no hay políticas RLS (deny-all de respaldo), así que el bearer OAuth de
+  Supabase Auth se convierte en la `Session` de siempre (`sesionDesdeClaims`) y cada herramienta lee por
+  `lib/scope`. **Costo, utilidad y margen nunca salen por el MCP**, ni con `VER_COSTO`. Escribe solo
+  `guardar_recomendacion`: propietario o Gerencia, cada fuente citada es de esa oportunidad y la cita
+  aparece textual; cada guardado es una fila nueva con `GUARDAR_RECOMENDACION`. Toda llamada queda en
+  `mcp_tool_calls`. Los esquemas Zod de `lib/mcp/esquemas.ts` son la fuente única y la salida es estricta.
 - **Gerencia administra a su equipo, y nada más** (decisiones §55, regla nueva que no está en el spec):
   `ADMINISTRAR_USUARIOS` lo tiene también `GERENTE_PAIS`, y `administraUsuario` lo acota a vendedores y
   preventas de sus países. Ni otro rol ni otro país, ni al editar: se comprueba a quien es hoy y a quien
@@ -446,8 +478,14 @@ de estado, tipo, oportunidad y lapso; y Administración pasó a ser **Configurac
 **Gerencia administra a su equipo** (vendedores y preventas de sus países) y Usuarios se filtra por estado y rol.
 **Prospectos** desde el 9-nov-2026 (§58): rol Marketing, pipeline propio de nueve etapas fijas, alcance por rol,
 lista con asignación masiva, kanban, detalle lateral, SLA de primer contacto, conversión que reutiliza cuenta y
-persona, importación y exportación CSV. Migraciones `rol_marketing` y `prospectos` aplicadas en desarrollo;
-en producción pendientes de aprobación. **Cuatro ajustes** el mismo día (§59): el vendedor ve sus prospectos
+persona, importación y exportación CSV. Migraciones `rol_marketing`, `prospectos`,
+`transcripcion_de_actividad` (§60, 10-nov) y `mcp_insights` (§61, 10-nov) aplicadas en desarrollo; en producción pendientes de aprobación.
+**Servidor MCP remoto** desde el 10-nov-2026 (§61): OAuth 2.1 sobre Supabase Auth con consentimiento en el CRM,
+cuatro herramientas de lectura acotadas y `guardar_recomendacion` con fuentes verificadas; migración `mcp_insights`
+aplicada en desarrollo; el servidor OAuth de Supabase está encendido en desarrollo y **rechaza los alcances `crm:*`**:
+solo se le piden `openid email` y la puerta es la matriz; falta desplegar la rama en `avattar-crm-test`.
+**Transcripción opcional en llamadas y videollamadas** desde el 10-nov-2026 (§60): el tipo la admite por
+dato del catálogo, el composer la pide solo entonces, la fila la pliega y nunca va al calendario. **Cuatro ajustes** el mismo día (§59): el vendedor ve sus prospectos
 desde Asignado; convertir pide cuenta, contacto y oportunidad en tres bloques prellenados; Prospectos va en la
 sección Marketing del menú y Marketing solo ve Prospectos y Actividades; los avisos quedan encima de los popups. **Un panel que se reabre empieza de cero** (§51, 12-oct): `Panel` remonta sus hijos en cada apertura y
 el resultado de la acción se descarta al cerrar, así que ningún formulario vuelve con lo que no se guardó ni

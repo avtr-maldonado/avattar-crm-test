@@ -3049,3 +3049,147 @@ corren antes que los del padre y el panel habría quedado debajo del popup del p
 panel y el tipo de entrada del servicio (la versión automática vive en la historia); la capa de
 avisos es un `div` con atributo y una función. **Pendiente:** lo de §58 (Graph para prospectos,
 campañas editables, plan de pruebas, Marketing en PROD, migraciones de §58 en PROD).
+
+## 60. Transcripción opcional en llamadas y videollamadas (10 de noviembre de 2026)
+
+**Decisión del negocio:** una llamada o videollamada puede llevar su transcripción, si el vendedor la
+tiene y quiere pegarla. Es opcional. No está en el spec. El motivo es posterior al CRM: un MCP leerá
+esas transcripciones para que una IA las analice; por eso se guardan **tal cual**, sin resumir ni
+tocar, y la estructura queda lista aunque el análisis todavía no exista.
+
+**Qué se construyó.** Dos columnas y una regla:
+
+- `ActivityType.hasTranscript` dice si el tipo la admite. Es **dato del catálogo, no nombre**
+  (INV-13, el mismo molde que `DocumentType.isContract`): Llamada y Videollamada nacen con la marca
+  en la migración y en la semilla; renombrarlos no la pierde y Administración puede verla en
+  Configuración («Transcripción» junto al tipo). Marcar otro tipo es un `UPDATE`, no código.
+- `Activity.transcript` guarda el texto, recortado de espacios. Vacío es «sin transcripción».
+- `transcripcionValida(typeId, transcript)` en `lib/domain/activity.ts` es la regla, y la comparten
+  el servicio de la oportunidad y el del prospecto: texto en un tipo que no la admite es
+  `VALIDACION` en el campo `transcript` con el nombre del tipo, y no se escribe nada. Al editar se
+  valida contra el tipo que **quedará**: cambiar una llamada con transcripción a «Correo enviado»
+  exige quitarla antes.
+- El composer muestra «Transcripción» solo cuando el tipo elegido la admite; al cambiar a otro
+  desaparece. La edición abre con la guardada. En la pestaña Actividades, en la agenda y en el
+  prospecto la fila la lleva **plegada** (`<details>`): es larga y lo que se busca en la fila es el
+  asunto.
+- **Nunca va al calendario de Microsoft 365.** El evento sigue llevando asunto y notas (F-605); la
+  transcripción es del CRM.
+
+**Qué no se decidió.** Quién puede leer la transcripción es hoy quien alcanza la actividad, sin
+permiso aparte; si el negocio la considera sensible, es un permiso nuevo y un selector menos en los
+lectores. Los lectores de listas la traen entera porque la fila la ofrece plegada y el lápiz la
+necesita para editar; si las listas se vuelven pesadas, se mueve a un lector propio por actividad.
+El análisis por IA (MCP) es otro incremento: aquí solo se captura.
+
+**Costo de volver:** una migración que quita dos columnas y un campo en el composer.
+
+## 61. Servidor MCP remoto: el CRM como herramienta de un cliente de IA (10 de noviembre de 2026)
+
+**Decisión del negocio:** cada vendedor conecta su propio cliente de IA (Claude, ChatGPT, Copilot,
+Claude Code) al CRM, le pide que analice una oportunidad con sus actividades y transcripciones (§60),
+y guarda la recomendación en la base con sus fuentes. No está en el spec. Diseño en
+`docs/superpowers/specs/2026-11-10-mcp-remoto-design.md`.
+
+**Dos premisas del encargo que el repo no cumplía, y cómo se resolvieron.**
+
+- El encargo pedía correr cada herramienta «con el cliente de Supabase bajo la sesión del usuario,
+  para que las RLS actuales apliquen». **No hay políticas RLS**: todas las tablas tienen RLS
+  habilitado y forzado y ninguna `CREATE POLICY`; es deny-all de respaldo. La autorización vive en
+  `lib/scope` (INV-01) y el invariante de columnas (INV-02) no se expresa en RLS. Se tomó el camino
+  A, aprobado: el token OAuth dice **quién es**, se arma la `Session` de siempre
+  (`sesionDesdeClaims`, extraída de `getSessionResult` sin cambiar su comportamiento) y cada
+  herramienta llama a los lectores existentes. Ninguna corre con más alcance que el usuario del
+  token; nunca `service_role`. Escribir políticas RLS por rol sería una segunda fuente de verdad de
+  autorización y no podría ocultar el costo: queda descartado, no pospuesto.
+- Los ids son `cuid`, no `uuid`: `source_activity_ids` es `text[]`.
+
+**Qué se construyó.**
+
+- **Autorización.** Supabase Auth es el servidor OAuth 2.1 (PKCE y registro dinámico de clientes,
+  que Claude, ChatGPT y Copilot exigen) y el CRM el *resource server*. El consentimiento lo
+  hospeda el CRM en `/oauth/consent` (sesión de Entra ID de siempre; sin perfil, a `/sin-acceso`),
+  con los alcances explicados en español (`lib/mcp/alcances.ts`). Los metadatos RFC 9728 están en
+  `/.well-known/oauth-protected-resource` (y `…/mcp`); `/mcp` responde 401 con `WWW-Authenticate`
+  hacia ellos. El middleware deja pasar `/mcp`, `/.well-known/` y `/oauth/consent` sin cookie: ahí
+  la identidad es el bearer, o la pantalla conserva su consulta.
+- **Token → sesión** (`lib/mcp/auth.ts`): JWT ES256 verificado con el JWKS del proyecto
+  (`getClaims(jwt)`, en local), claim `client_id` obligatorio (un token de sesión del navegador no
+  entra), perfil por `sesionDesdeClaims`. 401 sin token, inválido, vencido o sin `client_id`; 403
+  con identidad pero sin perfil.
+- **Alcances.** **Supabase Auth rechaza alcances propios** (verificado el 10-nov-2026 con el
+  servidor OAuth encendido en desarrollo: `scopes_supported` del issuer es `openid profile email
+  phone offline_access`, el registro dinámico acepta un cliente pero ignora su `scope`, y
+  `/oauth/authorize?scope=crm:read` vuelve con `invalid_request · unsupported scope: crm:read`).
+  Por eso **al servidor de autorización solo se le piden `openid email`** (`ALCANCES_DEL_SERVIDOR`):
+  son los que están en los metadatos del recurso y en el desafío del 401; anunciar `crm:*` haría
+  fallar la autorización de todo cliente que los pidiera. `crm:read` y `crm:write` siguen siendo la
+  unidad en que cada herramienta declara lo que necesita: si un token los trajera, se exigen; como
+  no los trae, **la puerta es la matriz de permisos y el alcance por rol**, que son la autorización
+  real, y el registro de llamadas lo deja escrito (`scopes: []`). La pantalla de consentimiento dice
+  entonces, fija, qué podrá hacer el cliente en el CRM (consultar y guardar recomendaciones, con lo
+  que la sesión permita) y después los alcances de identidad que Supabase pide.
+- **Transporte.** `@modelcontextprotocol/sdk` 1.32.2, transporte web estándar sin estado en
+  `app/mcp/route.ts`: un `McpServer` por request, respuesta JSON, sin Redis. `GET` y `DELETE`
+  responden 405. Se descartó `mcp-handler`: su 1.x fija versiones viejas del SDK y su 2.x exige
+  zod 4.
+- **Datos.** `OpportunityInsight` (`opportunity_insights`): cada guardado es **una fila nueva**,
+  nunca `update`; payload validado, `sourceActivityIds`, modelo, quién y cuándo. `McpToolCall`
+  (`mcp_tool_calls`): registro de acceso de **toda** llamada, también rechazadas y con error
+  (`OK | RECHAZADO | ERROR`, parámetros, oportunidad, duración, mensaje devuelto), fuera de la
+  transacción y sin tumbar la respuesta si falla. `GUARDAR_RECOMENDACION` en `AuditLog` en la
+  misma transacción que el insert (INV-09); la Bitácora lo muestra como «Recomendación guardada»
+  en el grupo de cambios. Migración `20261110120000_mcp_insights`, RLS forzado sin políticas como
+  las demás. Lectores: `lib/scope/insights.ts` (`listInsights`, con el alcance de la oportunidad) y
+  `lib/scope/mcp.ts` (un lector por «pantalla», y el MCP es una).
+- **Herramientas** (`lib/mcp/servidor.ts`; esquemas Zod en `lib/mcp/esquemas.ts` como fuente única:
+  de ahí el SDK deriva el JSON Schema, valida la entrada y **valida la salida con esquemas estrictos**,
+  así que una clave de costo que se colara haría fallar la respuesta antes de salir):
+  `buscar_oportunidades` (etapa por nombre, responsable por nombre o correo, importes, rango con
+  `campo_fecha` obligatorio, texto; 25 por página, cursor opaco; reusa `parseFilters` + `toWhere`
+  del pipeline), `obtener_oportunidad` (ficha, MEDDIC, hitos, banderas calculadas, total de
+  actividades, recomendaciones previas), `listar_actividades` (descendente, cursor por fecha e id,
+  extracto de 200 caracteres, nunca el contenido), `obtener_nota` (notas, resultado y transcripción
+  completas) y `guardar_recomendacion`. **Costo, utilidad y margen nunca salen por el MCP**, ni con
+  `VER_COSTO`: los DTO de `lib/mcp/dto.ts` no los toman y una prueba lo verifica.
+- **`guardar_recomendacion`** (`lib/domain/insight.ts`, devuelve `ResultadoAccion`): el servidor
+  valida, no el modelo. Esquema (riesgos y huecos 0–10, acciones 1–10, descripción ≤ 300, cita ≤ 500,
+  resumen ≤ 600; `estado = { etiqueta: SALUDABLE | EN_RIESGO | CRITICA | SIN_INFORMACION, resumen }`),
+  oportunidad al alcance («no existe o no está a tu alcance», sin confirmar cuál), **permiso de
+  escritura: propietario o Gerencia** (`puedeEditarOportunidad`; Preventa lee y no escribe), y las
+  fuentes (`lib/domain/insightFuentes.ts`, puro): cada `activity_id` citado existe al alcance, es de
+  **esa** oportunidad (si es de otra al alcance, dice de cuál), y **la cita aparece textual** en
+  asunto, notas, resultado o transcripción (espacios normalizados, sin distinguir mayúsculas). Todos
+  los problemas juntos, con índice (`riesgos.2.fuente.activity_id`) y qué hacer distinto.
+- **Contrato de error hacia el agente** (`lib/mcp/resultado.ts`): `isError` con un texto que dice
+  qué falló, un problema por línea, y cierra con qué hacer. Una excepción se registra como `ERROR`
+  y devuelve un mensaje genérico sin detalles. Un cursor corrupto se rechaza, no reinicia la
+  página en silencio.
+- **Pruebas.** Puras (esquemas, cursor, DTO contra los esquemas de salida y sin costo, fuentes,
+  texto de falla, alcances) y de integración: servicio con sus rechazos, lectores por alcance y
+  paginación, bearer con tokens ES256 firmados en la prueba (`tests/integracion/mcp-tokens.ts`,
+  llaves inyectadas con `usarLlavesDePrueba`, que solo existe bajo `NODE_ENV=test`), y la ruta de
+  punta a punta con JSON-RPC (`tools/list`, `tools/call`, 401 con desafío, alcance insuficiente,
+  registro de llamadas, metadatos).
+
+**Qué no se decidió.** Dónde se **ve** una recomendación en la interfaz: hoy solo en la Bitácora
+como evento; la pestaña «Recomendaciones» es otro incremento y `listInsights` ya está. Quién revoca
+un cliente: en el panel de Supabase (Authentication → OAuth Server), no en el CRM. Límites de tasa:
+no hay; el registro de llamadas permite medir antes de decidir.
+
+**Qué falta para usarlo.** (1) ~~Encender *OAuth 2.1 Server* en el proyecto de Supabase~~ Hecho en
+desarrollo el 10-nov-2026 (Authentication → OAuth Server: encendido, registro dinámico permitido,
+ruta de autorización `/oauth/consent` sobre el Site URL `https://avattar-crm-test.vercel.app`, sin
+barra final porque Supabase concatena); en producción con aprobación. (2) ~~Verificar los alcances~~
+Verificado: no viajan (arriba). (3) Desplegar esta rama en `avattar-crm-test`: el consentimiento vive
+donde apunta el Site URL, y hoy ese despliegue no tiene `/oauth/consent`. El servidor MCP puede correr
+en otro origen, incluso local: el token lo verifica contra el mismo JWKS. (4) `MCP_RESOURCE_URL` con
+el origen público si el servidor corre detrás de un proxy. (5) Aplicar la migración en producción
+junto con `rol_marketing`, `prospectos` y `transcripcion_de_actividad`. El cliente de prueba que
+verificó los alcances se registró y se borró desde la terminal con la API de administración.
+
+**Costo de volver:** una migración que quita dos tablas y un enum, un valor de `AuditAction` y un
+tipo de evento de bitácora, la carpeta `lib/mcp`, `lib/scope/mcp.ts`, `lib/scope/insights.ts`,
+`lib/domain/insight*.ts`, `lib/audit/mcp.ts`, `lib/auth/perfil.ts` (volvería a `session.ts`), dos
+rutas, la pantalla de consentimiento y tres excepciones del middleware. El flujo existente no
+cambió.

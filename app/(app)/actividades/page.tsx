@@ -362,6 +362,7 @@ function EditorDeActividad({ a, edicion }: { a: ActividadDeTablero; edicion: Edi
     subject: a.subject,
     notes: a.notes,
     outcome: a.outcome,
+    transcript: a.transcript,
     startsAt: a.startsAt.toISOString(),
     durationMin: a.durationMin,
     hecha: a.completedAt != null,

@@ -201,6 +201,9 @@ model User {
   assignedLeads        Lead[]                      @relation("LeadAssignee")
   createdLeads         Lead[]                      @relation("LeadCreator")
   leadTransitions      LeadStageTransition[]
+  /// §61 · recomendaciones y llamadas que hizo desde su cliente de IA (MCP).
+  insights             OpportunityInsight[]
+  mcpToolCalls         McpToolCall[]
 
   @@index([role, active])
   @@map("users")
@@ -468,6 +471,8 @@ model Opportunity {
   supportUsers OpportunitySupport[]
   /// §58 · el prospecto del que nació, si nació de uno.
   lead         Lead?
+  /// §61 · recomendaciones guardadas desde un cliente de IA (MCP).
+  insights     OpportunityInsight[]
 
   @@index([ownerId, status])
   @@index([countryCode, status, expectedCloseDate])
@@ -752,6 +757,10 @@ model Activity {
   durationMin Int?      @map("duration_min")
   completedAt DateTime? @map("completed_at")
   outcome     String?
+  /// §60 · la transcripción de una llamada o videollamada, si quien la hizo la
+  /// tiene. Solo en tipos con `ActivityType.hasTranscript`; nunca va al
+  /// calendario. Es lo que un MCP leerá después para que la IA la analice.
+  transcript  String?
 
   organizationId String? @map("organization_id")
   opportunityId  String? @map("opportunity_id")
@@ -932,6 +941,9 @@ model ActivityType {
   id         String     @id @default(cuid())
   name       String     @unique
   active     Boolean    @default(true)
+  /// Comportamiento, no solo nombre (§60): el composer ofrece la transcripción
+  /// y el servicio la acepta solo en estos. Llamada y Videollamada la traen.
+  hasTranscript Boolean @default(false) @map("has_transcript")
   activities Activity[]
 
   @@map("activity_types")
@@ -1028,6 +1040,62 @@ model AuditLog {
   @@index([entity, entityId, at])
   @@index([byUserId, at])
   @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════ MCP · decisiones §61
+
+/// Una recomendación que un cliente de IA guardó sobre una oportunidad a
+/// través del servidor MCP. **Cada guardado es una fila nueva**: nunca se
+/// actualiza, la historia es el versionado. `payload` es la recomendación ya
+/// validada por `lib/domain/insight.ts` (etiqueta, resumen, riesgos, acciones y
+/// huecos, cada riesgo y acción con su fuente), y `sourceActivityIds` las
+/// actividades citadas, verificadas contra la oportunidad y la cita textual.
+model OpportunityInsight {
+  id                String   @id @default(cuid())
+  opportunityId     String   @map("opportunity_id")
+  payload           Json
+  sourceActivityIds String[] @map("source_activity_ids")
+  /// El modelo que el cliente reporta. Informativo.
+  model             String?
+  generatedById     String   @map("generated_by")
+  generatedAt       DateTime @default(now()) @map("generated_at")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  generatedBy User        @relation(fields: [generatedById], references: [id])
+
+  @@index([opportunityId, generatedAt(sort: Desc)])
+  @@map("opportunity_insights")
+}
+
+enum McpCallResult {
+  OK
+  RECHAZADO
+  ERROR
+}
+
+/// Registro de acceso del servidor MCP: quién llamó qué herramienta, con qué
+/// parámetros, sobre qué oportunidad y con qué resultado. Se escribe siempre,
+/// también en rechazo y error, fuera de la transacción de la herramienta. No es
+/// `AuditLog`: aquello es la bitácora de negocio (INV-09), esto es acceso.
+model McpToolCall {
+  id            String        @id @default(cuid())
+  userId        String        @map("user_id")
+  clientId      String        @map("client_id")
+  tool          String
+  params        Json
+  /// Sin FK a propósito: es registro, y debe sobrevivir a lo que se registre.
+  opportunityId String?       @map("opportunity_id")
+  at            DateTime      @default(now())
+  durationMs    Int           @map("duration_ms")
+  result        McpCallResult
+  /// Lo que se le devolvió al agente cuando no fue OK.
+  message       String?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, at])
+  @@index([opportunityId, at])
+  @@map("mcp_tool_calls")
 }
 
 /// §9.5 · vistas de filtros guardadas. No se comparten entre usuarios en el MVP.

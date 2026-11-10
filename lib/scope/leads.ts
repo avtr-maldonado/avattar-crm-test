@@ -94,6 +94,7 @@ const leadDetailSelect = {
       subject: true,
       notes: true,
       outcome: true,
+      transcript: true,
       startsAt: true,
       durationMin: true,
       completedAt: true,

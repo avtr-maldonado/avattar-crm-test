@@ -230,3 +230,31 @@ describe("ganada y perdida en la bitácora · decisiones §25", () => {
     expect(tipos).toContain("PERDIDA");
   });
 });
+
+describe("GUARDAR_RECOMENDACION · una recomendación guardada por el MCP (§61)", () => {
+  it("se lee como «Recomendación guardada» con la etiqueta y el modelo, en el grupo de cambios", () => {
+    const eventos = construirBitacora({
+      ...BASE,
+      transiciones: [],
+      actividades: [],
+      auditoria: [
+        {
+          id: "r1",
+          at: new Date("2026-11-10T18:00:00Z"),
+          action: "GUARDAR_RECOMENDACION",
+          before: null,
+          after: { insightId: "i1", etiqueta: "EN_RIESGO", riesgos: 2, acciones: 3, huecos: 1, model: "claude-fable-5-1" },
+          byUser: JORGE,
+        },
+      ],
+    });
+    const evento = eventos.find((e) => e.id === "r1");
+    expect(evento).toMatchObject({
+      tipo: "RECOMENDACION",
+      titulo: "Recomendación guardada · EN_RIESGO",
+      detalle: "Modelo: claude-fable-5-1",
+      quien: "Jorge Medina",
+    });
+    expect(filtrarBitacora(eventos, "cambios").some((e) => e.id === "r1")).toBe(true);
+  });
+});

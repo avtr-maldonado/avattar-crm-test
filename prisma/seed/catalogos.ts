@@ -16,6 +16,7 @@ import {
   POLITICA_BASE,
   ROLES_COMITE,
   TIPOS_ACTIVIDAD,
+  TIPOS_CON_TRANSCRIPCION,
   TIPOS_DOCUMENTO,
 } from "./datos";
 
@@ -96,7 +97,8 @@ export async function sembrarCatalogos(prisma: PrismaClient) {
   // (`EMAXCONNSESSION`). Pasó el 12-oct-2026 sembrando producción. Son
   // cuarenta y tantas filas: el paralelismo no compraba nada.
   for (const name of TIPOS_ACTIVIDAD) {
-    await prisma.activityType.upsert({ where: { name }, update: {}, create: { name } });
+    const hasTranscript = TIPOS_CON_TRANSCRIPCION.has(name);
+    await prisma.activityType.upsert({ where: { name }, update: { hasTranscript }, create: { name, hasTranscript } });
   }
   for (const t of TIPOS_DOCUMENTO) {
     await prisma.documentType.upsert({

@@ -177,9 +177,10 @@ describe("schema.prisma · invariantes", () => {
 });
 
 describe("schema.prisma · cobertura del modelo", () => {
-  it("están los 32 modelos que el spec §6.2 exige, más PersonShare (§29) y los seis de Prospectos (§58)", () => {
+  it("están los 32 modelos que el spec §6.2 exige, más PersonShare (§29), los seis de Prospectos (§58) y los dos del MCP (§61)", () => {
     const encontrados = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]);
-    expect(encontrados).toHaveLength(39);
+    expect(encontrados).toHaveLength(41);
+    for (const mcp of ["OpportunityInsight", "McpToolCall"]) expect(encontrados).toContain(mcp);
     for (const lead of ["Lead", "LeadStageTransition", "LeadFolioCounter", "LeadChannel", "LeadCampaign", "LeadDiscardReason"]) {
       expect(encontrados).toContain(lead);
     }
