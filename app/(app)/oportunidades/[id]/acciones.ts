@@ -189,6 +189,7 @@ const esquemaActividad = z.object({
   subject: z.string().trim().min(3, "Escribe de qué se trata la actividad."),
   notas: z.string().trim().optional(),
   outcome: z.string().trim().optional(),
+  transcript: z.string().trim().optional(),
   fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pon la fecha."),
   inicio: z.string().regex(HORA, "Pon la hora de inicio."),
   fin: z.string().regex(HORA, "Pon la hora de fin."),
@@ -244,6 +245,7 @@ export async function guardarActividadAccion(
     subject: d.subject,
     notes: d.notas,
     outcome: d.outcome,
+    transcript: d.transcript,
     cuando: instanteEn(d.fecha, d.inicio, zona),
     // El dominio rechaza un fin antes del inicio con su campo; aquí solo se mide.
     durationMin: duracionEnMinutos(d.inicio, d.fin),

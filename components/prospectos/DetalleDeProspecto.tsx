@@ -6,7 +6,7 @@ import { estadoDeAgenda, type RelojDeAgenda } from "@/lib/domain/agenda";
 import { ETIQUETA_DE_ETAPA } from "@/lib/domain/leadStages";
 import { Boton, ControlSegmentado } from "@/components/ui/primitivas";
 import { Icono } from "@/components/ui/iconos";
-import { PastillaDeEstado } from "@/components/actividades/comun";
+import { PastillaDeEstado, TranscripcionPlegada } from "@/components/actividades/comun";
 import { ComposerDeActividad, type ActividadEditable, type SincroniaDeCalendario, type TipoDeActividad } from "@/components/oportunidad/ComposerDeActividad";
 import { AccionesDeProspecto } from "./AccionesDeProspecto";
 import type { VendedorAsignable } from "./AsignarProspectos";
@@ -27,6 +27,7 @@ export type ActividadDeProspecto = {
   subject: string;
   notes: string | null;
   outcome: string | null;
+  transcript: string | null;
   startsAt: Date;
   durationMin: number | null;
   completedAt: Date | null;
@@ -156,6 +157,7 @@ export function DetalleDeProspecto({
                     subject: a.subject,
                     notes: a.notes,
                     outcome: a.outcome,
+                    transcript: a.transcript,
                     startsAt: a.startsAt.toISOString(),
                     durationMin: a.durationMin,
                     hecha: a.completedAt != null,
@@ -173,6 +175,7 @@ export function DetalleDeProspecto({
                           <PastillaDeEstado estado={estado} />
                         </div>
                         {(a.outcome ?? a.notes) && <p className="mt-0.5 text-xs text-texto-cuerpo">{a.outcome ?? a.notes}</p>}
+                        <TranscripcionPlegada texto={a.transcript} className="mt-0.5" />
                         <p className="tabular mt-0.5 text-xs text-texto-tenue">
                           {a.type.name} · {fecha.format(a.startsAt)}, {hora.format(a.startsAt)} · {a.user.name}
                         </p>

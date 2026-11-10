@@ -226,6 +226,22 @@ describe("registrarActividadDeProspecto", () => {
     const despues = await prisma.lead.findUniqueOrThrow({ where: { id: l.id }, select: { nextActivityAt: true } });
     expect(despues.nextActivityAt?.getTime()).toBe(manana.getTime());
   });
+
+  it("una llamada del prospecto guarda su transcripción; un tipo que no la admite la rechaza (§60)", async () => {
+    const l = await unProspecto(marketing);
+    const [conTranscripcion, sinTranscripcion] = await Promise.all([
+      prisma.activityType.findFirstOrThrow({ where: { hasTranscript: true, active: true }, select: { id: true } }),
+      prisma.activityType.findFirstOrThrow({ where: { hasTranscript: false, active: true }, select: { id: true } }),
+    ]);
+    const r = await registrarActividadDeProspecto(marketing, l, { typeId: conTranscripcion.id, subject: "Llamada inicial", hecha: true, transcript: " Hola, ¿tienen presupuesto? " });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect((await prisma.activity.findUniqueOrThrow({ where: { id: r.datos.id }, select: { transcript: true } })).transcript).toBe("Hola, ¿tienen presupuesto?");
+
+    const l2 = (await getLeadDetail(marketing, l.id))!;
+    const mal = await registrarActividadDeProspecto(marketing, l2, { typeId: sinTranscripcion.id, subject: "Correo", hecha: true, transcript: "no" });
+    expect(mal).toMatchObject({ ok: false, motivo: "VALIDACION", problemas: [{ campo: "transcript" }] });
+  });
 });
 
 describe("convertirProspecto · cuenta, persona y oportunidad, reutilizando lo que existe (§58)", () => {

@@ -39,7 +39,8 @@ type Resultado = ResultadoAccion<{
   calendario: SincroniaDeCalendario;
 }>;
 
-export type TipoDeActividad = { id: string; name: string };
+/** `hasTranscript` (§60): el tipo admite pegar la transcripción; lo decide el catálogo, no el nombre. */
+export type TipoDeActividad = { id: string; name: string; hasTranscript: boolean };
 
 /** Una oportunidad que se puede elegir desde la pantalla de Actividades (§55). */
 export type OportunidadElegible = {
@@ -67,6 +68,8 @@ export type ActividadEditable = {
   subject: string;
   notes: string | null;
   outcome: string | null;
+  /** §60 · solo si el tipo la admite. */
+  transcript: string | null;
   /** ISO. Se convierte a fecha y hora de pared en la zona de la oportunidad. */
   startsAt: string;
   durationMin: number | null;
@@ -146,6 +149,13 @@ function ahoraRedondeado(zona: string) {
  * cambian la zona y los responsables, porque son los del país de **esa**
  * oportunidad (§20); `zona`, `zonaEtiqueta` y `usuarios` son el punto de
  * partida mientras no se ha elegido ninguna.
+ *
+ * ## La transcripción solo en los tipos que la admiten (§60)
+ *
+ * Una llamada o videollamada puede traer su transcripción, si el vendedor la
+ * tiene; el campo aparece al elegir uno de esos tipos y desaparece con los
+ * demás. Qué tipos la admiten lo dice el catálogo (`hasTranscript`), y el
+ * servidor lo vuelve a comprobar. Nunca va al calendario.
  */
 export function ComposerDeActividad({
   opportunityId,
@@ -244,6 +254,7 @@ export function ComposerDeActividad({
   const alEnviar = useEnvioQueConserva(enviar);
 
   const { conBoton, enDesplegable } = useMemo(() => reparte(tipos), [tipos]);
+  const admiteTranscripcion = tipos.find((t) => t.id === estado.tipoId)?.hasTranscript === true;
   const pideConfirmacion = resultado != null && !resultado.ok && resultado.motivo === "CONFIRMACION";
 
   function abrir() {
@@ -417,6 +428,20 @@ export function ComposerDeActividad({
               placeholder="Lo que haga falta recordar"
             />
           </Campo>
+
+          {admiteTranscripcion && (
+            <Campo etiqueta="Transcripción" htmlFor="transcript" problema={problemas.problema("transcript")}>
+              <AreaDeTexto
+                id="transcript"
+                name="transcript"
+                rows={8}
+                defaultValue={actividad?.transcript ?? ""}
+                placeholder="Pega aquí la transcripción, si la tienes"
+                problema={problemas.problema("transcript")}
+                className="font-mono text-xs"
+              />
+            </Campo>
+          )}
 
           {/* El resultado solo existe hacia atrás: pedirlo de algo que todavía
               no pasa es pedir que lo inventen. */}

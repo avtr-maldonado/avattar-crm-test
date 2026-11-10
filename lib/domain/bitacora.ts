@@ -21,7 +21,9 @@ export type TipoDeEvento =
   | "ACTIVIDAD"
   | "GANADA"
   | "PERDIDA"
-  | "REAPERTURA";
+  | "REAPERTURA"
+  /** §61 · una recomendación guardada desde un cliente de IA por el MCP. */
+  | "RECOMENDACION";
 
 export type FiltroDeBitacora = "todo" | "etapas" | "cotizacion" | "actividades" | "cambios";
 
@@ -158,6 +160,20 @@ function eventoDeAuditoria(
         titulo: `Cierre estimado: ${fecha(antes.expectedCloseDate)} → ${fecha(despues.expectedCloseDate)}`,
       };
 
+    // §61 · una recomendación guardada desde un cliente de IA por el MCP.
+    case "GUARDAR_RECOMENDACION": {
+      const etiqueta = typeof despues.etiqueta === "string" ? despues.etiqueta : null;
+      const modelo = typeof despues.model === "string" && despues.model ? despues.model : null;
+      return {
+        id: a.id,
+        tipo: "RECOMENDACION",
+        cuando: a.at,
+        quien: a.byUser.name,
+        titulo: etiqueta ? `Recomendación guardada · ${etiqueta}` : "Recomendación guardada",
+        detalle: modelo ? `Modelo: ${modelo}` : undefined,
+      };
+    }
+
     // §55 · la fecha ganada se corrigió después de cerrar: mueve el avance de cuota.
     case "CAMBIAR_FECHA_GANADA":
       return {
@@ -285,7 +301,7 @@ const GRUPOS: Record<Exclude<FiltroDeBitacora, "todo">, ReadonlySet<TipoDeEvento
   etapas: new Set(["ETAPA", "CREACION"]),
   cotizacion: new Set(["COTIZACION"]),
   actividades: new Set(["ACTIVIDAD"]),
-  cambios: new Set(["CIERRE", "PROPIETARIO", "GANADA", "PERDIDA", "REAPERTURA"]),
+  cambios: new Set(["CIERRE", "PROPIETARIO", "GANADA", "PERDIDA", "REAPERTURA", "RECOMENDACION"]),
 };
 
 export const FILTROS_DE_BITACORA: { valor: FiltroDeBitacora; etiqueta: string }[] = [

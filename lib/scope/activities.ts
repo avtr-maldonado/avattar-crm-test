@@ -74,6 +74,7 @@ export async function listActivities(
       id: true,
       subject: true,
       notes: true,
+      transcript: true,
       startsAt: true,
       durationMin: true,
       completedAt: true,

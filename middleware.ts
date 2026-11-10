@@ -55,7 +55,14 @@ export async function middleware(request: NextRequest) {
     ruta.startsWith("/auth") ||
     ruta.startsWith("/sin-acceso") ||
     // Diagnóstico del despliegue: se consulta justo cuando nadie puede entrar.
-    ruta === "/salud";
+    ruta === "/salud" ||
+    // Servidor MCP y sus metadatos (decisiones §61): la identidad ahí es el
+    // bearer del encabezado, que verifica la propia ruta; nunca la cookie.
+    ruta === "/mcp" ||
+    ruta.startsWith("/.well-known/") ||
+    // El consentimiento OAuth conserva su consulta (authorization_id) al mandar
+    // a /login; el middleware solo conservaría la ruta.
+    ruta === "/oauth/consent";
 
   if (!autenticado && !esPublica) {
     const url = request.nextUrl.clone();

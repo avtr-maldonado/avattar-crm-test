@@ -542,3 +542,44 @@ describe("editarActividad", () => {
     expect(despues[1]).toMatchObject({ correo: otro.email });
   });
 });
+
+describe("registrarActividad · transcripción (§60)", () => {
+  it("una llamada guarda su transcripción; editarla la cambia o la vacía", async () => {
+    const id = await unaOportunidad("Actividad · con transcripción");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const tipo = await prisma.activityType.findFirstOrThrow({ where: { hasTranscript: true, active: true }, select: { id: true } });
+
+    const r = await registrarActividad(jorge, detalle!, {
+      typeId: tipo.id,
+      subject: "Llamada con el patrocinador",
+      hecha: true,
+      sinSeguimiento: true,
+      transcript: "  Vendedor: ¿Cómo va el presupuesto?\nCliente: Aprobado para Q1.  ",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const guardada = await prisma.activity.findUniqueOrThrow({ where: { id: r.datos.id }, select: { transcript: true } });
+    expect(guardada.transcript).toBe("Vendedor: ¿Cómo va el presupuesto?\nCliente: Aprobado para Q1.");
+
+    const e = await editarActividad(jorge, detalle!, r.datos.id, { transcript: "   " });
+    expect(e.ok).toBe(true);
+    const vaciada = await prisma.activity.findUniqueOrThrow({ where: { id: r.datos.id }, select: { transcript: true } });
+    expect(vaciada.transcript).toBeNull();
+  });
+
+  it("un tipo que no la admite la rechaza con su campo y no escribe nada", async () => {
+    const id = await unaOportunidad("Actividad · transcripción indebida");
+    const detalle = await getOpportunityDetail(jorge, id);
+    const tipo = await prisma.activityType.findFirstOrThrow({ where: { hasTranscript: false, active: true }, select: { id: true } });
+
+    const r = await registrarActividad(jorge, detalle!, {
+      typeId: tipo.id,
+      subject: "Correo con la propuesta",
+      hecha: true,
+      sinSeguimiento: true,
+      transcript: "No debería guardarse.",
+    });
+    expect(r).toMatchObject({ ok: false, motivo: "VALIDACION", problemas: [{ campo: "transcript" }] });
+    expect(await prisma.activity.count({ where: { opportunityId: id } })).toBe(0);
+  });
+});

@@ -11,6 +11,8 @@ export type ActividadDeTablero = {
   subject: string;
   notes: string | null;
   outcome: string | null;
+  /** §60 · solo en llamadas y videollamadas, si quien la hizo la pegó. */
+  transcript: string | null;
   startsAt: Date;
   durationMin: number | null;
   completedAt: Date | null;

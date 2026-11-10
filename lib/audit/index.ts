@@ -79,7 +79,9 @@ export type AuditAction =
   | "ASIGNAR_PROSPECTO"
   | "DESCARTAR_PROSPECTO"
   | "CONVERTIR_PROSPECTO"
-  | "IMPORTAR_PROSPECTOS";
+  | "IMPORTAR_PROSPECTOS"
+  /** Un cliente de IA guardó una recomendación por el MCP (decisiones §61). Entidad `Opportunity`. */
+  | "GUARDAR_RECOMENDACION";
 
 export type AuditEntry = {
   /** El modelo, en singular y como lo llama Prisma: "Opportunity", "Quote". */

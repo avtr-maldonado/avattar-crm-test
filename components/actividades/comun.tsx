@@ -44,3 +44,17 @@ export function EnlaceAOportunidad({ a, className }: { a: ActividadDeTablero; cl
     </Link>
   );
 }
+
+/**
+ * §60 · La transcripción, plegada: es larga y lo que se busca en la fila es
+ * el asunto. Nada si no la hay. La misma en la pestaña y en el prospecto.
+ */
+export function TranscripcionPlegada({ texto, className }: { texto: string | null; className?: string }) {
+  if (!texto) return null;
+  return (
+    <details className={clsx("text-xs", className)}>
+      <summary className="cursor-pointer text-texto-tenue hover:text-acento">Transcripción</summary>
+      <p className="mt-1 max-w-prose whitespace-pre-line text-texto-cuerpo">{texto}</p>
+    </details>
+  );
+}

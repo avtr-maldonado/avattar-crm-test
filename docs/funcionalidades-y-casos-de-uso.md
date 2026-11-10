@@ -281,6 +281,7 @@ calendario de Microsoft 365 está configurado, lo agendado aparece en el calenda
 | CU-15.12 Un tipo que no está en los botones | Ídem | Lo elige en «Otro…» | Se aplica igual. Los botones son los seis con dibujo; si Administración renombra un tipo, ese tipo pasa al desplegable y nada más |
 | CU-15.13 Desde Actividades | Cualquiera | Pulsa el lápiz de una actividad en la bandeja o en la semana | Se edita en el sitio con el mismo formulario del detalle, en la zona del país de su oportunidad y con sus responsables (F-29, F-30). El alta sigue viviendo en la oportunidad: el botón «Registrar actividad», que no llevaba a ningún lado, se quitó el 29-sep-2026 |
 | CU-15.14 Marcar hecha al editar | Quien alcance la oportunidad | Edita una actividad pendiente y marca «Marcar como hecha», aunque sea la última pendiente | Se guarda **sin preguntar** por el siguiente paso (§49, enmienda a §19): el aviso de «sin próximo paso» al guardar ya lo dice. La pregunta de CU-15.3 sigue solo al registrar una hecha nueva |
+| CU-15.15 Pegar la transcripción de una llamada | Quien alcance la oportunidad o gestione el prospecto | Elige Llamada o Videollamada; aparece «Transcripción» y pega el texto, si lo tiene; con cualquier otro tipo el campo no está | Es opcional y se guarda tal cual, para que más adelante una IA la lea por MCP (§60). La fila de la pestaña, de la agenda y del prospecto la muestra plegada bajo «Transcripción». Editar abre con ella; cambiar la actividad a un tipo que no la admite exige quitarla antes, y el servidor lo dice junto al campo. No va al calendario. Qué tipos la admiten lo dice el catálogo, y Configuración los marca «Transcripción» |
 
 ### F-16 · Cotizar
 
@@ -681,7 +682,36 @@ Marketing y Gerencia los de sus países, Dirección y Administración todos. La 
 
 ---
 
-## 11. Lo que no está construido
+## 11. Servidor MCP · análisis con un cliente de IA (§61)
+
+Cada vendedor conecta su propio cliente de IA (Claude, ChatGPT, Copilot, Claude Code) al CRM por
+`/mcp`, autorizado con OAuth 2.1 sobre Supabase Auth y la misma cuenta de Microsoft. Las
+herramientas leen con el alcance del usuario del token, nunca más, y nunca costo ni utilidad. La
+recomendación que la IA guarda queda versionada, con sus fuentes verificadas, y en la Bitácora.
+
+### F-48 · Conectar un cliente de IA
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-48.1 Conectar | Cualquier usuario con perfil en el CRM | Agrega `<origen>/mcp` como servidor MCP remoto en su cliente | El cliente descubre a Supabase Auth por los metadatos del recurso, se registra solo y manda al usuario a `/oauth/consent` |
+| CU-48.2 Consentir | El mismo | Entra con Microsoft si no tiene sesión; ve qué podrá hacer el cliente («Consultar tus oportunidades», «Guardar recomendaciones»), qué identidad pide y a dónde volverá | «Autorizar» o «Rechazar»; vuelve al cliente con el código o con el rechazo. Sin perfil en el CRM se va a «Sin acceso» |
+| CU-48.3 Token de otra cosa | Cualquiera | Manda a `/mcp` un token de sesión del navegador, uno vencido o ninguno | 401 con el desafío hacia los metadatos; la llamada no entra |
+| CU-48.4 Revocar | El usuario | Desde el panel de Supabase, no desde el CRM | El cliente deja de poder llamar |
+
+### F-49 · Analizar una oportunidad desde la IA
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-49.1 Buscar | Cualquier usuario con perfil | `buscar_oportunidades` por etapa, responsable, importe, fechas (con el campo) o texto | Hasta 25 por página con cursor; solo lo que el usuario ve en el pipeline; abiertas por omisión. Una etapa o un responsable que no existen se rechazan diciendo cuáles hay |
+| CU-49.2 Ficha | Ídem | `obtener_oportunidad` | Etapa y probabilidad, importe y cotización, MEDDIC, hitos, banderas calculadas, total de actividades y recomendaciones previas. Sin costo, utilidad ni margen, tenga o no `VER_COSTO` |
+| CU-49.3 Actividades y notas | Ídem | `listar_actividades` y después `obtener_nota` de las que va a citar | La lista trae metadatos y un extracto de 200 caracteres; la nota trae notas, resultado y transcripción completas. Fuera del alcance: «no existe o no está a tu alcance» |
+| CU-49.4 Guardar la recomendación | Propietario o Gerencia de la oportunidad | `guardar_recomendacion` con estado, riesgos, acciones y huecos; cada riesgo y acción cita `activity_id` y un fragmento textual | El CRM valida: límites del esquema, oportunidad al alcance, permiso de escritura, cada actividad citada es de esa oportunidad y la cita aparece en ella. Rechaza todo junto, nombrando el índice y qué hacer. Si pasa: fila nueva (versión), «Recomendación guardada» en la Bitácora |
+| CU-49.5 Preventa | Preventa | Intenta guardar | Lee todo lo que alcanza; guardar se rechaza: «solo el propietario o Gerencia» |
+| CU-49.6 Registro de llamadas | Administración (en la base) | — | Cada llamada, también las rechazadas y con error, con usuario, cliente, herramienta, parámetros, oportunidad, duración y resultado |
+
+---
+
+## 12. Lo que no está construido
 
 | Funcionalidad | Estado | Nota |
 |---|---|---|

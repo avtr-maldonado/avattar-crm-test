@@ -81,7 +81,7 @@ export async function configuracionDeCatalogos() {
   const [tiposActividad, tiposDocumento, motivosPerdida, rolesComite, origenes, familias] =
     await Promise.all([
       prisma.activityType.findMany({
-        select: { id: true, name: true, active: true, _count: { select: { activities: true } } },
+        select: { id: true, name: true, active: true, hasTranscript: true, _count: { select: { activities: true } } },
         orderBy: { name: "asc" },
       }),
       prisma.documentType.findMany({
@@ -203,7 +203,7 @@ export async function catalogosParaAlta() {
 export async function tiposDeActividad() {
   return prisma.activityType.findMany({
     where: { active: true },
-    select: { id: true, name: true },
+    select: { id: true, name: true, hasTranscript: true },
     orderBy: { name: "asc" },
   });
 }

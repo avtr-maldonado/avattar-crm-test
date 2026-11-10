@@ -289,7 +289,7 @@ function PanelDeDetalle({
   vendedores: { id: string; name: string }[];
   motivos: { id: string; name: string }[];
   catalogos: { canales: { id: string; name: string }[]; campanas: { id: string; name: string }[] };
-  tipos: { id: string; name: string }[];
+  tipos: { id: string; name: string; hasTranscript: boolean }[];
   destinatarios: { id: string; name: string }[];
   session: { userId: string; gestiona: boolean; decide: boolean };
   pipelines: ReturnType<typeof pipelinesParaAlta>;

@@ -16,6 +16,8 @@ export type RegistroDeActividad = {
   subject: string;
   outcome?: string;
   notes?: string;
+  /** §60 · la transcripción, solo en tipos con `ActivityType.hasTranscript`. Vacía es «sin transcripción». */
+  transcript?: string | null;
   /** Cuándo ocurre o cuándo ocurrió. Por omisión, ahora. */
   cuando?: Date;
   /** Cuánto dura. Sin él, el calendario le da media hora. */
@@ -41,7 +43,16 @@ export type RegistroDeActividad = {
 export type EdicionDeActividad = Partial<
   Pick<
     RegistroDeActividad,
-    "typeId" | "subject" | "outcome" | "notes" | "cuando" | "durationMin" | "hecha" | "userId" | "zona"
+    | "typeId"
+    | "subject"
+    | "outcome"
+    | "notes"
+    | "transcript"
+    | "cuando"
+    | "durationMin"
+    | "hecha"
+    | "userId"
+    | "zona"
   >
 > & {
   siguiente?: SiguientePaso;
@@ -124,6 +135,9 @@ export async function registrarActividad(
   const siguiente = validarSiguiente(input.siguiente);
   if (!siguiente.ok) return siguiente;
 
+  const transcripcion = await transcripcionValida(input.typeId, input.transcript);
+  if (!transcripcion.ok) return transcripcion;
+
   const hecha = input.hecha ?? true;
   const abierta = detalle.status === "ABIERTA";
 
@@ -146,6 +160,7 @@ export async function registrarActividad(
         subject,
         notes: input.notes?.trim() || null,
         outcome: input.outcome?.trim() || null,
+        transcript: transcripcion.datos,
         startsAt: cuando,
         durationMin: duracion.datos,
         completedAt: hecha ? cuando : null,
@@ -234,6 +249,7 @@ export async function editarActividad(
       typeId: true,
       subject: true,
       notes: true,
+      transcript: true,
       startsAt: true,
       durationMin: true,
       completedAt: true,
@@ -270,6 +286,14 @@ export async function editarActividad(
   const typeId = cambios.typeId ?? actual.typeId;
   const notes = cambios.notes === undefined ? actual.notes : cambios.notes.trim() || null;
 
+  // Se valida contra el tipo que **quedará**: cambiar una llamada con
+  // transcripción a «Correo enviado» exige quitarla antes.
+  const transcripcion = await transcripcionValida(
+    typeId,
+    cambios.transcript === undefined ? actual.transcript : cambios.transcript,
+  );
+  if (!transcripcion.ok) return transcripcion;
+
   const siguienteEn = await prisma.$transaction(async (tx) => {
     await tx.activity.update({
       where: { id: actual.id },
@@ -277,6 +301,7 @@ export async function editarActividad(
         typeId,
         subject,
         notes,
+        transcript: transcripcion.datos,
         ...(cambios.outcome !== undefined ? { outcome: cambios.outcome.trim() || null } : {}),
         startsAt,
         durationMin: duracion.datos,
@@ -340,6 +365,33 @@ function validarDuracion(durationMin: number | null | undefined): ResultadoAccio
     });
   }
   return ok(durationMin);
+}
+
+/**
+ * §60 · La transcripción solo se guarda en los tipos que la admiten
+ * (`ActivityType.hasTranscript`, dato del catálogo y no nombre: INV-13).
+ * Vacía o ausente es «sin transcripción» y pasa con cualquier tipo; con texto
+ * en un tipo que no la lleva, el error nombra al tipo y no se escribe nada.
+ * Se recorta porque lo que se pega de una herramienta trae espacios. La
+ * comparte el servicio de prospectos.
+ */
+export async function transcripcionValida(
+  typeId: string,
+  transcript: string | null | undefined,
+): Promise<ResultadoAccion<string | null>> {
+  const texto = transcript?.trim() || null;
+  if (texto === null) return ok(null);
+  const tipo = await prisma.activityType.findUnique({
+    where: { id: typeId },
+    select: { name: true, hasTranscript: true },
+  });
+  if (!tipo?.hasTranscript) {
+    return falla("VALIDACION", {
+      campo: "transcript",
+      mensaje: `«${tipo?.name ?? "Ese tipo"}» no lleva transcripción: quítala o cambia el tipo de actividad.`,
+    });
+  }
+  return ok(texto);
 }
 
 function validarSiguiente(siguiente: SiguientePaso | undefined): ResultadoAccion<null> {
