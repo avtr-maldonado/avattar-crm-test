@@ -20,6 +20,8 @@ const actividades: ActividadCitable[] = [
 
 const folios = { opp_1: "OPP-2026-00012", opp_2: "OPP-2026-00007" };
 
+const VACIA = { fortalezas: [], riesgos: [], siguientes_pasos: [], recomendaciones: [] };
+
 describe("citaAparece", () => {
   it("compara con espacios normalizados y sin distinguir mayúsculas", () => {
     expect(citaAparece("revisamos el presupuesto", actividades[0]!)).toBe(true);
@@ -33,8 +35,9 @@ describe("validarFuentes", () => {
     const r = validarFuentes(
       "opp_1",
       {
+        ...VACIA,
         riesgos: [{ descripcion: "Sin fecha de firma", fuente: { activity_id: "act_1", cita: "sin fecha de firma" } }],
-        acciones: [{ descripcion: "Pedir fecha", fuente: { activity_id: "act_1", cita: "Queda pendiente la fecha" } }],
+        recomendaciones: [{ descripcion: "Pedir fecha", fuente: { activity_id: "act_1", cita: "Queda pendiente la fecha" } }],
       },
       actividades,
       folios,
@@ -45,13 +48,13 @@ describe("validarFuentes", () => {
   it("una actividad que no está al alcance se señala con su índice, sin confirmar si existe", () => {
     const r = validarFuentes(
       "opp_1",
-      { riesgos: [], acciones: [{ descripcion: "x", fuente: { activity_id: "act_9", cita: "lo que sea" } }] },
+      { ...VACIA, recomendaciones: [{ descripcion: "x", fuente: { activity_id: "act_9", cita: "lo que sea" } }] },
       actividades,
       folios,
     );
     expect(r.problemas).toEqual([
       {
-        campo: "acciones.0.fuente.activity_id",
+        campo: "recomendaciones.0.fuente.activity_id",
         mensaje: "«act_9» no existe o no está a tu alcance. Cita solo actividades que te devolvió listar_actividades de OPP-2026-00012.",
       },
     ]);
@@ -60,7 +63,7 @@ describe("validarFuentes", () => {
   it("una actividad de otra oportunidad dice de cuál es", () => {
     const r = validarFuentes(
       "opp_1",
-      { riesgos: [{ descripcion: "x", fuente: { activity_id: "act_2", cita: "Enviada la propuesta" } }], acciones: [] },
+      { ...VACIA, riesgos: [{ descripcion: "x", fuente: { activity_id: "act_2", cita: "Enviada la propuesta" } }] },
       actividades,
       folios,
     );
@@ -73,12 +76,12 @@ describe("validarFuentes", () => {
   it("una cita que no aparece en la actividad se rechaza pidiendo copiarla de obtener_nota", () => {
     const r = validarFuentes(
       "opp_1",
-      { riesgos: [], acciones: [{ descripcion: "x", fuente: { activity_id: "act_1", cita: "El cliente firmó el contrato" } }] },
+      { ...VACIA, recomendaciones: [{ descripcion: "x", fuente: { activity_id: "act_1", cita: "El cliente firmó el contrato" } }] },
       actividades,
       folios,
     );
     expect(r.problemas[0]).toEqual({
-      campo: "acciones.0.fuente.cita",
+      campo: "recomendaciones.0.fuente.cita",
       mensaje: "la cita no aparece en la actividad «act_1» (asunto, notas, resultado ni transcripción). Copia el fragmento tal cual de obtener_nota.",
     });
   });
@@ -87,12 +90,31 @@ describe("validarFuentes", () => {
     const r = validarFuentes(
       "opp_1",
       {
+        ...VACIA,
         riesgos: [{ descripcion: "a", fuente: { activity_id: "act_9", cita: "x" } }],
-        acciones: [{ descripcion: "b", fuente: { activity_id: "act_1", cita: "no está" } }],
+        recomendaciones: [{ descripcion: "b", fuente: { activity_id: "act_1", cita: "no está" } }],
       },
       actividades,
       folios,
     );
-    expect(r.problemas.map((p) => p.campo)).toEqual(["riesgos.0.fuente.activity_id", "acciones.0.fuente.cita"]);
+    expect(r.problemas.map((p) => p.campo)).toEqual(["riesgos.0.fuente.activity_id", "recomendaciones.0.fuente.cita"]);
+  });
+});
+
+describe("validarFuentes · las cuatro listas (§64)", () => {
+  it("revisa fortalezas y siguientes pasos, y una recomendación sin fuente no se revisa", () => {
+    const r = validarFuentes(
+      "opp_1",
+      {
+        fortalezas: [{ descripcion: "a", fuente: { activity_id: "act_1", cita: "Aprobado para Q1" } }],
+        riesgos: [],
+        siguientes_pasos: [{ descripcion: "b", fuente: { activity_id: "act_1", cita: "no aparece" } }],
+        recomendaciones: [{ descripcion: "c", fuente: null }, { descripcion: "d" }],
+      },
+      actividades,
+      folios,
+    );
+    expect(r.problemas.map((p) => p.campo)).toEqual(["siguientes_pasos.0.fuente.cita"]);
+    expect(r.idsCitados).toEqual(["act_1"]);
   });
 });

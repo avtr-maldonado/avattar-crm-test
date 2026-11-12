@@ -19,6 +19,7 @@
     "db:seed:catalogos": "tsx prisma/seed-catalogos.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.5.0",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@prisma/client": "^6.1.0",
     "@supabase/ssr": "^0.12.5",

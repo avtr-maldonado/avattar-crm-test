@@ -3193,3 +3193,178 @@ tipo de evento de bitácora, la carpeta `lib/mcp`, `lib/scope/mcp.ts`, `lib/scop
 `lib/domain/insight*.ts`, `lib/audit/mcp.ts`, `lib/auth/perfil.ts` (volvería a `session.ts`), dos
 rutas, la pantalla de consentimiento y tres excepciones del middleware. El flujo existente no
 cambió.
+
+## 62. Agente de análisis: la ficha de estado que escribe Claude (11 de noviembre de 2026)
+
+**Decisión del negocio:** además del MCP (§61), el CRM lleva dentro un agente que, pocos minutos después
+de cada cambio en una oportunidad abierta, lee todo lo que el CRM sabe de ella y escribe una **ficha de
+estado** con etiqueta, resumen, riesgos, acciones y huecos, cada riesgo y acción con la actividad que lo
+sostiene y la cita textual. Se ve en la pestaña «Análisis» del detalle y su etiqueta en la tarjeta y en la
+tabla. No está en el spec. Diseño en `docs/superpowers/specs/2026-11-11-agente-de-analisis-design.md`.
+Elecciones del usuario: en lote pocos minutos después del cambio; Claude Opus 5.5; solo abiertas; pestaña
+más estado en la tarjeta.
+
+**Lo que el negocio debe confirmar.** Los datos de la oportunidad —notas, resultado y transcripción de
+actividades, nombres de cuenta y contactos, importes, MEDDIC— **viajan a la API de Anthropic** cada vez
+que se analiza. Nunca viaja costo, utilidad ni margen. Es una decisión de datos del negocio, no técnica:
+queda aquí hasta que el Director la confirme. Mientras tanto, sin `ANTHROPIC_API_KEY` el agente está
+apagado y la pestaña lo dice.
+
+**Qué se construyó.**
+
+- **Marca.** Los servicios que mutan una oportunidad dejan `Opportunity.analysisDueAt = ahora + espera`
+  dentro de su transacción (`marcaDeAnalisis()` fundida en el `update` que ya hacen, o
+  `programarAnalisis(tx, id)`): crear, cambiar etapa, editar (incluye reasignar y preventa), reabrir,
+  registrar y editar actividad, MEDDIC, hitos (guardar, quitar, marcar), documentos (subir, quitar) y
+  cotización (abrir, guardar línea, guardar cambios, quitar línea: la marca va en el espejo del neto).
+  Una ráfaga de cambios corre la fecha y produce un solo análisis. **Ganar o perder borra la marca**: una
+  cerrada conserva su última ficha y no se vuelve a analizar. La espera es operativa, no de negocio:
+  `ANALISIS_ESPERA_MINUTOS`, 3 por omisión.
+- **Barrido.** `GET /api/analisis/barrido` con `Authorization: Bearer <CRON_SECRET>` (la convención de
+  Vercel Cron; `vercel.json` lo programa cada 2 minutos, lo que exige plan Pro: en Hobby los crons son
+  diarios, y la misma ruta la puede llamar pg_cron). Toma hasta 10 abiertas vencidas sin arriendo
+  vigente, las arrienda con un `updateMany` condicionado (dos barridos no toman la misma; un arriendo de
+  más de 10 minutos se considera abandonado) y las analiza una por una; `maxDuration` 300. El middleware
+  deja pasar `/api/analisis/` sin cookie.
+- **«Analizar ahora».** Quien edita la oportunidad (`puedeEditarOportunidad`, solo abiertas) adelanta la
+  marca a ahora y reinicia los intentos; la acción lanza el barrido de esa sola oportunidad con `after()`
+  al responder, y la pestaña muestra «En cola» o «Analizando…».
+- **La llamada** (`lib/agente/`): `@anthropic-ai/sdk` 1.5.0, `claude-opus-5-5`, pensamiento adaptativo
+  con esfuerzo `medium` explícito, streaming con `finalMessage()`, `fallbacks: "default"` con la beta
+  `server-side-fallback-2026-07-01`, prompt del sistema con `cache_control`. `Analista` es una interfaz;
+  `analistaClaude()` la implementa y las pruebas inyectan uno falso. El **expediente** (`expediente.ts`,
+  puro) es lo mismo que ve el MCP: ficha, etapa y tiempos, MEDDIC, hitos, cotización por líneas sin costo,
+  banderas calculadas, las últimas 30 actividades con notas, resultado y transcripción (recortada a
+  12 000 caracteres) y el análisis anterior. Una prueba verifica que el texto no nombra costo, utilidad ni
+  margen (INV-02): la ficha la lee el vendedor.
+- **La salida es el mismo esquema que `guardar_recomendacion`** (`lib/agente/salida.ts`: `Analisis`
+  derivado de `GuardarRecomendacion` sin `opportunity_id` ni `model`; `FORMATO_DE_SALIDA` es el JSON
+  Schema que la API impone, solo formas, porque la salida estructurada no soporta límites de longitud).
+  Después pasa por Zod y por `validarFuentes` (§61): cada cita debe aparecer en una actividad de esa
+  oportunidad. Si no, se le devuelven los problemas al modelo **una sola vez**; si tampoco, es una falla.
+- **Fallas.** `analysisError` guarda el motivo, `analysisAttempts` sube y `analysisDueAt` se corre 15 y
+  luego 60 minutos; al tercer fallo seguido la marca se quita y la pestaña dice «No se pudo analizar»
+  hasta el siguiente cambio o «Analizar ahora». Un éxito pone intentos en cero y borra el error.
+- **Datos.** `OpportunityInsight.generatedById` pasa a opcional; `origin: InsightOrigin (MCP | AGENTE)`;
+  `inputTokens` y `outputTokens` para medir el gasto. `AuditLog.byUserId` pasa a opcional: el agente no es
+  un usuario; `GENERAR_ANALISIS` en la bitácora, visible como «Análisis actualizado · En riesgo» con
+  «Agente de análisis» como quién. Migración `20261111100000_agente_de_analisis` aplicada en desarrollo
+  con diff vacío; las llaves foráneas conservan `Restrict`.
+- **Pantalla.** `components/oportunidad/FichaDeAnalisis.tsx` (servidor) y `AnalizarAhora.tsx` (cliente);
+  la pestaña va segunda, después de Resumen; las versiones anteriores se pliegan. `TarjetaOportunidad` y
+  `TablaOportunidades` muestran la pastilla del último análisis (`lib/agente/etiquetas.ts`: Saludable
+  verde, En riesgo lima, Crítica coral, Sin información gris); `opportunityCardSelect` trae solo el
+  `payload` de la fila más reciente.
+- **Pruebas.** Puras: `salida` (claves alineadas con el JSON Schema, límites), `espera`, `expediente`
+  (sin costo, orden, recorte, análisis anterior). Integración: la marca por servicio
+  (`analisis-programar`), el analista falso (`analisis-agente`: guarda con origen, tokens y bitácora sin
+  usuario; corrige una vez; falla con espera; agota intentos; esquema inválido; arriendo), la ruta sin
+  secreto y con el agente apagado (`analisis-ruta`). Nada llama a la API real.
+
+**Costo estimado.** Unos 20 mil tokens de entrada y 2 mil de salida por análisis: alrededor de US$0.12
+con Opus 5.5. Con 100 oportunidades abiertas y dos cambios al día cada una, unos US$25 al día en el peor
+caso. Los tokens quedan en cada fila para medir antes de decidir un tope.
+
+**Qué no se decidió.** El tope de gasto (se mide primero). Notificar al vendedor cuando una ficha pasa a
+Crítica. Analizar prospectos. Un cierre final con lecciones al ganar o perder (se descartó: solo abiertas).
+
+**Qué falta para usarlo.** `ANTHROPIC_API_KEY` y `CRON_SECRET` en Vercel (desarrollo primero; producción
+con aprobación), confirmar que el proyecto está en plan Pro para el cron cada 2 minutos, aplicar la
+migración en producción junto con las cuatro pendientes, y la confirmación del Director sobre los datos
+que viajan a Anthropic.
+
+**Costo de volver:** una migración que quita cuatro columnas de `opportunities`, tres de
+`opportunity_insights` y el enum, y vuelve obligatorios `generated_by` y `by_user_id` (solo si no hay filas
+del agente); `lib/agente`, `lib/scope/agente.ts`, `lib/domain/fichaDeAnalisis.ts`, la ruta, `vercel.json`,
+dos componentes, la pestaña y la pastilla, y las marcas en los nueve servicios (una línea cada una). El
+MCP y la Bitácora no cambian.
+
+## 63. Análisis con IA a demanda, con permiso en la matriz y aviso de tokens (11 de noviembre de 2026)
+
+**Decisión del negocio** (enmienda a §62, el mismo día): el análisis **no es automático**. Nada corre solo: un
+usuario con el permiso lo pide desde el detalle con «Analizar con IA», y solo en ese momento se gasta un
+token. El motivo es el consumo: analizar cada oportunidad tras cada cambio multiplicaba las llamadas sin
+que nadie las hubiera pedido.
+
+**Qué cambió respecto a §62.**
+
+- **Sin cron, sin barrido, sin reintentos.** Se quitaron `vercel.json`, la ruta `/api/analisis/barrido`,
+  `CRON_SECRET`, `ANALISIS_ESPERA_MINUTOS`, la excepción del middleware y la espera creciente. Un fallo se
+  muestra en la pestaña («No se pudo analizar: motivo») y quien pulsó decide si vuelve a intentar.
+- **La marca cambió de significado.** Los nueve servicios que mutan una oportunidad siguen dejando una fecha,
+  pero ahora es `Opportunity.lastChangedAt`: cuándo cambió por última vez (`marcaDeCambio()` fundida en el
+  `update` que ya hacen, o `anotarCambio(tx, id)`). Cerrar también la deja. Sirve para una sola cosa: saber si
+  hay algo nuevo que analizar.
+- **Permiso `ANALIZAR_CON_IA` en la matriz** (`permissions` y `role_permissions`, migración de datos
+  `20261111150000_analisis_a_demanda`, como `permiso_crear_oportunidad`): encendido por omisión para Vendedor,
+  Gerencia, Dirección y Administración; apagado para Preventa y Marketing. Se edita desde Configuración como
+  cualquier otro. **El botón lo decide la matriz, no el propietario**: quien tiene el permiso y alcanza la
+  oportunidad abierta lo ve; sin el permiso, la acción rechaza con `AUTORIZACION` y nombra el MCP como camino.
+- **El MCP no cambia.** Quien no tiene el permiso del botón sigue pudiendo analizar desde su cliente de IA;
+  `guardar_recomendacion` guarda con su regla de propietario o Gerencia (§61) y la ficha se ve en la pestaña y
+  en la tarjeta para todos los que alcanzan la oportunidad, con «desde un cliente de IA» como origen.
+- **Aviso de tokens.** Si la última ficha (del agente o del MCP) es posterior a `lastChangedAt`, la acción
+  devuelve `CONFIRMACION`: «Nada ha cambiado desde el análisis del 11 de noviembre, 10:20. ¿Analizar de todos
+  modos?». El botón pasa a «Analizar de todos modos» con «Cancelar»; el segundo clic manda `confirmado`. Es el
+  contrato de `ResultadoAccion` que ya usa el composer para cerrar sin siguiente paso. La fecha se formatea en
+  la zona del país de la oportunidad.
+- **Cuándo corre.** La acción toma el bloqueo «analizando» (`analysisStartedAt`, un `updateMany` condicionado:
+  dos pulsaciones no lanzan dos llamadas; un bloqueo de más de 10 minutos se considera abandonado) y lanza la
+  llamada con `after()` al responder: la pantalla no espera 30 a 90 segundos a Claude. La pestaña dice
+  «Analizando…» y se refresca sola cada 5 segundos (`RefrescoPeriodico`) hasta que llega la ficha o el error.
+  Una segunda pulsación mientras tanto es `CONFLICTO`.
+- **Bitácora.** `GENERAR_ANALISIS` lleva como `byUserId` a quien pulsó el botón: la ficha la escribió el agente
+  (`origin: AGENTE`, `generatedById` nulo), pero la pidió una persona. `byUserId` sigue siendo opcional en el
+  esquema por si vuelve un disparo sin usuario.
+- **Datos.** `analysis_due_at` → `last_changed_at` (inicializada con `updated_at` para no avisar en falso),
+  `analysis_leased_at` → `analysis_started_at`, fuera `analysis_attempts` y su índice; `analysis_error` queda.
+  Migración aplicada en desarrollo con diff vacío.
+
+**Lo que sigue pendiente de §62:** la confirmación del Director sobre los datos que viajan a Anthropic, y
+`ANTHROPIC_API_KEY` en Vercel. Ya no hace falta plan Pro ni cron.
+
+**Costo de volver a lo automático:** reactivar el barrido es volver a tener una fecha «vence en» y un
+programador; el código de §62 está en la historia de git del 11-nov. Lo demás (expediente, analista,
+validación, ficha, pestaña, pastilla) es común a los dos modos.
+
+## 64. La ficha de análisis: diagnóstico y cuatro cuadrantes, y la pestaña primero (12 de noviembre de 2026)
+
+**Decisión del negocio:** la pestaña «Análisis» es la primera del detalle de una oportunidad y la que se abre
+por omisión («Resumen» sigue en `?p=resumen`). La ficha deja de ser «resumen, riesgos, acciones, huecos» y pasa
+a ser un **diagnóstico** y **cuatro cuadrantes** en viñetas: Fortalezas (arriba a la izquierda), Riesgos (arriba
+a la derecha), Siguientes pasos basados en tareas pendientes y reuniones (abajo a la izquierda) y
+Recomendaciones (abajo a la derecha).
+
+**Qué cambió.**
+
+- **Un solo esquema para el agente y el MCP** (`GuardarRecomendacion` en `lib/mcp/esquemas.ts`, del que deriva
+  `Analisis`): `estado { etiqueta, diagnostico }`, `fortalezas`, `riesgos` y `siguientes_pasos` con fuente
+  obligatoria (activity_id y cita textual verificada), y `recomendaciones` (al menos una) con fuente opcional:
+  `null` cuando es algo por averiguar. `acciones` y `huecos` desaparecen: lo que conviene hacer y lo que falta
+  saber son recomendaciones. Los clientes MCP reciben el esquema nuevo en `tools/list`; la descripción de la
+  herramienta lo explica.
+- **Siguientes pasos citan lo comprometido**: el prompt los saca de las actividades pendientes (el asunto sirve de
+  cita) y de los acuerdos en reuniones y llamadas; si no hay nada, la lista queda vacía y se dice en las
+  recomendaciones.
+- **Arregla un caso**: con `SIN_INFORMACION` el esquema anterior exigía una acción con cita aunque no hubiera
+  actividades; ahora basta una recomendación sin fuente.
+- **`validarFuentes` recorre las cuatro listas** (`LISTAS_CITABLES`, `idsDeFuentes`) y salta los puntos sin
+  fuente. En la salida estructurada, la fuente de una recomendación es `anyOf [fuente, null]`.
+- **Las fichas guardadas no se reescriben**: `lib/agente/ficha.ts` (`leerFicha`, puro) las lee en las dos
+  formas. De la anterior, el resumen es el diagnóstico y acciones y huecos son recomendaciones (los huecos sin
+  cita). Lo usan la pestaña y el expediente (el «análisis anterior» que lee el modelo).
+- **Pantalla.** Diagnóstico en un bloque arriba; abajo una cuadrícula de 2×2 con un filo de color por cuadrante
+  (verde, coral, azul, lima) y viñetas del mismo color; cada punto con cita muestra la cita y «Ver actividades».
+  En una pantalla angosta los cuadrantes se apilan en el mismo orden.
+- **Bitácora**: `GUARDAR_RECOMENDACION` y `GENERAR_ANALISIS` cuentan `fortalezas`, `riesgos`, `siguientesPasos`
+  y `recomendaciones`.
+- De paso: el aviso «Nada ha cambiado…» usaba `bg-alerta/10`, y `alerta` no tiene canal RGB, así que Tailwind
+  descartaba la clase en silencio; pasó a `lima`, que sí lo tiene.
+
+**Costo de volver:** el esquema y su JSON Schema, `validarFuentes`, el prompt y la pestaña; `leerFicha` seguiría
+leyendo las dos formas.
+
+**Nota a §62 (12-nov-2026).** Una llave de Anthropic creada a nivel organización responde 400 («not scoped to a
+workspace») si la llamada no lleva `anthropic-workspace-id`. Lo recomendado es crear la llave dentro de un
+workspace; si se usa una de organización, `ANTHROPIC_WORKSPACE_ID` hace que `analistaClaude` mande el encabezado
+(`lib/agente/cliente.ts`, puro y con prueba).

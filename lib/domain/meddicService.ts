@@ -1,4 +1,5 @@
 import type { MeddicComponent, MeddicStatus } from "@prisma/client";
+import { marcaDeCambio } from "./fichaDeAnalisis";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import type { Session } from "@/lib/auth/permissions";
 import { puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
@@ -108,7 +109,7 @@ export async function guardarComponenteMeddic(
     });
     const nuevo = computeMeddicScore(todos, pesos);
 
-    await tx.opportunity.update({ where: { id: detalle.id }, data: { meddicScore: nuevo } });
+    await tx.opportunity.update({ where: { id: detalle.id }, data: { meddicScore: nuevo, ...marcaDeCambio() } });
     return nuevo;
   });
 

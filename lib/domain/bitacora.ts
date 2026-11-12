@@ -40,6 +40,9 @@ export type EventoDeBitacora = {
 
 type Persona = { name: string };
 
+/** Quién figura cuando una entrada de bitácora no tiene usuario (§62). */
+export const AGENTE = "Agente de análisis";
+
 export type FuentesDeBitacora = {
   oportunidad: { createdAt: Date; createdBy: Persona };
   transiciones: {
@@ -56,7 +59,8 @@ export type FuentesDeBitacora = {
     action: string;
     before: unknown;
     after: unknown;
-    byUser: Persona;
+    /** Nulo cuando lo escribió el agente de análisis (§62). */
+    byUser: Persona | null;
   }[];
   actividades: {
     id: string;
@@ -156,7 +160,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "CIERRE",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: `Cierre estimado: ${fecha(antes.expectedCloseDate)} → ${fecha(despues.expectedCloseDate)}`,
       };
 
@@ -168,8 +172,23 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "RECOMENDACION",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: etiqueta ? `Recomendación guardada · ${etiqueta}` : "Recomendación guardada",
+        detalle: modelo ? `Modelo: ${modelo}` : undefined,
+      };
+    }
+
+    // §62 · la ficha que escribió el agente de análisis. Mismo tipo que la del
+    // MCP: las dos son versiones de la misma historia.
+    case "GENERAR_ANALISIS": {
+      const etiqueta = typeof despues.etiqueta === "string" ? despues.etiqueta : null;
+      const modelo = typeof despues.model === "string" && despues.model ? despues.model : null;
+      return {
+        id: a.id,
+        tipo: "RECOMENDACION",
+        cuando: a.at,
+        quien: a.byUser?.name ?? AGENTE,
+        titulo: etiqueta ? `Análisis actualizado · ${etiqueta}` : "Análisis actualizado",
         detalle: modelo ? `Modelo: ${modelo}` : undefined,
       };
     }
@@ -180,7 +199,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "GANADA",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: `Fecha ganada: ${fecha(antes.actualCloseDate)} → ${fecha(despues.actualCloseDate)}`,
       };
 
@@ -191,7 +210,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "GANADA",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: `Ganada · ${importe(despues.amount)}`,
         detalle: despues.stage ? `Desde ${String(despues.stage)}` : undefined,
       };
@@ -207,7 +226,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "PERDIDA",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: `Perdida · ${motivo}`,
         detalle: [competidor, desde].filter(Boolean).join(" · ") || undefined,
       };
@@ -219,7 +238,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "REAPERTURA",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: `Reabierta · estaba ${String(antes.status ?? "cerrada").toLowerCase()}`,
         detalle: despues.stage ? `Sigue en ${String(despues.stage)}` : undefined,
       };
@@ -229,7 +248,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "PROPIETARIO",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: "Propietario reasignado",
       };
 
@@ -240,7 +259,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "PROPIETARIO",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: despues.presalesUserId
           ? antes.presalesUserId
             ? "Responsable de preventa cambiado"
@@ -262,7 +281,7 @@ function eventoDeAuditoria(
         id: a.id,
         tipo: "COTIZACION",
         cuando: a.at,
-        quien: a.byUser.name,
+        quien: a.byUser?.name ?? AGENTE,
         titulo: `Cotización: ${importe(antes.netSubtotal)} → ${importe(despues.netSubtotal)}`,
         detalle: lineas.length
           ? lineas.map((l) => detalleDeLinea(l, verCosto)).join("; ")

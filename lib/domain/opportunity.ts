@@ -1,4 +1,5 @@
 import type { BusinessType, CountryCode, ForecastCategory, Prisma } from "@prisma/client";
+import { marcaDeCambio } from "./fichaDeAnalisis";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
@@ -344,6 +345,8 @@ export async function crearOportunidad(
 
     const oportunidad = await tx.opportunity.create({
       data: {
+        // §63 · la marca de cambio: desde cuándo hay algo nuevo que analizar.
+        ...marcaDeCambio(),
         folio,
         name: input.name,
         organizationId,
@@ -458,6 +461,7 @@ export async function cambiarEtapa(
     await tx.opportunity.update({
       where: { id: detalle.id },
       data: {
+        ...marcaDeCambio(),
         stageId: destino.id,
         // RN-03 · el reloj mide cuánto lleva DONDE ESTÁ, así que se resella en
         // cada transición, incluida la que retrocede.
@@ -621,7 +625,8 @@ export async function editarOportunidad(
   // El cambio de propietario SÍ está en INV-09; el cierre entró con la
   // bitácora. Los dos van en la misma transacción que el cambio.
   await auditedTransaction(async (tx, audit) => {
-    if (Object.keys(datos).length > 0) await tx.opportunity.update({ where: { id: detalle.id }, data: datos });
+    // §63 · cualquier edición, también reasignar o cambiar la preventa, es un cambio.
+    await tx.opportunity.update({ where: { id: detalle.id }, data: { ...datos, ...marcaDeCambio() } });
     if (cambiaPreventa) {
       await tx.opportunitySupport.deleteMany({ where: { opportunityId: detalle.id } });
       if (preventaNueva) {
@@ -834,7 +839,8 @@ export async function marcarGanada(
   await auditedTransaction(async (tx, audit) => {
     await tx.opportunity.update({
       where: { id: detalle.id },
-      data: { status: "GANADA", actualCloseDate },
+      // §63 · cerrar también es un cambio; una cerrada ya no se analiza, pero la fecha queda.
+      data: { status: "GANADA", actualCloseDate, ...marcaDeCambio() },
     });
     await audit({
       entity: "Opportunity",
@@ -900,7 +906,7 @@ export async function marcarPerdida(
   await auditedTransaction(async (tx, audit) => {
     await tx.opportunity.update({
       where: { id: detalle.id },
-      data: { status: "PERDIDA", actualCloseDate, lossReasonId: razon.id, lossCompetitor },
+      data: { status: "PERDIDA", actualCloseDate, lossReasonId: razon.id, lossCompetitor, ...marcaDeCambio() },
     });
     await audit({
       entity: "Opportunity",
@@ -956,7 +962,7 @@ export async function reabrirOportunidad(
   await auditedTransaction(async (tx, audit) => {
     await tx.opportunity.update({
       where: { id: detalle.id },
-      data: { status: "ABIERTA", actualCloseDate: null, lossReasonId: null, lossCompetitor: null },
+      data: { status: "ABIERTA", actualCloseDate: null, lossReasonId: null, lossCompetitor: null, ...marcaDeCambio() },
     });
     await audit({
       entity: "Opportunity",

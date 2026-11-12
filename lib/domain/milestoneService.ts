@@ -1,4 +1,5 @@
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
+import { anotarCambio } from "./fichaDeAnalisis";
 import type { Session } from "@/lib/auth/permissions";
 import { puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
 import { prisma } from "@/lib/db";
@@ -113,6 +114,7 @@ export async function guardarHito(
       },
     });
   }
+  await anotarCambio(prisma, detalle.id);
 
   return ok(null);
 }
@@ -126,6 +128,7 @@ export async function quitarHito(
   if (bloqueada) return bloqueada;
 
   await prisma.milestone.deleteMany({ where: { id: milestoneId, opportunityId: detalle.id } });
+  await anotarCambio(prisma, detalle.id);
   return ok(null);
 }
 
@@ -148,5 +151,6 @@ export async function marcarHito(
       completedAt: cumplido ? new Date() : null,
     },
   });
+  await anotarCambio(prisma, detalle.id);
   return ok(null);
 }

@@ -1,6 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { analistaClaude, configurado } from "@/lib/agente/analista";
+import { analizarOportunidad, solicitarAnalisis } from "@/lib/domain/fichaDeAnalisis";
 import { z } from "zod";
 import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { requireSession } from "@/lib/auth/session";
@@ -338,5 +341,37 @@ export async function marcarPerdidaAccion(
 
   revalidatePath(`/oportunidades/${detalle.id}`);
   revalidatePath("/oportunidades");
+  return ok(null);
+}
+
+/**
+ * «Analizar con IA» · decisiones §63. La solicitud decide (permiso de la
+ * matriz, alcance, abierta, aviso de que nada cambió, bloqueo) y, si pasa, la
+ * llamada a Claude corre después de responder: la pantalla no espera a la IA,
+ * la pestaña se refresca sola mientras dice «Analizando…».
+ */
+const SolicitudDeAnalisis = z.object({ opportunityId: z.string().min(1), confirmado: z.boolean().optional(), zona: z.string().optional() });
+
+export async function analizarConIaAccion(entrada: {
+  opportunityId: string;
+  confirmado?: boolean;
+  zona?: string;
+}): Promise<ResultadoAccion<null>> {
+  const session = await requireSession();
+  const parsed = SolicitudDeAnalisis.safeParse(entrada);
+  if (!parsed.success) return deZod(parsed.error);
+  const { opportunityId, confirmado, zona } = parsed.data;
+
+  if (!configurado()) return falla("CONFLICTO", "El agente de análisis está apagado en este ambiente.");
+
+  const r = await solicitarAnalisis(session, opportunityId, { confirmado, zona });
+  if (!r.ok) return r;
+
+  after(() =>
+    analizarOportunidad(opportunityId, analistaClaude(), { pedidoPor: session.userId }).catch((e) => {
+      console.error("[analisis] analizar con IA", e);
+    }),
+  );
+  revalidatePath(`/oportunidades/${opportunityId}`);
   return ok(null);
 }

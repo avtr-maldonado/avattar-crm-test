@@ -31,9 +31,11 @@ export type PermissionCode =
   // descartar) y convertirlos en oportunidad.
   | "VER_PROSPECTOS"
   | "GESTIONAR_PROSPECTOS"
-  | "CONVERTIR_PROSPECTO";
+  | "CONVERTIR_PROSPECTO"
+  // §63 · pedir desde el detalle que el agente analice la oportunidad.
+  | "ANALIZAR_CON_IA";
 
-/** Los dieciséis permisos, para sembrarlos y para recorrerlos en Configuración. */
+/** Los diecisiete permisos, para sembrarlos y para recorrerlos en Configuración. */
 export const PERMISOS: readonly PermissionCode[] = [
   "VER_OPORTUNIDADES_PROPIAS",
   "VER_OPORTUNIDADES_OFICINA",
@@ -51,6 +53,7 @@ export const PERMISOS: readonly PermissionCode[] = [
   "VER_PROSPECTOS",
   "GESTIONAR_PROSPECTOS",
   "CONVERTIR_PROSPECTO",
+  "ANALIZAR_CON_IA",
 ] as const;
 
 /**

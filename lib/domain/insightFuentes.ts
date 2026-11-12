@@ -21,7 +21,16 @@ export type ActividadCitable = {
   transcript: string | null;
 };
 
-type ConFuente = { descripcion?: string; fuente: { activity_id: string; cita: string } };
+type ConFuente = { descripcion?: string; fuente?: { activity_id: string; cita: string } | null };
+
+/** §64 · las listas de una ficha cuyos puntos citan una actividad. */
+export const LISTAS_CITABLES = ["fortalezas", "riesgos", "siguientes_pasos", "recomendaciones"] as const;
+export type ListasCitables = { [K in (typeof LISTAS_CITABLES)[number]]: readonly ConFuente[] };
+
+/** Los activity_id que cita una ficha, sin repetir. */
+export function idsDeFuentes(ficha: ListasCitables): string[] {
+  return [...new Set(LISTAS_CITABLES.flatMap((l) => ficha[l].flatMap((x) => (x.fuente ? [x.fuente.activity_id] : []))))];
+}
 
 export type ResultadoDeFuentes = { problemas: Problema[]; idsCitados: string[] };
 
@@ -38,7 +47,7 @@ export function citaAparece(cita: string, actividad: ActividadCitable): boolean 
 
 export function validarFuentes(
   opportunityId: string,
-  recomendacion: { riesgos: ConFuente[]; acciones: ConFuente[] },
+  recomendacion: ListasCitables,
   actividades: readonly ActividadCitable[],
   folios: Readonly<Record<string, string>>,
 ): ResultadoDeFuentes {
@@ -47,8 +56,9 @@ export function validarFuentes(
   const problemas: Problema[] = [];
   const idsCitados: string[] = [];
 
-  const revisar = (lista: ConFuente[], nombre: "riesgos" | "acciones") => {
+  const revisar = (lista: readonly ConFuente[], nombre: string) => {
     lista.forEach((item, i) => {
+      if (!item.fuente) return;
       const { activity_id, cita } = item.fuente;
       const actividad = porId.get(activity_id);
       if (!actividad) {
@@ -77,7 +87,6 @@ export function validarFuentes(
     });
   };
 
-  revisar(recomendacion.riesgos, "riesgos");
-  revisar(recomendacion.acciones, "acciones");
+  for (const lista of LISTAS_CITABLES) revisar(recomendacion[lista], lista);
   return { problemas, idsCitados };
 }

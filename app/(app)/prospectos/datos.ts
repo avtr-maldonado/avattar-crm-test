@@ -1,3 +1,4 @@
+import { AGENTE } from "@/lib/domain/bitacora";
 import type { Session } from "@/lib/auth/permissions";
 import { convierteProspecto, decideComoVentas, gestionaProspecto } from "@/lib/domain/leadAccess";
 import { estadoDeSla } from "@/lib/domain/leadSla";
@@ -73,7 +74,7 @@ export function historiaDe(detalle: LeadDetail, auditoria: Awaited<ReturnType<ty
           : a.action === "CONVERTIR_PROSPECTO"
             ? `Convertido en ${String(despues.folio ?? "oportunidad")}`
             : null;
-    return texto ? [{ id: a.id, cuando: a.at, quien: a.byUser.name, texto }] : [];
+    return texto ? [{ id: a.id, cuando: a.at, quien: a.byUser?.name ?? AGENTE, texto }] : [];
   });
   return [...transiciones, ...anotaciones].sort((x, y) => y.cuando.getTime() - x.cuando.getTime());
 }

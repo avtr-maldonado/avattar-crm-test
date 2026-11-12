@@ -1,4 +1,5 @@
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
+import { anotarCambio } from "./fichaDeAnalisis";
 import type { Session } from "@/lib/auth/permissions";
 import { puedeEditarOportunidad, SOLO_PROPIETARIO_O_GERENCIA } from "./opportunityAccess";
 import { prisma } from "@/lib/db";
@@ -130,6 +131,7 @@ export async function subirDocumento(
     },
     select: { id: true, version: true },
   });
+  await anotarCambio(prisma, detalle.id);
 
   return ok(creado);
 }
@@ -182,6 +184,7 @@ export async function quitarDocumento(
 ): Promise<ResultadoAccion> {
   if (!puedeEditarOportunidad(session, detalle)) return falla("AUTORIZACION", SOLO_PROPIETARIO_O_GERENCIA);
   await prisma.document.deleteMany({ where: { id: documentId, opportunityId: detalle.id } });
+  await anotarCambio(prisma, detalle.id);
   return ok(null);
 }
 

@@ -6,10 +6,14 @@ import { BuscarOportunidades, GuardarRecomendacion, ListarActividades, LIMITES }
 const fuente = { activity_id: "act_1", cita: "Presupuesto aprobado para Q1." };
 const buena = {
   opportunity_id: "opp_1",
-  estado: { etiqueta: "EN_RIESGO", resumen: "Hay patrocinio pero no hay fecha de decisión." },
+  estado: { etiqueta: "EN_RIESGO", diagnostico: "Hay patrocinio pero no hay fecha de decisión." },
+  fortalezas: [{ descripcion: "Presupuesto aprobado", fuente }],
   riesgos: [{ descripcion: "Sin fecha de decisión", fuente }],
-  acciones: [{ descripcion: "Pedir fecha al patrocinador", fuente }],
-  huecos: [{ descripcion: "No se conoce el proceso de compra" }],
+  siguientes_pasos: [{ descripcion: "Llamada de seguimiento el jueves", fuente }],
+  recomendaciones: [
+    { descripcion: "Pedir fecha al patrocinador", fuente },
+    { descripcion: "Averiguar el proceso de compra", fuente: null },
+  ],
 };
 
 function problemas(r: { success: boolean; error?: { issues: { path: (string | number)[]; message: string }[] } }) {
@@ -21,11 +25,22 @@ describe("GuardarRecomendacion", () => {
     expect(GuardarRecomendacion.safeParse(buena).success).toBe(true);
   });
 
-  it("exige al menos una acción", () => {
-    const p = problemas(GuardarRecomendacion.safeParse({ ...buena, acciones: [] }));
+  it("exige al menos una recomendación", () => {
+    const p = problemas(GuardarRecomendacion.safeParse({ ...buena, recomendaciones: [] }));
     expect(p).toHaveLength(1);
-    expect(p[0]).toMatch(/^acciones: /);
+    expect(p[0]).toMatch(/^recomendaciones: /);
     expect(p[0]).toMatch(/al menos una/);
+  });
+
+  it("una recomendación puede ir sin fuente; fortalezas, riesgos y siguientes pasos no (§64)", () => {
+    expect(GuardarRecomendacion.safeParse({ ...buena, recomendaciones: [{ descripcion: "Pedir el organigrama" }] }).success).toBe(true);
+    const p = problemas(GuardarRecomendacion.safeParse({ ...buena, fortalezas: [{ descripcion: "Buena relación" }] }));
+    expect(p[0]).toMatch(/^fortalezas.0.fuente: /);
+  });
+
+  it("ya no acepta la forma anterior (resumen, acciones, huecos)", () => {
+    const vieja = { opportunity_id: "opp_1", estado: { etiqueta: "EN_RIESGO", resumen: "x".repeat(20) }, riesgos: [], acciones: [], huecos: [] };
+    expect(GuardarRecomendacion.safeParse(vieja).success).toBe(false);
   });
 
   it("no acepta más riesgos que el límite, y lo dice con el número", () => {
@@ -35,9 +50,9 @@ describe("GuardarRecomendacion", () => {
   });
 
   it("acota la cita y señala la fuente exacta", () => {
-    const larga = { ...buena, acciones: [{ ...buena.acciones[0], fuente: { ...fuente, cita: "x".repeat(LIMITES.cita + 1) } }] };
+    const larga = { ...buena, recomendaciones: [{ descripcion: "Pedir fecha", fuente: { ...fuente, cita: "x".repeat(LIMITES.cita + 1) } }] };
     const p = problemas(GuardarRecomendacion.safeParse(larga));
-    expect(p[0]).toMatch(new RegExp(`^acciones.0.fuente.cita: .*${LIMITES.cita}`));
+    expect(p[0]).toMatch(new RegExp(`^recomendaciones.0.fuente.cita: .*${LIMITES.cita}`));
   });
 
   it("la etiqueta del estado es cerrada", () => {

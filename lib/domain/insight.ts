@@ -5,7 +5,7 @@ import { auditedTransaction } from "@/lib/audit";
 import { GuardarRecomendacion } from "@/lib/mcp/esquemas";
 import { getOpportunity } from "@/lib/scope/opportunities";
 import { actividadesPorIds } from "@/lib/scope/mcp";
-import { validarFuentes } from "./insightFuentes";
+import { idsDeFuentes, validarFuentes } from "./insightFuentes";
 import { puedeEditarOportunidad } from "./opportunityAccess";
 
 /**
@@ -53,7 +53,7 @@ export async function guardarRecomendacion(
     );
   }
 
-  const idsPedidos = [...new Set([...rec.riesgos, ...rec.acciones].map((x) => x.fuente.activity_id))];
+  const idsPedidos = idsDeFuentes(rec);
   const actividades = await actividadesPorIds(session, idsPedidos);
   const folios: Record<string, string> = { [oportunidad.id]: oportunidad.folio };
   for (const a of actividades) if (a.opportunity) folios[a.opportunity.id] = a.opportunity.folio;
@@ -63,9 +63,10 @@ export async function guardarRecomendacion(
 
   const payload = {
     estado: rec.estado,
+    fortalezas: rec.fortalezas,
     riesgos: rec.riesgos,
-    acciones: rec.acciones,
-    huecos: rec.huecos,
+    siguientes_pasos: rec.siguientes_pasos,
+    recomendaciones: rec.recomendaciones,
   } satisfies Prisma.InputJsonValue;
 
   const guardada = await auditedTransaction(async (tx, audit) => {
@@ -89,9 +90,10 @@ export async function guardarRecomendacion(
         insightId: fila.id,
         version,
         etiqueta: rec.estado.etiqueta,
+        fortalezas: rec.fortalezas.length,
         riesgos: rec.riesgos.length,
-        acciones: rec.acciones.length,
-        huecos: rec.huecos.length,
+        siguientesPasos: rec.siguientes_pasos.length,
+        recomendaciones: rec.recomendaciones.length,
         model: rec.model ?? null,
         clientId: opciones.clientId,
       },

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TEXTO_DE_ESTADO, TONO_DE_ESTADO } from "@/lib/agente/etiquetas";
 import { ETIQUETA_BANDERA, tonoDeRiesgo } from "@/lib/etiquetas";
 import { Avatar, Pastilla } from "@/components/ui/primitivas";
 import type { DatosTarjeta } from "./TarjetaOportunidad";
@@ -35,6 +36,7 @@ export function TablaOportunidades({
             <Th alineacion="derecha">Cierre</Th>
             <Th>Dueño</Th>
             <Th>Riesgo</Th>
+            <Th>Análisis</Th>
           </tr>
         </thead>
         <tbody>
@@ -106,6 +108,11 @@ export function TablaOportunidades({
                     </Pastilla>
                   ))}
                 </div>
+              </td>
+              <td className="px-3 py-2">
+                {o.analisis ? (
+                  <Pastilla tono={TONO_DE_ESTADO[o.analisis]}>{TEXTO_DE_ESTADO[o.analisis]}</Pastilla>
+                ) : null}
               </td>
             </tr>
           ))}

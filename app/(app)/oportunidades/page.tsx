@@ -1,4 +1,5 @@
 import { oficinaActiva, requireSession } from "@/lib/auth/session";
+import { ultimaEtiqueta } from "@/lib/agente/etiquetas";
 import { countOpportunities, listOpportunities, listOrganizations } from "@/lib/scope";
 import { listPipelines, pipelinePorOmision, pipelinesParaAlta } from "@/lib/scope/pipelines";
 import type { VacioDePipeline } from "@/components/pipeline/VacioDePipeline";
@@ -503,6 +504,7 @@ function aTarjeta(o: Oportunidad): DatosTarjeta {
     propietario: { nombre: o.owner.name, iniciales: o.owner.initials },
     banderas: o.banderas,
     estatus: o.status,
+    analisis: ultimaEtiqueta(o.insights),
   };
 }
 

@@ -258,3 +258,31 @@ describe("GUARDAR_RECOMENDACION · una recomendación guardada por el MCP (§61)
     expect(filtrarBitacora(eventos, "cambios").some((e) => e.id === "r1")).toBe(true);
   });
 });
+
+describe("GENERAR_ANALISIS · la ficha que escribe el agente (§62)", () => {
+  it("se lee como «Análisis actualizado» con la etiqueta, sin usuario detrás: «Agente de análisis»", () => {
+    const eventos = construirBitacora({
+      ...BASE,
+      transiciones: [],
+      actividades: [],
+      auditoria: [
+        {
+          id: "g1",
+          at: new Date("2026-11-11T18:00:00Z"),
+          action: "GENERAR_ANALISIS",
+          before: null,
+          after: { insightId: "i2", etiqueta: "CRITICA", riesgos: 3, acciones: 2, huecos: 0, model: "claude-opus-5-5" },
+          byUser: null,
+        },
+      ],
+    });
+    const evento = eventos.find((e) => e.id === "g1");
+    expect(evento).toMatchObject({
+      tipo: "RECOMENDACION",
+      titulo: "Análisis actualizado · CRITICA",
+      detalle: "Modelo: claude-opus-5-5",
+      quien: "Agente de análisis",
+    });
+    expect(filtrarBitacora(eventos, "cambios").some((e) => e.id === "g1")).toBe(true);
+  });
+});

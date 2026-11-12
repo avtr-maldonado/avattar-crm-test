@@ -81,14 +81,17 @@ export type AuditAction =
   | "CONVERTIR_PROSPECTO"
   | "IMPORTAR_PROSPECTOS"
   /** Un cliente de IA guardó una recomendación por el MCP (decisiones §61). Entidad `Opportunity`. */
-  | "GUARDAR_RECOMENDACION";
+  | "GUARDAR_RECOMENDACION"
+  // §62 · la ficha que escribe el agente de análisis.
+  | "GENERAR_ANALISIS";
 
 export type AuditEntry = {
   /** El modelo, en singular y como lo llama Prisma: "Opportunity", "Quote". */
   entity: string;
   entityId: string;
   action: AuditAction;
-  byUserId: string;
+  /** Nulo solo cuando escribe el agente de análisis (§62). */
+  byUserId: string | null;
   /** Solo los campos que cambiaron, no el registro entero. */
   before?: Prisma.InputJsonValue;
   after?: Prisma.InputJsonValue;

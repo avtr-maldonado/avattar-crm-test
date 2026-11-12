@@ -111,7 +111,10 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     por rol: Gerencia ve a quienes operan en sus países; filtros de estado y rol después → §55),
                     cotizaciones (getCotizacion y cotizacionVigente: una sola por oportunidad),
                     bitacora (la historia de una oportunidad: etapas, auditoría, actividades hechas y alta),
-                    insights (listInsights: las recomendaciones de una oportunidad al alcance → §61) · mcp (los lectores del
+                    insights (listInsights: las fichas de una oportunidad al alcance, del MCP y del agente → §61, §62) ·
+                    agente (§62, §63, sin sesión: expedienteDeOportunidad con select explícito y sin costo, estadoDeAnalisis
+                    —último cambio, en curso, última ficha, error—, tomarParaAnalizar: el bloqueo condicionado,
+                    ultimoAnalisisSelect) · mcp (los lectores del
                     servidor MCP: buscarOportunidades, actividadesDeOportunidad con cursor, actividadPorId, actividadesPorIds,
                     etapas y usuarios por nombre; nunca costo → §61),
                     analisis (P-09: ganadas con cotización vigente y actividades hechas dentro de un rango de fechas
@@ -152,6 +155,11 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     insightFuentes (validarFuentes y citaAparece: cada actividad citada existe al alcance, es de esa
                     oportunidad y contiene la cita → §61),
                     Servicios con transacción:
+                    fichaDeAnalisis (§62, §63: marcaDeCambio y anotarCambio —lastChangedAt, la dejan los nueve servicios que mutan
+                    una oportunidad—; solicitarAnalisis: permiso ANALIZAR_CON_IA, alcance, abierta, CONFIRMACION si nada cambió
+                    desde la última ficha, CONFLICTO si ya está analizando, y el bloqueo; analizarOportunidad: expediente →
+                    analista → Zod → validarFuentes con una corrección → fila AGENTE con tokens y GENERAR_ANALISIS con quien pulsó.
+                    Nada corre solo. NO es lib/domain/analisis.ts, que son los reportes de P-09),
                     insight (guardarRecomendacion: esquema, alcance, propietario o Gerencia, fuentes; fila nueva por guardado
                     y GUARDAR_RECOMENDACION → §61),
                     opportunity (cambiarFechaGanada: la única corrección de una cerrada, con bitácora → §55),
@@ -171,6 +179,13 @@ lib/mcp/            el servidor MCP (§61): esquemas (Zod, fuente única: JSON S
                     sesionDesdeClaims; a Supabase solo se le piden openid email porque rechaza crm:*; crm:read/crm:write se
                     exigen solo si el token los trajera, si no decide la matriz; desafío RFC 9728),
                     alcances (etiquetas del consentimiento), servidor (cinco herramientas, registro de cada llamada)
+lib/agente/         el agente de análisis (§62, §63 a demanda): analista (la interfaz Analista y analistaClaude: SDK oficial,
+                    claude-opus-5-5, esfuerzo medium, streaming, fallbacks por omisión, sistema cacheado; configurado() sin
+                    ANTHROPIC_API_KEY apaga), expediente (puro: lo que lee el modelo, nunca costo), prompt (sistema, mensaje,
+                    corrección), salida (Analisis derivado de GuardarRecomendacion y FORMATO_DE_SALIDA, el JSON Schema de la API),
+                    espera (el bloqueo «analizando», enCurso), etiquetas (texto y tono de las cuatro etiquetas, puro, lo usan
+                    tarjeta, tabla y pestaña), ficha (leerFicha: la ficha en sus dos formas, la de §64 —diagnóstico y cuatro
+                    cuadrantes— y la anterior, que se traduce sin reescribir la base)
 lib/acciones.ts     el contrato ResultadoAccion que devuelven TODAS las Server Actions · las reglas puras de qué
                     aviso se apaga y cuándo: corregir/problemaPendiente (al teclear) y darPorVisto (al cerrar el
                     panel → §51)
@@ -259,6 +274,10 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     «Sin evidencia», confirmar la exige; «Nueva persona…» crea a la del comité desde el panel →
                     RN-30 enmendada, decisiones §24 y §27) · CambioDeEtapa ·
                     EditarOportunidad (disparador «icono»: el lápiz en «Datos de la oportunidad») ·
+                    FichaDeAnalisis (§62–§64: la pestaña «Análisis», primera y por omisión: diagnóstico y cuadrícula 2×2 en viñetas
+                    —fortalezas, riesgos, siguientes pasos, recomendaciones— con cita y enlace, versiones plegadas, aviso de
+                    analizando/falló/apagado) · AnalizarConIa (cliente: el botón, y «Analizar de todos
+                    modos» cuando el servidor responde CONFIRMACION) · RefrescoPeriodico (router.refresh cada 5 s mientras analiza) ·
                     CerrarOportunidad (Ganada/Perdida desde cualquier etapa; requisitos con palomita, motivo
                     y competidor → §25) · PanelHitos (neto, asignado y por asignar a la vista; la suma no
                     supera el neto, el % se convierte en el servidor) · PanelDocumentos
@@ -389,6 +408,17 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   `guardar_recomendacion`: propietario o Gerencia, cada fuente citada es de esa oportunidad y la cita
   aparece textual; cada guardado es una fila nueva con `GUARDAR_RECOMENDACION`. Toda llamada queda en
   `mcp_tool_calls`. Los esquemas Zod de `lib/mcp/esquemas.ts` son la fuente única y la salida es estricta.
+- **El agente analiza solo cuando alguien lo pide, y el servidor valida lo que devuelve** (decisiones §62 y §63, módulo
+  nuevo que no está en el spec): nada corre solo. «Analizar con IA» es del permiso `ANALIZAR_CON_IA` de la matriz (no del
+  propietario), solo en abiertas; si la última ficha es posterior a `lastChangedAt` la acción pide `CONFIRMACION` antes de
+  gastar tokens; el bloqueo `analysisStartedAt` evita dos llamadas. Cada servicio que muta una oportunidad deja
+  `lastChangedAt` (`marcaDeCambio` o `anotarCambio`): **un servicio nuevo que mute una oportunidad debe dejarla**. El
+  modelo recibe el expediente **sin costo, utilidad ni margen** y devuelve el mismo esquema que `guardar_recomendacion`
+  (§64: `estado { etiqueta, diagnostico }`, `fortalezas`, `riesgos` y `siguientes_pasos` con cita obligatoria, `recomendaciones`
+  con cita opcional; las fichas viejas se leen con `leerFicha`);
+  pasa por Zod y `validarFuentes` con una sola corrección, y se guarda como fila `AGENTE` con tokens y `GENERAR_ANALISIS`
+  con quien pulsó (`AuditLog.byUserId` es opcional). Sin el permiso queda el MCP, que guarda igual y se ve igual.
+  `lib/domain/analisis.ts` son los reportes de P-09; el agente vive en `fichaDeAnalisis.ts`.
 - **Gerencia administra a su equipo, y nada más** (decisiones §55, regla nueva que no está en el spec):
   `ADMINISTRAR_USUARIOS` lo tiene también `GERENTE_PAIS`, y `administraUsuario` lo acota a vendedores y
   preventas de sus países. Ni otro rol ni otro país, ni al editar: se comprueba a quien es hoy y a quien
@@ -479,11 +509,16 @@ de estado, tipo, oportunidad y lapso; y Administración pasó a ser **Configurac
 **Prospectos** desde el 9-nov-2026 (§58): rol Marketing, pipeline propio de nueve etapas fijas, alcance por rol,
 lista con asignación masiva, kanban, detalle lateral, SLA de primer contacto, conversión que reutiliza cuenta y
 persona, importación y exportación CSV. Migraciones `rol_marketing`, `prospectos`,
-`transcripcion_de_actividad` (§60, 10-nov) y `mcp_insights` (§61, 10-nov) aplicadas en desarrollo; en producción pendientes de aprobación.
+`transcripcion_de_actividad` (§60, 10-nov), `mcp_insights` (§61, 10-nov), `agente_de_analisis` (§62, 11-nov) y `analisis_a_demanda` (§63, 11-nov) aplicadas en desarrollo; en producción pendientes de aprobación.
 **Servidor MCP remoto** desde el 10-nov-2026 (§61): OAuth 2.1 sobre Supabase Auth con consentimiento en el CRM,
 cuatro herramientas de lectura acotadas y `guardar_recomendacion` con fuentes verificadas; migración `mcp_insights`
 aplicada en desarrollo; el servidor OAuth de Supabase está encendido en desarrollo y **rechaza los alcances `crm:*`**:
 solo se le piden `openid email` y la puerta es la matriz; falta desplegar la rama en `avattar-crm-test`.
+**Agente de análisis a demanda** desde el 11-nov-2026 (§62, enmendado por §63 el mismo día): «Analizar con IA» con el permiso
+`ANALIZAR_CON_IA` de la matriz, Claude Opus 5.5 con el expediente sin costo, ficha validada con las fuentes del MCP, aviso cuando
+nada cambió desde la última ficha, pestaña «Análisis» y pastilla en tarjeta y tabla; migraciones `agente_de_analisis` y
+`analisis_a_demanda` aplicadas en desarrollo; faltan `ANTHROPIC_API_KEY` en Vercel y la confirmación del Director sobre los datos
+que viajan a Anthropic.
 **Transcripción opcional en llamadas y videollamadas** desde el 10-nov-2026 (§60): el tipo la admite por
 dato del catálogo, el composer la pide solo entonces, la fila la pliega y nunca va al calendario. **Cuatro ajustes** el mismo día (§59): el vendedor ve sus prospectos
 desde Asignado; convertir pide cuenta, contacto y oportunidad en tres bloques prellenados; Prospectos va en la

@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { ultimoAnalisisSelect } from "./agente";
 import { can, type Session } from "@/lib/auth/permissions";
 
 /**
@@ -100,6 +101,8 @@ export function opportunityCardSelect(session: Session): Prisma.OpportunitySelec
     organization: { select: { id: true, name: true } },
     stage: { select: { id: true, name: true, position: true, probability: true, staleAfterDays: true } },
     owner: { select: { id: true, name: true, initials: true } },
+    // §62 · la etiqueta del último análisis, para la tarjeta y la tabla.
+    ...ultimoAnalisisSelect,
   };
   return base;
 }
