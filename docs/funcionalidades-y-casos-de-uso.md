@@ -711,7 +711,33 @@ recomendación que la IA guarda queda versionada, con sus fuentes verificadas, y
 
 ---
 
-## 12. Lo que no está construido
+## 12. Agente de análisis · la ficha de estado que escribe Claude, a demanda (§62, §63)
+
+Quien tiene el permiso «Analizar con IA» pide desde el detalle de una oportunidad abierta que el CRM mande
+su expediente (ficha, etapa, MEDDIC, hitos, cotización sin costo, banderas y las últimas actividades con
+notas y transcripciones) a Claude Opus 5.5 y guarde la ficha que devuelve: etiqueta, resumen, riesgos,
+acciones y huecos, cada riesgo y acción con la actividad que lo sostiene y la cita textual verificada. Desde §64 la ficha es un diagnóstico y cuatro cuadrantes: fortalezas, riesgos, siguientes pasos y recomendaciones.
+Nada corre solo. Se ve en la pestaña «Análisis» y su etiqueta en la tarjeta y en la tabla. Apagado sin
+`ANTHROPIC_API_KEY`.
+
+### F-50 · Ficha de análisis a demanda
+
+| Caso | Quién | Qué pasa | Resultado |
+|---|---|---|---|
+| CU-50.1 Analizar con IA | Quien tiene el permiso `ANALIZAR_CON_IA` (por omisión Vendedor, Gerencia, Dirección y Administración) y alcanza una oportunidad abierta | Pulsa «Analizar con IA» en la pestaña Análisis | Solo entonces se llama a Claude. La pestaña dice «Analizando…» y se refresca sola hasta que llega la ficha o el error. En una cerrada el botón no está |
+| CU-50.2 Nada cambió | Ídem | Pulsa cuando la última ficha es posterior al último cambio de la oportunidad | «Nada ha cambiado desde el análisis del 11 de noviembre, 10:20. ¿Analizar de todos modos?» con «Cancelar» y «Analizar de todos modos»; solo el segundo clic gasta tokens |
+| CU-50.3 Sin permiso | Un rol sin `ANALIZAR_CON_IA` (por omisión Preventa y Marketing) | Abre la pestaña | No hay botón; puede analizar desde su cliente de IA por el MCP y la ficha guardada se ve aquí igual, con «desde un cliente de IA» como origen |
+| CU-50.4 Permiso editable | Administración | Configuración → Permisos | Enciende o apaga «Analizar con IA» por rol, como cualquier otro permiso |
+| CU-50.5 Ver la ficha | Quien ve la oportunidad, Preventa incluida | Abre una oportunidad: «Análisis» es la primera pestaña y la que se abre (§64) | Estado (Saludable, En riesgo, Crítica, Sin información) y diagnóstico arriba; abajo cuatro cuadrantes en viñetas: Fortalezas, Riesgos, Siguientes pasos (tareas pendientes y reuniones) y Recomendaciones, cada punto con su cita y enlace a Actividades; cuándo, con qué modelo y por quién se generó; versiones anteriores plegadas. Las fichas anteriores a §64 se muestran con su resumen como diagnóstico y sus acciones y huecos como recomendaciones |
+| CU-50.6 Estado en el pipeline | Ídem | Mira la tarjeta del kanban o la tabla | La pastilla del último análisis junto a las banderas de riesgo |
+| CU-50.7 Doble clic | Quien analiza | Pulsa de nuevo mientras dice «Analizando…» | Se rechaza: ya hay un análisis en curso; no se lanza una segunda llamada |
+| CU-50.8 Cita inventada o API caída | El agente | Devuelve una cita que no aparece, una salida inválida, o la API falla | Una corrección si son las fuentes; si no, no guarda nada y la pestaña dice «No se pudo analizar» con el motivo. Quien pulsó decide si vuelve a intentar |
+| CU-50.9 Bitácora | Quien ve la oportunidad | Abre la Bitácora | «Análisis actualizado · En riesgo» con quien lo pidió como quién, en el grupo de cambios |
+| CU-50.10 Gasto | Administración (en la base) | — | Cada ficha guarda los tokens de entrada y salida de su llamada |
+
+---
+
+## 13. Lo que no está construido
 
 | Funcionalidad | Estado | Nota |
 |---|---|---|

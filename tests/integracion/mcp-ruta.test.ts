@@ -104,8 +104,8 @@ describe("POST /mcp", () => {
     );
     const guardar = herramientas.find((t) => t.name === "guardar_recomendacion")!;
     expect(guardar.description).toMatch(/obtener_nota/);
-    expect(Object.keys(guardar.inputSchema.properties).sort()).toEqual(["acciones", "estado", "huecos", "model", "opportunity_id", "riesgos"]);
-    expect(guardar.inputSchema.required).toEqual(expect.arrayContaining(["opportunity_id", "estado", "riesgos", "acciones", "huecos"]));
+    expect(Object.keys(guardar.inputSchema.properties).sort()).toEqual(["estado", "fortalezas", "model", "opportunity_id", "recomendaciones", "riesgos", "siguientes_pasos"]);
+    expect(guardar.inputSchema.required).toEqual(expect.arrayContaining(["opportunity_id", "estado", "fortalezas", "riesgos", "siguientes_pasos", "recomendaciones"]));
   });
 
   it("obtener_nota de la actividad de otro: isError, y la llamada queda registrada como RECHAZADO", async () => {
@@ -132,7 +132,7 @@ describe("POST /mcp", () => {
     const o = await unaOportunidad("MCP ruta · solo lectura");
     const r = await rpc(await token(jorge.email, "crm:read"), "tools/call", {
       name: "guardar_recomendacion",
-      arguments: { opportunity_id: o.id, estado: { etiqueta: "SALUDABLE", resumen: "Todo bien, sin riesgos visibles." }, riesgos: [], acciones: [{ descripcion: "Seguir", fuente: { activity_id: "x", cita: "nada" } }], huecos: [] },
+      arguments: { opportunity_id: o.id, estado: { etiqueta: "SALUDABLE", diagnostico: "Todo bien, sin riesgos visibles." }, fortalezas: [], riesgos: [], siguientes_pasos: [], recomendaciones: [{ descripcion: "Seguir", fuente: { activity_id: "x", cita: "nada" } }] },
     });
     expect(r.estado).toBe(200);
     expect(r.cuerpo.result.isError).toBe(true);
@@ -165,10 +165,11 @@ describe("POST /mcp", () => {
       name: "guardar_recomendacion",
       arguments: {
         opportunity_id: o.id,
-        estado: { etiqueta: "EN_RIESGO", resumen: "Presupuesto aprobado, pero sin fecha de firma." },
+        estado: { etiqueta: "EN_RIESGO", diagnostico: "Presupuesto aprobado, pero sin fecha de firma." },
+        fortalezas: [{ descripcion: "Presupuesto aprobado", fuente: { activity_id: a.id, cita: "Aprobado para Q1" } }],
         riesgos: [{ descripcion: "Sin fecha de firma", fuente: { activity_id: a.id, cita: "sin fecha de firma" } }],
-        acciones: [{ descripcion: "Pedir fecha", fuente: { activity_id: a.id, cita: "Aprobado para Q1" } }],
-        huecos: [],
+        siguientes_pasos: [],
+        recomendaciones: [{ descripcion: "Pedir fecha", fuente: { activity_id: a.id, cita: "Aprobado para Q1" } }],
         model: "claude-fable-5-1",
       },
     });

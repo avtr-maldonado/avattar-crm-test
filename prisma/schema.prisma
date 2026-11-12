@@ -451,6 +451,15 @@ model Opportunity {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   deletedAt      DateTime? @map("deleted_at")
 
+  /// Agente de análisis (decisiones §62, §63): cuándo cambió por última vez,
+  /// para avisar que «nada ha cambiado» antes de gastar tokens. La dejan los
+  /// servicios que mutan la oportunidad.
+  lastChangedAt     DateTime? @map("last_changed_at")
+  /// Bloqueo «analizando»: dos pulsaciones no lanzan dos llamadas.
+  analysisStartedAt DateTime? @map("analysis_started_at")
+  /// El último motivo de falla, para la pestaña; se borra al lograrlo.
+  analysisError     String?   @map("analysis_error")
+
   organization  Organization       @relation(fields: [organizationId], references: [id])
   primaryPerson Person?            @relation(fields: [primaryPersonId], references: [id])
   pipeline      Pipeline           @relation(fields: [pipelineId], references: [id])
@@ -1029,13 +1038,14 @@ model AuditLog {
   entity   String
   entityId String   @map("entity_id")
   action   String
-  byUserId String   @map("by_user_id")
+  /// Nulo cuando escribió el agente de análisis (§62): no es un usuario.
+  byUserId String?  @map("by_user_id")
   at       DateTime @default(now())
   before   Json?
   after    Json?
   ip       String?
 
-  byUser User @relation(fields: [byUserId], references: [id])
+  byUser User? @relation(fields: [byUserId], references: [id], onDelete: Restrict)
 
   @@index([entity, entityId, at])
   @@index([byUserId, at])
@@ -1057,14 +1067,25 @@ model OpportunityInsight {
   sourceActivityIds String[] @map("source_activity_ids")
   /// El modelo que el cliente reporta. Informativo.
   model             String?
-  generatedById     String   @map("generated_by")
+  /// Quién la guardó por el MCP. Nulo cuando la escribió el agente (§62).
+  generatedById     String?  @map("generated_by")
   generatedAt       DateTime @default(now()) @map("generated_at")
+  origin            InsightOrigin @default(MCP)
+  /// Lo que costó la llamada, para medir el gasto del agente. Nulo en el MCP.
+  inputTokens       Int?     @map("input_tokens")
+  outputTokens      Int?     @map("output_tokens")
 
   opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
-  generatedBy User        @relation(fields: [generatedById], references: [id])
+  generatedBy User?       @relation(fields: [generatedById], references: [id], onDelete: Restrict)
 
   @@index([opportunityId, generatedAt(sort: Desc)])
   @@map("opportunity_insights")
+}
+
+/// Quién escribió una ficha: un cliente de IA por el MCP (§61) o el agente del CRM (§62).
+enum InsightOrigin {
+  MCP
+  AGENTE
 }
 
 enum McpCallResult {

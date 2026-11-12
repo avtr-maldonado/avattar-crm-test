@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TEXTO_DE_ESTADO, TONO_DE_ESTADO, type EtiquetaDeEstado } from "@/lib/agente/etiquetas";
 import { clsx } from "clsx";
 import type { RiskFlag } from "@/lib/dto";
 import { ETIQUETA_BANDERA } from "@/lib/etiquetas";
@@ -50,6 +51,8 @@ export type DatosTarjeta = {
   banderas: RiskFlag[];
   /** §25 · una ganada se ve verde y una perdida coral, cuando el filtro las deja ver. */
   estatus: "ABIERTA" | "GANADA" | "PERDIDA";
+  /** §62 · la etiqueta del último análisis del agente, si lo hay. */
+  analisis: EtiquetaDeEstado | null;
 };
 
 // Borde de color y relleno tenue del mismo color (24-sep-2026): verde es
@@ -84,6 +87,11 @@ export function TarjetaOportunidad({ o }: { o: DatosTarjeta }) {
           </Pastilla>
         ) : null}
         {o.banderas.length > 0 && <SenalDeRiesgo banderas={o.banderas} />}
+        {o.analisis ? (
+          <Pastilla tono={TONO_DE_ESTADO[o.analisis]} titulo="Análisis del agente">
+            {TEXTO_DE_ESTADO[o.analisis]}
+          </Pastilla>
+        ) : null}
       </div>
 
       {/* Si algo no cabe se recorta el nombre de la cuenta, que se deduce del

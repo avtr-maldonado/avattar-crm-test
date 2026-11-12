@@ -19,12 +19,13 @@ export const LIMITES = {
   actividadesMax: 50,
   /** Caracteres del extracto de una actividad en la lista. */
   extracto: 200,
+  fortalezas: 10,
   riesgos: 10,
-  acciones: 10,
-  huecos: 10,
+  siguientesPasos: 10,
+  recomendaciones: 10,
   descripcion: 300,
   cita: 500,
-  resumen: 600,
+  diagnostico: 600,
   modelo: 100,
   texto: 120,
 } as const;
@@ -118,7 +119,13 @@ const ConFuente = z
   })
   .strict();
 
-const Hueco = z.object({ descripcion: texto("la descripción", 3, LIMITES.descripcion) }).strict();
+/** §64 · una recomendación puede no apoyarse en una actividad (lo que falta averiguar); si cita, se verifica igual. */
+const ConFuenteOpcional = z
+  .object({
+    descripcion: texto("la descripción", 3, LIMITES.descripcion),
+    fuente: Fuente.nullish(),
+  })
+  .strict();
 
 export const GuardarRecomendacion = z
   .object({
@@ -128,15 +135,27 @@ export const GuardarRecomendacion = z
         etiqueta: z.enum(ETIQUETAS_DE_ESTADO, {
           errorMap: () => ({ message: `usa una de: ${ETIQUETAS_DE_ESTADO.join(", ")}.` }),
         }),
-        resumen: texto("el resumen", 10, LIMITES.resumen),
+        diagnostico: texto("el diagnóstico", 10, LIMITES.diagnostico).describe("Dónde está la oportunidad y qué la decide."),
       })
       .strict(),
-    riesgos: z.array(ConFuente).max(LIMITES.riesgos, `máximo ${LIMITES.riesgos} riesgos; prioriza.`),
-    acciones: z
+    // §64 · los cuatro cuadrantes de la ficha.
+    fortalezas: z
       .array(ConFuente)
-      .min(1, "al menos una acción: una recomendación sin acción no sirve al vendedor.")
-      .max(LIMITES.acciones, `máximo ${LIMITES.acciones} acciones; prioriza.`),
-    huecos: z.array(Hueco).max(LIMITES.huecos, `máximo ${LIMITES.huecos} huecos; prioriza.`),
+      .max(LIMITES.fortalezas, `máximo ${LIMITES.fortalezas} fortalezas; prioriza.`)
+      .describe("Lo que juega a favor, cada punto con su actividad y cita."),
+    riesgos: z
+      .array(ConFuente)
+      .max(LIMITES.riesgos, `máximo ${LIMITES.riesgos} riesgos; prioriza.`)
+      .describe("Lo que puede frenar o perder la venta, cada punto con su actividad y cita."),
+    siguientes_pasos: z
+      .array(ConFuente)
+      .max(LIMITES.siguientesPasos, `máximo ${LIMITES.siguientesPasos} siguientes pasos; prioriza.`)
+      .describe("Lo ya comprometido: tareas pendientes y reuniones agendadas o acordadas, citando esa actividad."),
+    recomendaciones: z
+      .array(ConFuenteOpcional)
+      .min(1, "al menos una recomendación: una ficha sin recomendación no sirve al vendedor.")
+      .max(LIMITES.recomendaciones, `máximo ${LIMITES.recomendaciones} recomendaciones; prioriza.`)
+      .describe("Qué conviene hacer; la fuente es opcional (null cuando es algo por averiguar)."),
     model: texto("model", 1, LIMITES.modelo).optional().describe("El modelo que generó la recomendación."),
   })
   .strict();

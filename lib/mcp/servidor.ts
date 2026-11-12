@@ -6,6 +6,7 @@ import { registrarLlamadaMcp } from "@/lib/audit/mcp";
 import { guardarRecomendacion } from "@/lib/domain/insight";
 import { explainRiskFlags } from "@/lib/domain/riskFlags";
 import { parseFilters, toWhere } from "@/lib/filters/opportunities";
+import { AGENTE } from "@/lib/domain/bitacora";
 import { listInsights } from "@/lib/scope/insights";
 import {
   actividadesDeOportunidad,
@@ -54,7 +55,7 @@ const INSTRUCCIONES = `CRM de ventas de Avattar. Flujo para analizar una oportun
 1. buscar_oportunidades para ubicarla (o usa el opportunity_id que te dio el usuario).
 2. obtener_oportunidad una sola vez: etapa, MEDDIC, hitos, banderas y recomendaciones previas.
 3. listar_actividades para ver qué pasó; obtener_nota solo en las actividades que vas a citar.
-4. guardar_recomendacion con riesgos y acciones citando activity_id y un fragmento textual de obtener_nota.
+4. guardar_recomendacion con diagnóstico, fortalezas, riesgos, siguientes pasos (tareas pendientes y reuniones) y recomendaciones; cada punto con fuente cita activity_id y un fragmento textual de obtener_nota.
 Los resultados están acotados al usuario autorizado; no existe forma de volcar el pipeline completo.`;
 
 type Ejecucion<T> = Promise<{ resultado: ResultadoAccion<T>; opportunityId?: string | null }>;
@@ -253,7 +254,7 @@ export function crearServidorMcp(sesion: SesionMcp): McpServer {
           aFichaDeOportunidad(o, {
             banderas,
             totalDeActividades: total,
-            recomendaciones: previas.map((p) => ({ generatedAt: p.generatedAt, etiqueta: etiquetaDe(p.payload), generatedBy: p.generatedBy.name })),
+            recomendaciones: previas.map((p) => ({ generatedAt: p.generatedAt, etiqueta: etiquetaDe(p.payload), generatedBy: p.generatedBy?.name ?? AGENTE })),
           }),
         ),
       };
@@ -324,8 +325,9 @@ export function crearServidorMcp(sesion: SesionMcp): McpServer {
     nombre: "guardar_recomendacion",
     titulo: "Guardar recomendación",
     descripcion:
-      "Guarda el resultado de tu análisis sobre una oportunidad: estado (etiqueta y resumen), riesgos, acciones y huecos de información. Cada riesgo y cada acción citan " +
-      "un activity_id de esta oportunidad y un fragmento textual copiado de obtener_nota; el CRM verifica ambos y rechaza lo que no cuadre. Cada guardado es una versión nueva. " +
+      "Guarda el resultado de tu análisis sobre una oportunidad: estado (etiqueta y diagnóstico), fortalezas, riesgos, siguientes pasos (tareas pendientes y reuniones " +
+      "agendadas o acordadas) y recomendaciones. Cada fortaleza, riesgo y siguiente paso cita un activity_id de esta oportunidad y un fragmento textual copiado de obtener_nota; " +
+      "una recomendación puede ir con fuente null. El CRM verifica cada cita y rechaza lo que no cuadre. Cada guardado es una versión nueva. " +
       "Llámala una vez al terminar, no mientras analizas.",
     alcance: "crm:write",
     forma: GuardarRecomendacion,

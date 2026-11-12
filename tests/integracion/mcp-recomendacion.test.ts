@@ -101,10 +101,14 @@ async function unaActividad(opportunityId: string, transcript: string) {
 function recomendacion(opportunityId: string, activityId: string, cita = "Aprobado para Q1") {
   return {
     opportunity_id: opportunityId,
-    estado: { etiqueta: "EN_RIESGO" as const, resumen: "Hay presupuesto aprobado pero no hay fecha de firma." },
+    estado: { etiqueta: "EN_RIESGO" as const, diagnostico: "Hay presupuesto aprobado pero no hay fecha de firma." },
+    fortalezas: [],
     riesgos: [{ descripcion: "Sin fecha de firma", fuente: { activity_id: activityId, cita } }],
-    acciones: [{ descripcion: "Pedir fecha al patrocinador", fuente: { activity_id: activityId, cita } }],
-    huecos: [{ descripcion: "No se conoce el proceso de compra" }],
+    siguientes_pasos: [],
+    recomendaciones: [
+      { descripcion: "Pedir fecha al patrocinador", fuente: { activity_id: activityId, cita } },
+      { descripcion: "Averiguar el proceso de compra", fuente: null },
+    ],
     model: "claude-fable-5-1",
   };
 }
@@ -132,7 +136,7 @@ describe("guardarRecomendacion", () => {
       select: { after: true },
     });
     expect(bitacora).toHaveLength(2);
-    expect(bitacora[0]!.after).toMatchObject({ etiqueta: "EN_RIESGO", riesgos: 1, acciones: 1, huecos: 1, model: "claude-fable-5-1", clientId: "cliente_prueba" });
+    expect(bitacora[0]!.after).toMatchObject({ etiqueta: "EN_RIESGO", fortalezas: 0, riesgos: 1, siguientesPasos: 0, recomendaciones: 2, model: "claude-fable-5-1", clientId: "cliente_prueba" });
   });
 
   it("una oportunidad fuera del alcance no existe para el agente", async () => {
@@ -178,10 +182,10 @@ describe("guardarRecomendacion", () => {
   });
 
   it("los límites del esquema se aplican también en el servicio", async () => {
-    const o = await unaOportunidad("MCP · sin acciones");
+    const o = await unaOportunidad("MCP · sin recomendaciones");
     const a = await unaActividad(o.id, "Aprobado para Q1");
-    const r = await guardarRecomendacion(jorge, { ...recomendacion(o.id, a.id), acciones: [] }, { clientId: "c" });
+    const r = await guardarRecomendacion(jorge, { ...recomendacion(o.id, a.id), recomendaciones: [] }, { clientId: "c" });
     expect(r).toMatchObject({ ok: false, motivo: "VALIDACION" });
-    expect(!r.ok && r.problemas[0]!.campo).toBe("acciones");
+    expect(!r.ok && r.problemas[0]!.campo).toBe("recomendaciones");
   });
 });

@@ -1,4 +1,8 @@
 import { notFound } from "next/navigation";
+import { configurado as agenteConfigurado } from "@/lib/agente/analista";
+import { FichaDeAnalisis } from "@/components/oportunidad/FichaDeAnalisis";
+import { estadoDeAnalisis } from "@/lib/scope/agente";
+import { listInsights } from "@/lib/scope/insights";
 import type { CountryCode } from "@/lib/dto";
 import { requireSession } from "@/lib/auth/session";
 import { listActivities } from "@/lib/scope";
@@ -77,6 +81,7 @@ import { preventaDe, puedeEditarOportunidad } from "@/lib/domain/opportunityAcce
 import { can, type Session } from "@/lib/auth/permissions";
 import { administraPersona } from "@/lib/domain/personAccess";
 import {
+  analizarConIaAccion,
   cambiarEtapaAccion,
   editarCampoAccion,
   editarOportunidadAccion,
@@ -167,10 +172,12 @@ export default async function DetalleOportunidadPage({
     zonaEtiqueta: ciudadDe(pais.timezone),    accion: guardarActividadAccion,
   };
 
-  const pestanaActiva = typeof sp.p === "string" ? sp.p : "resumen";
+  // §64 · la ficha de análisis es lo primero que se ve al abrir una oportunidad.
+  const pestanaActiva = typeof sp.p === "string" ? sp.p : "analisis";
   const hrefDe = (clave: string) => `/oportunidades/${oportunidad.id}?p=${clave}`;
 
   const pestanas: Pestana[] = [
+    { clave: "analisis", etiqueta: "Análisis" },
     { clave: "resumen", etiqueta: "Resumen" },
     { clave: "actividades", etiqueta: "Actividades", contador: actividades.length },
     { clave: "cotizacion", etiqueta: "Cotización", contador: cotizacion?.lines.length ?? 0 },
@@ -187,6 +194,12 @@ export default async function DetalleOportunidadPage({
     { clave: "documentos", etiqueta: "Documentos", contador: oportunidad.documents.length },
     { clave: "bitacora", etiqueta: "Bitácora", contador: bitacora.length },
   ];
+
+  // §62, §63 · solo cuando se mira la pestaña: la ficha y lo que está pasando con el agente.
+  const [fichas, estadoDelAgente] =
+    pestanaActiva === "analisis"
+      ? await Promise.all([listInsights(session, oportunidad.id), estadoDeAnalisis(oportunidad.id)])
+      : [[], null];
 
   const banderas = computeRiskFlags(oportunidad, oportunidad.stage, new Date());
   // Fuera del JSX: el reloj se toma una vez por render (§49).
@@ -224,7 +237,18 @@ export default async function DetalleOportunidadPage({
         </div>
 
         <div className="mt-6">
-          {pestanaActiva === "meddic" ? (
+          {pestanaActiva === "analisis" ? (
+            <FichaDeAnalisis
+              fichas={fichas}
+              estado={estadoDelAgente}
+              encendido={agenteConfigurado()}
+              // §63 · el botón es de la matriz de permisos, no del propietario; una cerrada no se analiza.
+              puedeAnalizar={oportunidad.status === "ABIERTA" && can(session, "ANALIZAR_CON_IA")}
+              zona={pais.timezone}
+              opportunityId={oportunidad.id}
+              accion={analizarConIaAccion}
+            />
+          ) : pestanaActiva === "meddic" ? (
             <TabMeddic
               o={oportunidad}
               politica={politica}

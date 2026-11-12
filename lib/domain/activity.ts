@@ -1,4 +1,5 @@
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
+import { marcaDeCambio } from "./fichaDeAnalisis";
 import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { calendarioDeGraph, type Calendario } from "@/lib/graph/calendario";
@@ -185,6 +186,8 @@ export async function registrarActividad(
             ? detalle.lastActivityAt
             : cuando,
         nextActivityAt: proximo,
+        // §63 · una actividad nueva es un cambio que el agente debe leer.
+        ...marcaDeCambio(),
       },
     });
 
@@ -325,7 +328,7 @@ export async function editarActividad(
 
     await tx.opportunity.update({
       where: { id: detalle.id },
-      data: { nextActivityAt: proximo, lastActivityAt: ultima?.completedAt ?? null },
+      data: { nextActivityAt: proximo, lastActivityAt: ultima?.completedAt ?? null, ...marcaDeCambio() },
     });
 
     return proximo;

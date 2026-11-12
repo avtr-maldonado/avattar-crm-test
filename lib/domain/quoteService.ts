@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { anotarCambio, marcaDeCambio } from "./fichaDeAnalisis";
 import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
@@ -82,7 +83,8 @@ async function recalcularYEspejar(tx: Prisma.TransactionClient, quoteId: string)
   if (cotizacion.lines.length > 0) {
     await tx.opportunity.update({
       where: { id: cotizacion.opportunityId },
-      data: { amount: t.netSubtotal, grossMargin: t.grossMargin },
+      // §63 · el espejo del neto es también la marca de cambio.
+      data: { amount: t.netSubtotal, grossMargin: t.grossMargin, ...marcaDeCambio() },
     });
   } else {
     const o = await tx.opportunity.findUniqueOrThrow({
@@ -175,6 +177,7 @@ export async function abrirCotizacion(
     select: { id: true },
   });
 
+  await anotarCambio(prisma, detalle.id);
   return ok(creada);
 }
 

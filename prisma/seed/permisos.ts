@@ -41,6 +41,11 @@ export const PERMISOS_POR_ROL: Record<string, DefinicionPermiso> = {
     descripcion: "Dar de alta oportunidades y trabajarlas en el tablero. Preventa las apoya: las ve y les agrega actividades (decisiones §39).",
     roles: { VENDEDOR: si, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
   },
+  ANALIZAR_CON_IA: {
+    nombre: "Analizar con IA",
+    descripcion: "Pedir desde el detalle la ficha de estado que escribe el agente (decisiones §63). Sin él, queda el MCP.",
+    roles: { VENDEDOR: si, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
+  },
   VER_MARGEN: {
     nombre: "Ver margen",
     descripcion: "El porcentaje de margen. Independiente de ver el costo (RN-09).",
