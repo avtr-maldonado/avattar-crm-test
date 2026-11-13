@@ -3378,3 +3378,21 @@ de `buscar_oportunidades` y las fechas de las salidas. Regla: en `lib/mcp/esquem
 se construye con una función (`fuente()`, `conFuente()`, `fecha()`, `fechaIso()`), y `lib/mcp/servidor.test.ts`
 falla si alguna herramienta publica un `$ref`. El agente no cambia: su `FORMATO_DE_SALIDA` es JSON escrito a mano,
 y `Analisis` sigue derivando de `GuardarRecomendacion`, así que MCP y agente siguen con la misma forma.
+
+## 65. Aviso de costo antes de analizar con IA (13 de noviembre de 2026)
+
+**Qué se pidió.** Al pulsar «Analizar con IA», una leyenda que diga que se procesará con IA y que generará un
+costo aproximado de $0.08 USD a la organización.
+
+**Qué se construyó.** El primer clic ya no llama al servidor: abre una franja con la leyenda y «Cancelar» /
+«Analizar». Si el servidor responde `CONFIRMACION` porque nada cambió desde la última ficha (§63), ese aviso se
+suma a la franja, encima de la leyenda, y el botón pasa a «Analizar de todos modos». El monto y el texto viven en
+`lib/agente/costo.ts` (`COSTO_APROXIMADO_USD`, `leyendaDeCosto`), puro y con prueba.
+
+**Supuestos.** El $0.08 lo dio el negocio y es una estimación fija, no un cálculo: no lee los tokens reales de
+`OpportunityInsight`. No es un umbral (INV-05) porque ninguna regla decide con él; por eso vive en código y no en
+la política comercial. Es una excepción pedida a §41 (sin textos descriptivos): el aviso informa de un costo antes
+de incurrirlo, como el de «nada cambió».
+
+**Costo de cambiar.** El monto: una constante. Calcularlo con los tokens de las fichas anteriores: un lector en
+`lib/scope/agente.ts` y la tarifa por millón de tokens en la base.

@@ -516,7 +516,7 @@ aplicada en desarrollo; el servidor OAuth de Supabase está encendido en desarro
 solo se le piden `openid email` y la puerta es la matriz; falta desplegar la rama en `avattar-crm-test`.
 **Agente de análisis a demanda** desde el 11-nov-2026 (§62, enmendado por §63 el mismo día): «Analizar con IA» con el permiso
 `ANALIZAR_CON_IA` de la matriz, Claude Opus 5.5 con el expediente sin costo, ficha validada con las fuentes del MCP, aviso cuando
-nada cambió desde la última ficha, pestaña «Análisis» y pastilla en tarjeta y tabla; migraciones `agente_de_analisis` y
+nada cambió desde la última ficha, aviso de costo aproximado antes de pedirlo (§65, `lib/agente/costo.ts`), pestaña «Análisis» y pastilla en tarjeta y tabla; migraciones `agente_de_analisis` y
 `analisis_a_demanda` aplicadas en desarrollo; faltan `ANTHROPIC_API_KEY` en Vercel y la confirmación del Director sobre los datos
 que viajan a Anthropic.
 **Transcripción opcional en llamadas y videollamadas** desde el 10-nov-2026 (§60): el tipo la admite por
