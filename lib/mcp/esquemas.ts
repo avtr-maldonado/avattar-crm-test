@@ -37,9 +37,14 @@ export const ETIQUETAS_DE_ESTADO = ["SALUDABLE", "EN_RIESGO", "CRITICA", "SIN_IN
 const id = (de: string) =>
   z.string().trim().min(1, `falta el ${de}.`).max(64, `un ${de} tiene como mucho 64 caracteres.`);
 
-const fecha = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "usa el formato AAAA-MM-DD, por ejemplo 2026-10-01.");
+/**
+ * Un esquema que se repite se construye cada vez (§64): si dos campos comparten
+ * la misma instancia de Zod, el SDK publica el segundo como `$ref` al primero y
+ * hay clientes de IA que no resuelven esas referencias. Ven el campo sin forma
+ * y el CRM les rechaza lo que mandan. Lo prueba `servidor.test.ts`.
+ */
+const fecha = () =>
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "usa el formato AAAA-MM-DD, por ejemplo 2026-10-01.");
 
 const texto = (nombre: string, min: number, max: number) =>
   z
@@ -63,8 +68,8 @@ export const BuscarOportunidadesBase = z
       .enum(CAMPOS_DE_FECHA, { errorMap: () => ({ message: `usa uno de: ${CAMPOS_DE_FECHA.join(", ")}.` }) })
       .optional()
       .describe("Sobre qué fecha aplica el rango desde/hasta. Obligatorio si das alguna de las dos."),
-    desde: fecha.optional().describe("Inicio del rango, AAAA-MM-DD, inclusive."),
-    hasta: fecha.optional().describe("Fin del rango, AAAA-MM-DD, inclusive."),
+    desde: fecha().optional().describe("Inicio del rango, AAAA-MM-DD, inclusive."),
+    hasta: fecha().optional().describe("Fin del rango, AAAA-MM-DD, inclusive."),
     texto: texto("texto", 1, LIMITES.texto).optional().describe("Busca en nombre, folio y cuenta."),
     cursor: z.string().max(200).optional().describe("El siguiente_cursor de la página anterior."),
   })
@@ -105,27 +110,30 @@ export const ListarActividades = z
 
 export const ObtenerNota = z.object({ activity_id: id("activity_id") }).strict();
 
-const Fuente = z
-  .object({
-    activity_id: id("activity_id").describe("Una actividad de listar_actividades de esta oportunidad."),
-    cita: texto("la cita", 3, LIMITES.cita).describe("Fragmento textual de obtener_nota que sostiene el punto."),
-  })
-  .strict();
+const fuente = () =>
+  z
+    .object({
+      activity_id: id("activity_id").describe("Una actividad de listar_actividades de esta oportunidad."),
+      cita: texto("la cita", 3, LIMITES.cita).describe("Fragmento textual de obtener_nota que sostiene el punto."),
+    })
+    .strict();
 
-const ConFuente = z
-  .object({
-    descripcion: texto("la descripción", 3, LIMITES.descripcion),
-    fuente: Fuente,
-  })
-  .strict();
+const conFuente = () =>
+  z
+    .object({
+      descripcion: texto("la descripción", 3, LIMITES.descripcion),
+      fuente: fuente(),
+    })
+    .strict();
 
 /** §64 · una recomendación puede no apoyarse en una actividad (lo que falta averiguar); si cita, se verifica igual. */
-const ConFuenteOpcional = z
-  .object({
-    descripcion: texto("la descripción", 3, LIMITES.descripcion),
-    fuente: Fuente.nullish(),
-  })
-  .strict();
+const conFuenteOpcional = () =>
+  z
+    .object({
+      descripcion: texto("la descripción", 3, LIMITES.descripcion),
+      fuente: fuente().nullish(),
+    })
+    .strict();
 
 export const GuardarRecomendacion = z
   .object({
@@ -140,19 +148,19 @@ export const GuardarRecomendacion = z
       .strict(),
     // §64 · los cuatro cuadrantes de la ficha.
     fortalezas: z
-      .array(ConFuente)
+      .array(conFuente())
       .max(LIMITES.fortalezas, `máximo ${LIMITES.fortalezas} fortalezas; prioriza.`)
       .describe("Lo que juega a favor, cada punto con su actividad y cita."),
     riesgos: z
-      .array(ConFuente)
+      .array(conFuente())
       .max(LIMITES.riesgos, `máximo ${LIMITES.riesgos} riesgos; prioriza.`)
       .describe("Lo que puede frenar o perder la venta, cada punto con su actividad y cita."),
     siguientes_pasos: z
-      .array(ConFuente)
+      .array(conFuente())
       .max(LIMITES.siguientesPasos, `máximo ${LIMITES.siguientesPasos} siguientes pasos; prioriza.`)
       .describe("Lo ya comprometido: tareas pendientes y reuniones agendadas o acordadas, citando esa actividad."),
     recomendaciones: z
-      .array(ConFuenteOpcional)
+      .array(conFuenteOpcional())
       .min(1, "al menos una recomendación: una ficha sin recomendación no sirve al vendedor.")
       .max(LIMITES.recomendaciones, `máximo ${LIMITES.recomendaciones} recomendaciones; prioriza.`)
       .describe("Qué conviene hacer; la fuente es opcional (null cuando es algo por averiguar)."),
@@ -163,13 +171,13 @@ export const GuardarRecomendacion = z
 export type EntradaDeBusqueda = z.infer<typeof BuscarOportunidades>;
 export type EntradaDeActividades = z.infer<typeof ListarActividades>;
 export type Recomendacion = z.infer<typeof GuardarRecomendacion>;
-export type FuenteCitada = z.infer<typeof Fuente>;
+export type FuenteCitada = z.infer<ReturnType<typeof fuente>>;
 
 // ─── Salidas ──────────────────────────────────────────────────────────────────
 // Estrictas a propósito: una clave de más (un costo que se coló) hace fallar la
 // validación de salida del SDK antes de que llegue al cliente (INV-02).
 
-const fechaIso = z.string();
+const fechaIso = () => z.string();
 
 export const OportunidadDeLista = z
   .object({
@@ -184,7 +192,7 @@ export const OportunidadDeLista = z
     pronostico: z.string(),
     cierre_estimado: z.string().nullable(),
     propietario: z.string(),
-    ultima_actividad: fechaIso.nullable(),
+    ultima_actividad: fechaIso().nullable(),
   })
   .strict();
 
@@ -209,15 +217,15 @@ export const FichaDeOportunidad = z
       .nullable(),
     propietario: z.string(),
     preventa: z.string().nullable(),
-    etapa: z.object({ nombre: z.string(), probabilidad: z.string(), desde: fechaIso }).strict(),
+    etapa: z.object({ nombre: z.string(), probabilidad: z.string(), desde: fechaIso() }).strict(),
     importe_usd: z.string(),
     importe_estimado_usd: z.string(),
     cotizacion: z.object({ neto_usd: z.string(), lineas: z.number() }).strict().nullable(),
     cierre_estimado: z.string().nullable(),
     cierre_real: z.string().nullable(),
-    creada: fechaIso,
-    ultima_actividad: fechaIso.nullable(),
-    proxima_actividad: fechaIso.nullable(),
+    creada: fechaIso(),
+    ultima_actividad: fechaIso().nullable(),
+    proxima_actividad: fechaIso().nullable(),
     total_de_actividades: z.number(),
     meddic: z
       .object({
@@ -242,7 +250,7 @@ export const FichaDeOportunidad = z
         })
         .strict(),
     ),
-    recomendaciones_previas: z.array(z.object({ fecha: fechaIso, etiqueta: z.string().nullable(), por: z.string() }).strict()),
+    recomendaciones_previas: z.array(z.object({ fecha: fechaIso(), etiqueta: z.string().nullable(), por: z.string() }).strict()),
   })
   .strict();
 
@@ -251,7 +259,7 @@ export const ActividadDeLista = z
     activity_id: z.string(),
     tipo: z.string(),
     asunto: z.string(),
-    fecha: fechaIso,
+    fecha: fechaIso(),
     duracion_min: z.number().nullable(),
     hecha: z.boolean(),
     responsable: z.string(),
@@ -272,7 +280,7 @@ export const Nota = z
     folio: z.string().nullable(),
     tipo: z.string(),
     asunto: z.string(),
-    fecha: fechaIso,
+    fecha: fechaIso(),
     hecha: z.boolean(),
     responsable: z.string(),
     notas: z.string().nullable(),
@@ -282,5 +290,5 @@ export const Nota = z
   .strict();
 
 export const SalidaDeRecomendacion = z
-  .object({ insight_id: z.string(), generated_at: fechaIso, version: z.number() })
+  .object({ insight_id: z.string(), generated_at: fechaIso(), version: z.number() })
   .strict();

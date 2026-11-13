@@ -3368,3 +3368,13 @@ leyendo las dos formas.
 workspace») si la llamada no lleva `anthropic-workspace-id`. Lo recomendado es crear la llave dentro de un
 workspace; si se usa una de organización, `ANTHROPIC_WORKSPACE_ID` hace que `analistaClaude` mande el encabezado
 (`lib/agente/cliente.ts`, puro y con prueba).
+
+**Corrección a §64 (12-nov-2026): el MCP publicaba los cuadrantes como `$ref`.** Con los cuatro cuadrantes, los
+esquemas Zod de `riesgos`, `siguientes_pasos` y la fuente de `recomendaciones` eran la misma instancia que los de
+`fortalezas`, y el SDK publica una instancia repetida como `$ref` a la primera (`#/properties/fortalezas/items`).
+claude.ai no resolvía esa referencia: veía esos cuadrantes sin forma y `guardar_recomendacion` rechazaba lo que
+mandaba, con errores que parecían contradecir al esquema. Pasaba también, sin efecto visible, con `desde`/`hasta`
+de `buscar_oportunidades` y las fechas de las salidas. Regla: en `lib/mcp/esquemas.ts` todo esquema que se repite
+se construye con una función (`fuente()`, `conFuente()`, `fecha()`, `fechaIso()`), y `lib/mcp/servidor.test.ts`
+falla si alguna herramienta publica un `$ref`. El agente no cambia: su `FORMATO_DE_SALIDA` es JSON escrito a mano,
+y `Analisis` sigue derivando de `GuardarRecomendacion`, así que MCP y agente siguen con la misma forma.
