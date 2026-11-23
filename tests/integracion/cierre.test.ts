@@ -322,7 +322,7 @@ describe("reabrirOportunidad · la matriz manda · §52", () => {
     await marcarPerdida(jorge, abierta!, { lossReasonId: motivoSimple.id });
     const cerrada = await getOpportunityDetail(jorge, id);
 
-    const sinPermiso = con(jorge, "VER_OPORTUNIDADES_OFICINA", "VER_OPORTUNIDADES_PROPIAS");
+    const sinPermiso = con(jorge, "VER_OPORTUNIDADES_OFICINA");
     const r = await reabrirOportunidad(sinPermiso, cerrada!);
 
     expect(r).toMatchObject({ ok: false, motivo: "AUTORIZACION" });

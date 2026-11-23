@@ -54,15 +54,14 @@ export async function configuracionDePolitica() {
       taxLabel: true,
       timezone: true,
       fiscalYearStartMonth: true,
+      // Solo lo que alguna regla lee (decisiones §67). Los umbrales de descuento,
+      // el SLA de autorización, la cobertura sana y el MEDDIC para ganar siguen
+      // en la base, sin uso, para cuando vuelvan las autorizaciones o la regla.
       commercialPolicy: {
         select: {
-          discountThresholdMgmt: true,
-          discountThresholdDir: true,
-          approvalSlaHours: true,
           meddicMinToClosing: true,
-          meddicMinToWin: true,
           meddicMinToCommit: true,
-          healthyCoverageMin: true,
+          leadFirstContactSlaHours: true,
         },
       },
     },

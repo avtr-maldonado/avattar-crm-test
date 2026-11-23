@@ -52,7 +52,7 @@ beforeAll(async () => {
   [marketing, admin, paulina, ivan] = await Promise.all([
     sesionDe("mk@avattar.com", GESTION),
     sesionDe("as@avattar.com", [...GESTION, "CONVERTIR_PROSPECTO", "CREAR_OPORTUNIDAD", "VER_OPORTUNIDADES_OFICINA"]),
-    sesionDe("pe@avattar.com", ["VER_PROSPECTOS", "CONVERTIR_PROSPECTO", "CREAR_OPORTUNIDAD", "VER_OPORTUNIDADES_PROPIAS"]),
+    sesionDe("pe@avattar.com", ["VER_PROSPECTOS", "CONVERTIR_PROSPECTO", "CREAR_OPORTUNIDAD"]),
     sesionDe("ic@avattar.com", []),
   ]);
   canalId = (await prisma.leadChannel.findFirstOrThrow({ select: { id: true } })).id;

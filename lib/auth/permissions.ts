@@ -1,5 +1,4 @@
 import type { CountryCode, Role } from "@prisma/client";
-import { money, type Money } from "@/lib/money";
 
 /**
  * La matriz de permisos · §5.2.
@@ -14,15 +13,12 @@ import { money, type Money } from "@/lib/money";
  * dejó de ver el costo hasta que lo reportara.
  */
 export type PermissionCode =
-  | "VER_OPORTUNIDADES_PROPIAS"
   | "VER_OPORTUNIDADES_OFICINA"
   | "CREAR_OPORTUNIDAD"
   | "VER_MARGEN"
   | "VER_COSTO"
-  | "AUTORIZAR_DESCUENTO"
   | "EDITAR_CATALOGOS"
   | "REABRIR_OPORTUNIDAD"
-  | "EXPORTAR_CON_COSTO"
   | "VER_ANALISIS"
   | "VER_OBJETIVOS_EQUIPO"
   | "EDITAR_POLITICA_COMERCIAL"
@@ -35,17 +31,14 @@ export type PermissionCode =
   // §63 · pedir desde el detalle que el agente analice la oportunidad.
   | "ANALIZAR_CON_IA";
 
-/** Los diecisiete permisos, para sembrarlos y para recorrerlos en Configuración. */
+/** Los catorce permisos (§66 quitó tres que nada consultaba), para sembrarlos y para recorrerlos en Configuración. */
 export const PERMISOS: readonly PermissionCode[] = [
-  "VER_OPORTUNIDADES_PROPIAS",
   "VER_OPORTUNIDADES_OFICINA",
   "CREAR_OPORTUNIDAD",
   "VER_MARGEN",
   "VER_COSTO",
-  "AUTORIZAR_DESCUENTO",
   "EDITAR_CATALOGOS",
   "REABRIR_OPORTUNIDAD",
-  "EXPORTAR_CON_COSTO",
   "VER_ANALISIS",
   "VER_OBJETIVOS_EQUIPO",
   "EDITAR_POLITICA_COMERCIAL",
@@ -83,17 +76,6 @@ export type Session = {
 /** ¿El usuario tiene este permiso? Lo que no está concedido, se niega. */
 export function can(session: Session, code: PermissionCode): boolean {
   return session.permissions.has(code);
-}
-
-/**
- * El tope de un permiso, o `null` si no tiene tope **o** si no tiene el
- * permiso. Las dos situaciones devuelven `null` a propósito: el tope solo
- * significa algo después de que `can()` haya dicho que sí.
- */
-export function limitFor(session: Session, code: PermissionCode): Money | null {
-  if (!can(session, code)) return null;
-  const tope = session.limits[code];
-  return tope == null ? null : money(tope);
 }
 
 /**

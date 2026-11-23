@@ -111,10 +111,8 @@ describe("seed §15 · integridad del escenario", () => {
     expect((await del("VENDEDOR", "VER_ANALISIS"))?.granted).toBe(false);
     expect((await del("GERENTE_PAIS", "VER_COSTO"))?.granted).toBe(true);
 
-    // RN-04 · el gerente autoriza hasta 30 %.
-    const autoriza = await del("GERENTE_PAIS", "AUTORIZAR_DESCUENTO");
-    expect(autoriza?.granted).toBe(true);
-    expect(autoriza?.limitValue?.toString()).toBe("0.3");
+    // §66 · los permisos que nada consultaba ya no se siembran.
+    expect(await del("GERENTE_PAIS", "AUTORIZAR_DESCUENTO")).toBeNull();
   });
 
   it("las cinco etapas traen sus compuertas declarativas (§8.3)", async () => {

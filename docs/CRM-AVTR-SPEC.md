@@ -264,6 +264,11 @@ docs/
 Se implementa como datos, no como condicionales dispersos. Cada permiso es una fila; el rol define
 el valor. La matriz es editable desde Administración (`F-1005`).
 
+> **Enmienda del 23-nov-2026 (decisiones §66).** Salieron «Autorizar descuento», «Exportar con costo» y
+> «Ver oportunidades propias»: ninguna funcionalidad los consultaba. «Ver oportunidades de la oficina» se
+> llama «Gestionar oportunidades de la oficina», «Editar catálogos» se llama «Editar productos y cuotas» y
+> «Editar política comercial» se llama «Ver política comercial». Los códigos no cambian.
+
 | Permiso | VENDEDOR | GERENTE_PAIS | DIRECCION | ADMINISTRADOR |
 |---|---|---|---|---|
 | `VER_OPORTUNIDADES_PROPIAS` | sí | sí | sí | sí |

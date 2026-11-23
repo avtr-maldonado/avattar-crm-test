@@ -104,7 +104,7 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     con `rango` el tablero lee lo que empieza dentro del lapso → §55;
                     oportunidadesParaAgendar: las abiertas al alcance y la oficina, para «Nueva actividad» → §55),
                     contadores (acotados a la oficina activa),
-                    configuracion, pipelines (los de los países de la sesión, para todo rol → §48), busqueda (buscador global: todo el alcance, no la oficina),
+                    configuracion (la política expone solo lo que una regla lee → §67), pipelines (los de los países de la sesión, para todo rol → §48), busqueda (buscador global: todo el alcance, no la oficina),
                     funnel (historial de etapas para la tasa de paso), objetivos (cuotas + logrado + pipeline;
                     aniosConObjetivos ofrece siempre el año en curso y el siguiente → §55),
                     usuarios (perfiles y quienes entraron sin perfil; la puerta es ADMINISTRAR_USUARIOS y el alcance
@@ -140,7 +140,8 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     personAccess (administraPersona: quién edita, comparte y transfiere una persona → §29),
                     userAccess (administraUsuario, rolesQueAdministra, paisesQueAdministra: Gerencia administra a
                     vendedores y preventas de sus países, nada más; lo aplican crear, editar y dar acceso → §55),
-                    opportunityAccess (puedeEditarOportunidad: propietario u oficina, lo aplican los siete servicios que
+                    opportunityAccess (veOportunidades: el menú por rol, todos menos Marketing → §66;
+                    puedeEditarOportunidad: propietario u oficina, lo aplican los siete servicios que
                     mutan una oportunidad; preventaDe: el responsable de preventa → §39),
                     leadStages (las nueve etapas, su etiqueta y tono, puedeTransitar → §58) · leadSla (estadoDeSla: cumplido,
                     en tiempo, por vencer, vencido; venceEn → §58) · leadAccess (gestionaProspecto, decideComoVentas,
@@ -171,7 +172,7 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     la comparte el prospecto → §60), contact (personas y cuentas; guardarAccesoDePersona comparte y transfiere → §29),
                     product, quoteService, milestoneService, meddicService, document,
                     usuario, objetivo (fijar cuota), permisos (cambiarPermiso: la matriz de §5.2 editable por
-                    Administración, nunca su propia columna → §40; la tabla se abre en lectura y la edición
+                    Administración, nunca su propia columna → §40; catorce permisos, ninguno con tope → §66; la tabla se abre en lectura y la edición
                     se enciende con un botón → §43)
 lib/mcp/            el servidor MCP (§61): esquemas (Zod, fuente única: JSON Schema de entrada y salida estricta),
                     cursor (opaco; el corrupto se rechaza), dto (puro, nunca costo ni margen), resultado (ResultadoAccion →

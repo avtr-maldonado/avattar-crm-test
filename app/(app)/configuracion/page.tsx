@@ -564,40 +564,16 @@ async function TabPolitica() {
           ) : (
             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
               <Umbral
-                etiqueta="Autoriza Gerencia"
-                valor={formatPercent(toClient(pais.commercialPolicy.discountThresholdMgmt))}
-                nota="Descuento sobre este umbral"
-              />
-              <Umbral
-                etiqueta="Autoriza Dirección"
-                valor={formatPercent(toClient(pais.commercialPolicy.discountThresholdDir))}
-                nota="Sin tope superior"
-              />
-              <Umbral
                 etiqueta="MEDDIC para cierre"
                 valor={String(pais.commercialPolicy.meddicMinToClosing)}
-               
-              />
-              <Umbral
-                etiqueta="MEDDIC para ganar"
-                valor={String(pais.commercialPolicy.meddicMinToWin)}
-                nota="Más E, I y C confirmados"
               />
               <Umbral
                 etiqueta="MEDDIC para compromiso"
                 valor={String(pais.commercialPolicy.meddicMinToCommit)}
-               
               />
               <Umbral
-                etiqueta="Cobertura sana"
-                valor={`${pais.commercialPolicy.healthyCoverageMin.toString()}×`}
-                nota="Sobre la brecha de cuota"
-              />
-              <Umbral
-                etiqueta="SLA de autorización"
-                valor={`${pais.commercialPolicy.approvalSlaHours} h`}
-                nota="Horas hábiles"
-                pendiente="Q-09"
+                etiqueta="Primer contacto de prospectos"
+                valor={`${pais.commercialPolicy.leadFirstContactSlaHours} h`}
               />
               <Umbral
                 etiqueta={pais.taxLabel}

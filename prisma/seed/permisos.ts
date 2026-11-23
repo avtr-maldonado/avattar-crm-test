@@ -11,8 +11,8 @@ import type { Role } from "@prisma/client";
  *
  * `limite` es la fracción máxima que ese rol puede autorizar. `null` con
  * `granted: true` significa **sin tope** (Dirección); `granted: false`
- * significa que no autoriza. Las dos cosas son distintas y `limitFor` las
- * distingue.
+ * significa que no autoriza. Desde §66 ningún permiso lleva tope: el único
+ * era «Autorizar descuento».
  */
 type ValorPermiso = { granted: boolean; limite?: string };
 
@@ -26,14 +26,9 @@ const no: ValorPermiso = { granted: false };
 const si: ValorPermiso = { granted: true };
 
 export const PERMISOS_POR_ROL: Record<string, DefinicionPermiso> = {
-  VER_OPORTUNIDADES_PROPIAS: {
-    nombre: "Ver oportunidades propias",
-    descripcion: "Las oportunidades donde el usuario es propietario.",
-    roles: { VENDEDOR: si, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: si, MARKETING: no },
-  },
   VER_OPORTUNIDADES_OFICINA: {
-    nombre: "Ver oportunidades de la oficina",
-    descripcion: "Todas las oportunidades de los países asignados al usuario.",
+    nombre: "Gestionar oportunidades de la oficina",
+    descripcion: "Reasignar, editar las de otros y elegir propietario al convertir un prospecto. Lo que cada quien ve lo decide su rol (decisiones §66).",
     roles: { VENDEDOR: no, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
   },
   CREAR_OPORTUNIDAD: {
@@ -56,33 +51,15 @@ export const PERMISOS_POR_ROL: Record<string, DefinicionPermiso> = {
     descripcion: "El costo unitario y la utilidad. Un vendedor conoce su margen sin conocer el costo del proveedor.",
     roles: { VENDEDOR: no, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
   },
-  AUTORIZAR_DESCUENTO: {
-    nombre: "Autorizar descuento",
-    descripcion: "Resolver solicitudes de autorización. Nadie autoriza la propia (RN-04).",
-    roles: {
-      VENDEDOR: no,
-      GERENTE_PAIS: { granted: true, limite: "0.3000" },
-      // Sin tope: `granted` en true y `limite` ausente.
-      DIRECCION: si,
-      ADMINISTRADOR: no,
-      PREVENTA: no,
-      MARKETING: no,
-    },
-  },
   EDITAR_CATALOGOS: {
-    nombre: "Editar catálogos",
-    descripcion: "Tipos de actividad, motivos de pérdida, roles de comité y demás.",
+    nombre: "Editar productos y cuotas",
+    descripcion: "Dar de alta y editar productos, y fijar las cuotas de Objetivos (decisiones §66).",
     roles: { VENDEDOR: no, GERENTE_PAIS: no, DIRECCION: no, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
   },
   REABRIR_OPORTUNIDAD: {
     nombre: "Reabrir oportunidad",
     descripcion: "Reabrir una cerrada, con motivo y traza. El folio no cambia (RN-18).",
     roles: { VENDEDOR: no, GERENTE_PAIS: no, DIRECCION: no, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
-  },
-  EXPORTAR_CON_COSTO: {
-    nombre: "Exportar con costo",
-    descripcion: "Incluir columnas de costo y utilidad en las exportaciones. Deja traza (INV-09).",
-    roles: { VENDEDOR: no, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
   },
   VER_ANALISIS: {
     nombre: "Ver análisis",
@@ -95,8 +72,8 @@ export const PERMISOS_POR_ROL: Record<string, DefinicionPermiso> = {
     roles: { VENDEDOR: no, GERENTE_PAIS: si, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
   },
   EDITAR_POLITICA_COMERCIAL: {
-    nombre: "Editar política comercial",
-    descripcion: "Umbrales de descuento, mínimos MEDDIC y SLA (INV-05).",
+    nombre: "Ver política comercial",
+    descripcion: "La pestaña de solo lectura con umbrales, mínimos MEDDIC y SLA por país (INV-05, decisiones §66).",
     roles: { VENDEDOR: no, GERENTE_PAIS: no, DIRECCION: si, ADMINISTRADOR: si, PREVENTA: no, MARKETING: no },
   },
   // Agregado el 14-sep-2026 con el módulo de usuarios (decisiones-pendientes §15).

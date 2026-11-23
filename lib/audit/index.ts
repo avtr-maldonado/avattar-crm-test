@@ -43,12 +43,10 @@ import { prisma } from "@/lib/db";
  * `action`, y un typo la vuelve invisible justo cuando alguien la necesita.
  */
 export type AuditAction =
-  | "AUTORIZAR_DESCUENTO"
   | "RECHAZAR_DESCUENTO"
   | "CAMBIAR_PRECIO_CONGELADO"
   | "REABRIR_OPORTUNIDAD"
   | "EDITAR_CATALOGO"
-  | "EXPORTAR_CON_COSTO"
   | "CAMBIAR_PROPIETARIO"
   | "CAMBIAR_PREVENTA"
   | "EDITAR_PERMISO"

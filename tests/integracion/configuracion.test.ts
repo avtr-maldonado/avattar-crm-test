@@ -69,9 +69,10 @@ describe("P-11 · quién entra · §11", () => {
 });
 
 describe("P-11 · INV-05, todo umbral aparece aquí", () => {
-  it("la política expone los nueve umbrales que las reglas consumen", async () => {
+  it("la política expone los umbrales que las reglas consumen, y solo esos (§67)", async () => {
     // Si una regla empieza a leer un umbral nuevo y nadie lo agrega a P-11,
-    // queda invisible para quien tiene que confirmarlo. Esta lista es el
+    // queda invisible para quien tiene que confirmarlo; si se expone uno que
+    // nada lee, la pantalla promete una regla que no existe. Esta lista es el
     // contrato entre la configuración y la pantalla.
     const paises = await configuracionDePolitica();
     const mx = paises.find((p) => p.code === "MX")!;
@@ -79,13 +80,9 @@ describe("P-11 · INV-05, todo umbral aparece aquí", () => {
 
     const expuestos = Object.keys(mx.commercialPolicy!).sort();
     expect(expuestos).toEqual([
-      "approvalSlaHours",
-      "discountThresholdDir",
-      "discountThresholdMgmt",
-      "healthyCoverageMin",
+      "leadFirstContactSlaHours",
       "meddicMinToClosing",
       "meddicMinToCommit",
-      "meddicMinToWin",
     ]);
   });
 
@@ -97,15 +94,13 @@ describe("P-11 · INV-05, todo umbral aparece aquí", () => {
     }
   });
 
-  it("los valores son los del seed, en fracción y no en porcentaje (INV-03)", async () => {
+  it("el impuesto va en fracción y no en porcentaje (INV-03)", async () => {
     const mx = (await configuracionDePolitica()).find((p) => p.code === "MX")!;
-    const pol = mx.commercialPolicy!;
 
-    expect(pol.discountThresholdMgmt.toString()).toBe("0.15");
-    expect(pol.discountThresholdDir.toString()).toBe("0.3");
     expect(mx.taxRate.toString()).toBe("0.16");
-    // Un 20 en vez de 0.2 significaría 2000 % al formatearlo.
-    expect(Number(pol.discountThresholdMgmt)).toBeLessThan(1);
+    // Un 16 en vez de 0.16 significaría 1600 % al formatearlo.
+    expect(Number(mx.taxRate)).toBeLessThan(1);
+    expect(mx.commercialPolicy!.leadFirstContactSlaHours).toBeGreaterThan(0);
   });
 });
 
@@ -171,11 +166,12 @@ describe("P-11 · catálogos", () => {
 });
 
 describe("P-11 · matriz de permisos · §5.2", () => {
-  it("los diecisiete permisos están, con su valor por los seis roles", async () => {
+  it("los catorce permisos están, con su valor por los seis roles", async () => {
     const permisos = await configuracionDePermisos();
     // Once del spec §5.2 más VER_OBJETIVOS_EQUIPO (P-08), CREAR_OPORTUNIDAD (§39) y los tres de
-    // prospectos (§58: VER_PROSPECTOS, GESTIONAR_PROSPECTOS, CONVERTIR_PROSPECTO) y ANALIZAR_CON_IA (§63).
-    expect(permisos).toHaveLength(17);
+    // prospectos (§58: VER_PROSPECTOS, GESTIONAR_PROSPECTOS, CONVERTIR_PROSPECTO) y ANALIZAR_CON_IA (§63), menos los tres
+    // que nada consultaba (§66).
+    expect(permisos).toHaveLength(14);
     expect(permisos.map((p) => p.code)).toContain("ANALIZAR_CON_IA");
     expect(permisos.map((p) => p.code)).toContain("CREAR_OPORTUNIDAD");
     expect(permisos.map((p) => p.code)).toContain("GESTIONAR_PROSPECTOS");
@@ -197,32 +193,14 @@ describe("P-11 · matriz de permisos · §5.2", () => {
     expect(porCodigo.VER_ANALISIS.VENDEDOR.granted).toBe(false);
     expect(porCodigo.VER_OBJETIVOS_EQUIPO.VENDEDOR.granted).toBe(false);
 
-    // RN-04 · Gerencia con tope, Dirección sin él.
-    expect(porCodigo.AUTORIZAR_DESCUENTO.GERENTE_PAIS).toEqual({
-      granted: true,
-      limite: "0.3",
-    });
-    expect(porCodigo.AUTORIZAR_DESCUENTO.DIRECCION).toEqual({
-      granted: true,
-      limite: null,
-    });
+    // §66 · los tres permisos que nada consultaba salieron de la matriz.
+    expect(porCodigo.AUTORIZAR_DESCUENTO).toBeUndefined();
+    expect(porCodigo.EXPORTAR_CON_COSTO).toBeUndefined();
+    expect(porCodigo.VER_OPORTUNIDADES_PROPIAS).toBeUndefined();
 
     // RN-18 · solo Administración reabre.
     expect(porCodigo.REABRIR_OPORTUNIDAD.ADMINISTRADOR.granted).toBe(true);
     expect(porCodigo.REABRIR_OPORTUNIDAD.DIRECCION.granted).toBe(false);
   });
 
-  it("«sin permiso» y «permiso sin tope» se distinguen en los datos", async () => {
-    // Los dos se leerían como «sin límite» si solo se mirara `limite`. La
-    // diferencia está en `granted`, y confundirlas dejaría a un vendedor
-    // autorizando descuentos ilimitados.
-    const porCodigo = Object.fromEntries(
-      (await configuracionDePermisos()).map((p) => [p.code, p.porRol]),
-    );
-
-    expect(porCodigo.AUTORIZAR_DESCUENTO.VENDEDOR.limite).toBeNull();
-    expect(porCodigo.AUTORIZAR_DESCUENTO.DIRECCION.limite).toBeNull();
-    expect(porCodigo.AUTORIZAR_DESCUENTO.VENDEDOR.granted).toBe(false);
-    expect(porCodigo.AUTORIZAR_DESCUENTO.DIRECCION.granted).toBe(true);
-  });
 });

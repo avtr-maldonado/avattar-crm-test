@@ -108,7 +108,6 @@ export function MatrizDePermisos({
                   <p className="font-medium text-texto-titulo" title={p.description ?? undefined}>
                     {p.name}
                   </p>
-                  <p className="font-mono text-xs text-texto-tenue">{p.code}</p>
                 </td>
                 {roles.map((r) => {
                   const v = p.porRol[r] ?? { granted: false, limite: null };

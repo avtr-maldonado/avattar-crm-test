@@ -1,5 +1,6 @@
 import { menuColapsado, oficinaActiva, requireSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
+import { veOportunidades as puedeVerOportunidades } from "@/lib/domain/opportunityAccess";
 import { contadoresDeNavegacion } from "@/lib/scope/contadores";
 import { BarraLateral, type SeccionNavegacion } from "@/components/ui/BarraLateral";
 import { ProveedorDeBarra } from "@/components/ui/ContextoDeBarra";
@@ -47,10 +48,10 @@ export default async function AppLayout({
   // un rubro que lleva a un 404 enseña a desconfiar del menú. Al volver, va con
   // `contador: contadores.then((c) => c.autorizaciones)` y `urgente`, porque
   // tienen SLA corriendo (RN-21); el lector ya calcula ese conteo.
-  // §58 y §59 · Oportunidades, Contactos, Productos y Objetivos solo para quien
-  // tiene algún permiso de ver oportunidades: Marketing no lo tiene y su menú
-  // queda en Prospectos y Actividades. Prospectos va en su propia sección.
-  const veOportunidades = can(session, "VER_OPORTUNIDADES_PROPIAS") || can(session, "VER_OPORTUNIDADES_OFICINA");
+  // §58, §59 y §66 · Oportunidades, Contactos, Productos y Objetivos solo para el
+  // rol que tiene oportunidades al alcance: Marketing no, y su menú queda en
+  // Prospectos y Actividades. Prospectos va en su propia sección.
+  const veOportunidades = puedeVerOportunidades(session);
   const marketing: Rubro[] = can(session, "VER_PROSPECTOS")
     ? [
         {

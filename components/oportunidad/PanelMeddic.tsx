@@ -106,7 +106,8 @@ export function PanelMeddic({
   personas: { id: string; name: string; jobTitle: string | null }[];
   /** Para declarar el rol de una persona nueva desde el panel (§2.1). */
   rolesDeComite: { id: string; name: string }[];
-  minimos: { cierre: number; ganada: number; compromiso: number };
+  /** Solo los mínimos que gatean: ganar no exige MEDDIC desde §25 (decisiones §67). */
+  minimos: { cierre: number; compromiso: number };
   puedeEditar: boolean;
   accion: Accion;
 }) {
@@ -183,7 +184,6 @@ export function PanelMeddic({
 
         <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
           <Umbral etiqueta="Entrar a Cierre" minimo={minimos.cierre} puntaje={puntaje} />
-          <Umbral etiqueta="Marcar ganada" minimo={minimos.ganada} puntaje={puntaje} />
           <Umbral etiqueta="Compromiso" minimo={minimos.compromiso} puntaje={puntaje} />
         </dl>
         {sinEvidencia > 0 ? (

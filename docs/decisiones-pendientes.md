@@ -26,7 +26,7 @@ invisible.
 | **Q-06** | ¿Se carga un resumen histórico agregado de 24 meses? | **No.** P-09 muestra «sin datos suficientes» durante los primeros trimestres, nunca un cero | — | Si se decide que sí, es un módulo de importación nuevo |
 | **Q-07** | ¿Se permiten conceptos libres en la cotización? ¿Con costo obligatorio? | **Sí, con costo obligatorio.** Sin costo, el margen de esa línea sería falso y las autorizaciones dejarían de ser confiables | `QuoteLine.productId` nulo | Validación en `lib/domain/quote.ts` |
 | **Q-08** | Pesos MEDDIC por omisión: ¿los seis iguales, o pesa más el decisor económico? | **17/17/17/17/15/17.** `DOLOR_IDENTIFICADO` a 15 para que sumen 100 | `MeddicWeight`, por pipeline | Editable desde P-11 sin desplegar (AC-17) |
-| **Q-09** | ¿El SLA de autorización se cuenta en horas hábiles o naturales? | **Hábiles**, 24 h | `CommercialPolicy.approvalSlaHours` | El número es dato; hábiles-contra-naturales sí es código, en `lib/domain/approval.ts` |
+| **Q-09** | ¿El SLA de autorización se cuenta en horas hábiles o naturales? | **Hábiles**, 24 h · dormida: sin autorizaciones no se muestra ni se lee (§67) | `CommercialPolicy.approvalSlaHours` | El número es dato; hábiles-contra-naturales sí es código, en `lib/domain/approval.ts` |
 | **Q-10** | ¿Quién carga el tipo de cambio, con qué frecuencia y de qué fuente? | **Sin efecto.** La decisión D-A eliminó la multimoneda | — | Volvería a aplicar si se reintroduce multimoneda |
 
 ---
@@ -3396,3 +3396,50 @@ de incurrirlo, como el de «nada cambió».
 
 **Costo de cambiar.** El monto: una constante. Calcularlo con los tokens de las fichas anteriores: un lector en
 `lib/scope/agente.ts` y la tarifa por millón de tokens en la base.
+
+## 66. La matriz de permisos sin permisos que nada consulta (23 de noviembre de 2026)
+
+**Qué se pidió.** Revisar qué permisos de Configuración › Roles y permisos se usan de verdad y quitar los que no.
+
+**Qué se encontró.** Diecisiete permisos. Once hacen lo que dice su nombre. Seis no:
+
+| Permiso | Hallazgo | Decisión |
+|---|---|---|
+| Autorizar descuento | Ninguna pantalla ni regla lo consultaba; las autorizaciones están fuera del alcance | Sale |
+| Exportar con costo | No existe exportación de oportunidades ni de cotizaciones | Sale |
+| Ver oportunidades propias | Solo mostraba el menú; el alcance lo decide el rol. Quitarlo escondía el menú y dejaba entrar por enlace | Sale; el menú lo decide `veOportunidades` (todos menos Marketing, el mismo corte que `lib/scope/opportunities`) |
+| Ver oportunidades de la oficina | No amplía lo que se ve: significa «actúa como Gerencia» (reasignar, editar las de otros, elegir propietario al convertir) | Se llama «Gestionar oportunidades de la oficina» |
+| Editar catálogos | Gobierna productos y cuotas; la pestaña Catálogos es de solo lectura | Se llama «Editar productos y cuotas» |
+| Editar política comercial | Solo muestra la pestaña de solo lectura; no hay edición | Se llama «Ver política comercial» |
+
+**Cómo.** Los códigos de los renombrados no cambian: solo `name` y `description` en la base. La migración de
+datos `20261123100000_permisos_sin_uso` borra las tres filas y sus celdas; aplicada en desarrollo, en producción
+pendiente de aprobación. `PERMISOS_CON_TOPE` quedó vacío y `limitFor` salió (no tenía llamadores); la columna
+`limit_value` y la celda de tope de la matriz quedan dormidas. Las acciones de bitácora `AUTORIZAR_DESCUENTO` y
+`EXPORTAR_CON_COSTO` salieron de `AuditAction`. Lo prueba `lib/domain/catalogoDePermisos.test.ts`.
+
+**Costo de volver.** Reinsertar el permiso con sus celdas (la definición está en la historia de
+`prisma/seed/permisos.ts`) y devolverlo a `PermissionCode`; para el descuento, además, su código en
+`PERMISOS_CON_TOPE`. Las autorizaciones de descuento, si vuelven, traen su permiso con ellas.
+
+## 67. La política comercial muestra solo lo que una regla lee (23 de noviembre de 2026)
+
+**Qué se pidió.** Revisar qué datos de Configuración › Política comercial siguen aplicando y quitar los que no.
+
+**Qué se encontró.** Diez datos por país. Cinco gobiernan algo; cinco no, y uno que sí gobierna no aparecía:
+
+| Dato | Hallazgo | Decisión |
+|---|---|---|
+| Autoriza Gerencia / Autoriza Dirección (`discountThresholdMgmt`, `discountThresholdDir`) | Ninguna regla los lee; las autorizaciones de descuento están fuera del alcance | Salen de la pantalla |
+| SLA de autorización (`approvalSlaHours`, Q-09) | Sin autorizaciones no hay nada que medir | Sale de la pantalla; Q-09 queda dormida |
+| Cobertura sana (`healthyCoverageMin`) | Nada la lee; Objetivos pinta la cobertura con su propio corte | Sale de la pantalla |
+| MEDDIC para ganar (`meddicMinToWin`) | Desde §25 ganar no exige MEDDIC; solo se mostraba, aquí y como «Marcar ganada» en el panel MEDDIC, prometiendo un requisito que no existe | Sale de la pantalla y del panel |
+| MEDDIC para cierre, MEDDIC para compromiso, impuesto, inicio de año fiscal, zona horaria | Los leen la compuerta de etapa, el pronóstico «Compromiso», la cotización, los lapsos y las actividades | Se quedan |
+| Primer contacto de prospectos (`leadFirstContactSlaHours`, §58) | El SLA de prospectos lo lee y la pantalla no lo mostraba (INV-05: todo umbral debe verse) | Entra |
+
+**Cómo.** Solo pantalla: `configuracionDePolitica` selecciona los tres de `CommercialPolicy` que se leen y la prueba
+de contrato de `tests/integracion/configuracion.test.ts` exige exactamente esos. Las columnas siguen en la base con sus
+valores, sin migración. `componentesFaltantesParaGanar` (`lib/domain/meddic.ts`) sigue con su prueba y sin llamadores.
+
+**Costo de volver.** Agregar el campo al `select` y a la prueba de contrato, y su `Umbral` en la pestaña. Si vuelve el
+MEDDIC para ganar como requisito, además la llamada en `marcarGanada` y el umbral en `PanelMeddic`.

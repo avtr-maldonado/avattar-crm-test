@@ -555,9 +555,9 @@ Hasta el 29-oct-2026 era «Administración» y solo entraba Administración. Des
 |---|---|---|---|
 | CU-34.1 Pipelines y etapas | **Cualquier rol** (§55) | Pestaña | Por pipeline: etapas con probabilidad, días para estancada, requisitos de entrada y modo (advertencia o bloqueante). **Solo lectura**: se edita en la base |
 | CU-34.2 Catálogos | **Cualquier rol** (§55) | Pestaña | Tipos de actividad y de documento, motivos de pérdida, roles de comité, orígenes y familias, con sus usos. Solo lectura |
-| CU-34.4 Política comercial | Dirección, Administración | Pestaña | Umbrales de descuento, mínimos y pesos MEDDIC, SLA, por país. Solo lectura |
+| CU-34.4 Política comercial | Dirección, Administración | Pestaña | Por país, solo lo que una regla lee (§67): MEDDIC para cierre y para compromiso, primer contacto de prospectos, impuesto, inicio de año fiscal y zona horaria. Solo lectura |
 | CU-34.5 Roles y permisos | Rol **Administrador**, por rol y no por permiso (§40, §55) | Pestaña | La matriz de §5.2 leída de la base: cada permiso por rol, con el tope donde lo hay, y cuántos usuarios activos tiene cada rol |
-| CU-34.6 Editar la matriz | Rol **Administrador** (§40, §43) | Pulsa «Editar permisos» arriba de la tabla; marca o desmarca una celda; en «Autorizar descuento» fija el tope en por ciento; «Terminar edición» vuelve a la lectura | La matriz se abre siempre en lectura (`—`, `✓`, «hasta 30 %»). En edición cada cambio guarda al instante, queda en la bitácora e invalida la caché de permisos. La columna de Administración no se edita desde aquí. Otro rol no ve el botón |
+| CU-34.6 Editar la matriz | Rol **Administrador** (§40, §43) | Pulsa «Editar permisos» arriba de la tabla; marca o desmarca una celda; «Terminar edición» vuelve a la lectura | La matriz se abre siempre en lectura (`—`, `✓`); desde §66 lleva catorce permisos y ninguno con tope. En edición cada cambio guarda al instante, queda en la bitácora e invalida la caché de permisos. La columna de Administración no se edita desde aquí. Otro rol no ve el botón |
 
 ### F-35 · Administrar usuarios
 

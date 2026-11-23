@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { can, limitFor, type Session } from "./permissions";
+import { can, type Session } from "./permissions";
 
 function sesion(parcial: Partial<Session> & Pick<Session, "role">): Session {
   return {
@@ -16,30 +16,18 @@ function sesion(parcial: Partial<Session> & Pick<Session, "role">): Session {
 const vendedor = sesion({
   role: "VENDEDOR",
   userId: "u-vendedor",
-  permissions: new Set(["VER_OPORTUNIDADES_PROPIAS", "VER_MARGEN"]),
+  permissions: new Set(["VER_MARGEN"]),
 });
 
 const gerente = sesion({
   role: "GERENTE_PAIS",
   userId: "u-gerente",
   permissions: new Set([
-    "VER_OPORTUNIDADES_PROPIAS",
     "VER_OPORTUNIDADES_OFICINA",
     "VER_MARGEN",
     "VER_COSTO",
-    "AUTORIZAR_DESCUENTO",
     "VER_ANALISIS",
   ]),
-  limits: { AUTORIZAR_DESCUENTO: "0.3000" },
-});
-
-const direccion = sesion({
-  role: "DIRECCION",
-  userId: "u-direccion",
-  countryCodes: ["MX", "CO", "CL"],
-  permissions: new Set(["AUTORIZAR_DESCUENTO", "VER_COSTO", "VER_ANALISIS"]),
-  // Sin límite: Dirección autoriza cualquier descuento (§5.2).
-  limits: { AUTORIZAR_DESCUENTO: null },
 });
 
 describe("can · §5.2", () => {
@@ -62,25 +50,3 @@ describe("can · §5.2", () => {
   });
 });
 
-describe("limitFor · RN-04", () => {
-  it("el gerente autoriza hasta su límite", () => {
-    expect(limitFor(gerente, "AUTORIZAR_DESCUENTO")?.toString()).toBe("0.3");
-  });
-
-  it("dirección autoriza sin límite: permiso concedido, tope nulo", () => {
-    expect(can(direccion, "AUTORIZAR_DESCUENTO")).toBe(true);
-    expect(limitFor(direccion, "AUTORIZAR_DESCUENTO")).toBeNull();
-  });
-
-  it("sin el permiso no hay límite que consultar", () => {
-    expect(limitFor(vendedor, "AUTORIZAR_DESCUENTO")).toBeNull();
-  });
-
-  it("distingue «sin permiso» de «permiso sin tope»", () => {
-    // Los dos devuelven null en limitFor, así que la diferencia tiene que
-    // preguntarse con can(). Confundirlas dejaría a un vendedor autorizando
-    // descuentos ilimitados.
-    expect(can(vendedor, "AUTORIZAR_DESCUENTO")).toBe(false);
-    expect(can(direccion, "AUTORIZAR_DESCUENTO")).toBe(true);
-  });
-});

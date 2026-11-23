@@ -18,6 +18,16 @@ export function puedeEditarOportunidad(
   return ownerId === session.userId || can(session, "VER_OPORTUNIDADES_OFICINA");
 }
 
+/**
+ * Si el rol tiene oportunidades a su alcance (§66): todos menos Marketing, el
+ * mismo corte que el `switch` de `lib/scope/opportunities`. Decide el menú.
+ * Antes lo decía «Ver oportunidades propias», que no recortaba nada: quitarlo
+ * escondía el menú y dejaba entrar por enlace.
+ */
+export function veOportunidades(session: Pick<Session, "role">): boolean {
+  return session.role !== "MARKETING";
+}
+
 export const SOLO_PROPIETARIO_O_GERENCIA =
   "Solo su propietario o Gerencia pueden modificarla. Preventa la consulta y le registra actividades.";
 

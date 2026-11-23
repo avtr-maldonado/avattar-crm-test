@@ -885,7 +885,6 @@ function TabMeddic({
       }))}
       minimos={{
         cierre: Number(politica.meddicMinToClosing),
-        ganada: Number(politica.meddicMinToWin),
         compromiso: Number(politica.meddicMinToCommit),
       }}
       rolesDeComite={rolesDeComite}

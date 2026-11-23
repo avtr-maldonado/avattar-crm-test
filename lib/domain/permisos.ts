@@ -26,8 +26,12 @@ import { money } from "@/lib/money";
  */
 const ROLES: readonly Role[] = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA", "MARKETING"];
 
-/** Los permisos que llevan tope: la matriz solo admite `limite` en ellos. */
-export const PERMISOS_CON_TOPE: ReadonlySet<string> = new Set(["AUTORIZAR_DESCUENTO"]);
+/**
+ * Los permisos que llevan tope: la matriz solo admite `limite` en ellos.
+ * Vacío desde §66: el único era «Autorizar descuento», que salió con las
+ * autorizaciones fuera del alcance. La columna y la celda quedan para cuando vuelvan.
+ */
+export const PERMISOS_CON_TOPE: ReadonlySet<string> = new Set<string>();
 
 export type CambioDePermiso = {
   role: Role;
