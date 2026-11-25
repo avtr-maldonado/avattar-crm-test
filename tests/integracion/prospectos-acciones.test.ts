@@ -1,3 +1,4 @@
+import ExcelJS from "exceljs";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import type { PermissionCode, Session } from "@/lib/auth/permissions";
@@ -82,6 +83,31 @@ describe("importar · previsualizar con un archivo y luego crear las válidas", 
     const r = await importarProspectosAccion(null, formulario({ filas: JSON.stringify(vista.datos.filas.filter((x) => x.datos).map((x) => x.datos)) }));
     expect(r).toMatchObject({ ok: true, datos: { creados: 1 } });
     if (r.ok) creados.push(...r.datos.ids);
+  });
+});
+
+describe("importar · Excel (§69)", () => {
+  it("lee un .xlsx con teléfono y puntaje guardados como número", async () => {
+    const activo = await prisma.leadChannel.findFirstOrThrow({ where: { active: true }, select: { name: true } });
+    const libro = new ExcelJS.Workbook();
+    const hoja = libro.addWorksheet("Prospectos");
+    hoja.addRow(["Contacto", "Correo", "Teléfono", "Cargo", "Empresa", "Giro", "País", "Canal", "Campaña", "Puntaje", "Notas"]);
+    hoja.addRow(["Importada Excel", `xlsx.${Date.now()}@accion.test`, 525598765432, null, "Importadora Excel", null, "MX", activo.name, null, 70, null]);
+    const f = new FormData();
+    f.set("archivo", new File([await libro.xlsx.writeBuffer()], "prospectos.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    const vista = await previsualizarImportacionAccion(null, f);
+    expect(vista).toMatchObject({ ok: true });
+    if (!vista.ok) return;
+    expect(vista.datos.filas).toHaveLength(1);
+    expect(vista.datos.filas[0]!.problemas).toEqual([]);
+    expect(vista.datos.filas[0]!.datos).toMatchObject({ phone: "525598765432", score: 70 });
+  });
+
+  it("un .xlsx que no es Excel se rechaza con el campo del archivo", async () => {
+    const f = new FormData();
+    f.set("archivo", new File(["no soy excel"], "prospectos.xlsx"));
+    const vista = await previsualizarImportacionAccion(null, f);
+    expect(vista).toMatchObject({ ok: false, motivo: "VALIDACION", problemas: [{ campo: "archivo", mensaje: "No se pudo leer el archivo como Excel." }] });
   });
 });
 

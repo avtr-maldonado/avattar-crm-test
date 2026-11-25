@@ -102,3 +102,12 @@ export function filtrarAgenda<T extends Filtrable>(actividades: readonly T[], f:
       (oportunidades.size === 0 || (a.opportunity !== null && oportunidades.has(a.opportunity.id))),
   );
 }
+
+/**
+ * Cuándo quedó hecha una actividad que estaba agendada · decisiones §69: a su
+ * hora si ya pasó; ahora si era para después. Sin esto, marcar hoy la llamada
+ * de pasado mañana dejaba la «última actividad» en el futuro.
+ */
+export function realizadaEn(agendada: Date, ahora: Date): Date {
+  return agendada.getTime() <= ahora.getTime() ? agendada : ahora;
+}

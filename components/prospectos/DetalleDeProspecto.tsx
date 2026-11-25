@@ -7,6 +7,7 @@ import { ETIQUETA_DE_ETAPA } from "@/lib/domain/leadStages";
 import { Boton, ControlSegmentado } from "@/components/ui/primitivas";
 import { Icono } from "@/components/ui/iconos";
 import { PastillaDeEstado, TranscripcionPlegada } from "@/components/actividades/comun";
+import { MarcarActividad, type AccionDeMarcar } from "./MarcarActividad";
 import { ComposerDeActividad, type ActividadEditable, type SincroniaDeCalendario, type TipoDeActividad } from "@/components/oportunidad/ComposerDeActividad";
 import { AccionesDeProspecto } from "./AccionesDeProspecto";
 import type { VendedorAsignable } from "./AsignarProspectos";
@@ -85,7 +86,7 @@ export function DetalleDeProspecto({
   vendedores: VendedorAsignable[];
   motivos: MotivoDeDescarte[];
   /** Lo que el composer necesita; `null` cuando la sesión no registra actividades aquí. */
-  composer: { tipos: TipoDeActividad[]; usuarios: { id: string; name: string }[]; usuarioActual: string; zonaEtiqueta: string; accion: AccionDeActividad } | null;
+  composer: { tipos: TipoDeActividad[]; usuarios: { id: string; name: string }[]; usuarioActual: string; zonaEtiqueta: string; accion: AccionDeActividad; marcar: AccionDeMarcar } | null;
   /** El botón y el panel de convertir, cuando esta sesión puede (§58). */
   convertir?: React.ReactNode;
   /** El botón y el panel de editar los datos, para quien gestiona. */
@@ -94,7 +95,9 @@ export function DetalleDeProspecto({
 }) {
   const { fecha, hora, fechaLarga } = formateadoresDe(zona);
 
-  const nueva = composer ? <ComposerDeActividad leadId={datos.id} {...composer} zona={zona} /> : null;
+  // `marcar` es del círculo de estado (§69), no del composer.
+  const paraComposer = composer && { tipos: composer.tipos, usuarios: composer.usuarios, usuarioActual: composer.usuarioActual, zonaEtiqueta: composer.zonaEtiqueta, accion: composer.accion };
+  const nueva = paraComposer ? <ComposerDeActividad leadId={datos.id} {...paraComposer} zona={zona} /> : null;
 
   return (
     <div className="space-y-4">
@@ -166,9 +169,13 @@ export function DetalleDeProspecto({
                   };
                   return (
                     <li key={a.id} className="flex items-start gap-3 py-2.5">
-                      <span className={clsx("mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-pill", estado === "realizada" ? "bg-exito/10 text-exito" : "bg-superficie-sutil text-texto-tenue")}>
-                        <Icono nombre={estado === "realizada" ? "palomita" : "reloj"} className="size-3.5" />
-                      </span>
+                      {composer ? (
+                        <MarcarActividad leadId={datos.id} activityId={a.id} asunto={a.subject} hecha={editable.hecha} accion={composer.marcar} />
+                      ) : (
+                        <span className={clsx("mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-pill", estado === "realizada" ? "bg-exito/10 text-exito" : "bg-superficie-sutil text-texto-tenue")}>
+                          <Icono nombre={estado === "realizada" ? "palomita" : "reloj"} className="size-3.5" />
+                        </span>
+                      )}
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                           <p className={clsx("text-sm font-medium", estado === "realizada" ? "text-texto-tenue" : "text-texto-titulo")}>{a.subject}</p>
@@ -180,7 +187,7 @@ export function DetalleDeProspecto({
                           {a.type.name} · {fecha.format(a.startsAt)}, {hora.format(a.startsAt)} · {a.user.name}
                         </p>
                       </div>
-                      {composer && <ComposerDeActividad leadId={datos.id} {...composer} zona={zona} actividad={editable} />}
+                      {paraComposer && <ComposerDeActividad leadId={datos.id} {...paraComposer} zona={zona} actividad={editable} />}
                     </li>
                   );
                 })}

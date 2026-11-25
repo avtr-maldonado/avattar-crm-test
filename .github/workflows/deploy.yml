@@ -1,0 +1,62 @@
+name: Publicar
+
+# Publica `main` en la VPS de producción (decisiones §70; docs/OPERACION.md) cuando «CI» pasó en ese
+# commit, o a mano (por ejemplo, para volver a una versión). Entra por SSH y corre deploy/deploy.sh,
+# que trae el commit, construye, respalda y aplica las migraciones que falten y levanta la app. Solo
+# corre en el repositorio de la organización. Calcado del de AVTR Tempo.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit de main a publicar (40 caracteres). Vacío = el último de main.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Una publicación a la vez, y nunca se cancela una a medias.
+concurrency:
+  group: publicar-produccion
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    if: >-
+      github.repository == 'avtr-ti/avattar-crm' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TARGET_SHA: ${{ inputs.sha || github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - name: Publicar en la VPS
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # La huella del servidor va fija: si cambia, la publicación se detiene.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # Corre el script de la VPS con el commit. Con la llave limitada a ese script en
+          # authorized_keys, el servidor ignora lo demás y solo toma el sha.
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o BatchMode=yes -o ServerAliveInterval=30 -o ConnectTimeout=20 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "bash /opt/avattar-crm/deploy/deploy.sh $TARGET_SHA"
+          rm -f ~/.ssh/deploy_key
+
+      - name: Prueba de humo
+        run: |
+          # La app contesta, el diagnóstico alcanza la base y el MCP sigue cerrado sin token.
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://crm.avtr.solutions/login)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://crm.avtr.solutions/salud)" = "200"
+          test "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -X POST https://crm.avtr.solutions/mcp)" = "401"

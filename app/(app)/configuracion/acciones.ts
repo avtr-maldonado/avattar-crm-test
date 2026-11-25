@@ -6,6 +6,7 @@ import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { invalidarPermisosEnCache, requireSession } from "@/lib/auth/session";
 import { crearUsuario, darAcceso, editarUsuario } from "@/lib/domain/usuario";
 import { cambiarPermiso } from "@/lib/domain/permisos";
+import { crearCampana, crearCanal, editarCampana, editarCanal } from "@/lib/domain/leadCatalog";
 import { getUsuario } from "@/lib/scope/usuarios";
 
 /**
@@ -146,5 +147,63 @@ export async function cambiarPermisoAccion(_previo: ResultadoAccion | null, form
     invalidarPermisosEnCache();
     revalidatePath("/configuracion");
   }
+  return r;
+}
+
+// ─────────────────────────────────────── Canales y campañas de prospectos · §68
+
+const esquemaCanal = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+});
+
+const esquemaCampana = esquemaCanal.extend({
+  channelId: z.string().optional(),
+});
+
+function revalidarCatalogos() {
+  revalidatePath("/configuracion");
+  revalidatePath("/prospectos");
+}
+
+/** Alta o edición de un canal: con `id` renombra, sin él da de alta. */
+export async function guardarCanalAccion(_previo: ResultadoAccion<unknown> | null, form: FormData): Promise<ResultadoAccion<unknown>> {
+  const datos = esquemaCanal.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+  const session = await requireSession();
+  const { id, name } = datos.data;
+  const r = id ? await editarCanal(session, id, { name }) : await crearCanal(session, { name });
+  if (r.ok) revalidarCatalogos();
+  return r;
+}
+
+/** Alta o edición de una campaña; el canal vacío es «Sin canal». */
+export async function guardarCampanaAccion(_previo: ResultadoAccion<unknown> | null, form: FormData): Promise<ResultadoAccion<unknown>> {
+  const datos = esquemaCampana.safeParse(Object.fromEntries(form));
+  if (!datos.success) return deZod(datos.error);
+  const session = await requireSession();
+  const { id, name } = datos.data;
+  const channelId = datos.data.channelId || null;
+  const r = id ? await editarCampana(session, id, { name, channelId }) : await crearCampana(session, { name, channelId });
+  if (r.ok) revalidarCatalogos();
+  return r;
+}
+
+const esquemaActivo = z.object({ id: z.string().min(1), active: z.boolean() });
+
+/** «Eliminar» es desactivar (MD-05); reactivar es la misma acción. */
+export async function activarCanalAccion(id: string, active: boolean): Promise<ResultadoAccion<unknown>> {
+  const datos = esquemaActivo.safeParse({ id, active });
+  if (!datos.success) return deZod(datos.error);
+  const r = await editarCanal(await requireSession(), datos.data.id, { active: datos.data.active });
+  if (r.ok) revalidarCatalogos();
+  return r;
+}
+
+export async function activarCampanaAccion(id: string, active: boolean): Promise<ResultadoAccion<unknown>> {
+  const datos = esquemaActivo.safeParse({ id, active });
+  if (!datos.success) return deZod(datos.error);
+  const r = await editarCampana(await requireSession(), datos.data.id, { active: datos.data.active });
+  if (r.ok) revalidarCatalogos();
   return r;
 }

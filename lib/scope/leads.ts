@@ -121,14 +121,42 @@ export async function auditoriaDeProspecto(leadId: string) {
   });
 }
 
-/** Los catálogos activos: canales, campañas y motivos de descarte. */
+/**
+ * Los catálogos de prospectos. `canales` y `campanas` son los activos: alta,
+ * edición e importación. Los filtros llevan también los inactivos (§68), porque
+ * desactivar una campaña no vuelve imposible buscar sus prospectos.
+ */
 export async function catalogosDeProspectos() {
-  const [canales, campanas, motivosDeDescarte] = await Promise.all([
-    prisma.leadChannel.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
-    prisma.leadCampaign.findMany({ where: { active: true }, select: { id: true, name: true, channelId: true }, orderBy: { name: "asc" } }),
+  const [canalesTodos, campanasTodas, motivosDeDescarte] = await Promise.all([
+    prisma.leadChannel.findMany({ select: { id: true, name: true, active: true }, orderBy: { name: "asc" } }),
+    prisma.leadCampaign.findMany({ select: { id: true, name: true, channelId: true, active: true }, orderBy: { name: "asc" } }),
     prisma.leadDiscardReason.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
-  return { canales, campanas, motivosDeDescarte };
+  return {
+    canales: canalesTodos.filter((c) => c.active).map(({ id, name }) => ({ id, name })),
+    campanas: campanasTodas.filter((c) => c.active).map(({ id, name, channelId }) => ({ id, name, channelId })),
+    canalesParaFiltrar: canalesTodos.map(({ id, name, active }) => ({ id, name: active ? name : `${name} (inactivo)` })),
+    campanasParaFiltrar: campanasTodas.map(({ id, name, active }) => ({ id, name: active ? name : `${name} (inactiva)` })),
+    motivosDeDescarte,
+  };
+}
+
+/** Configuración › Prospectos (§68): todos, activos e inactivos, con cuántos prospectos los usan. */
+export async function catalogosDeProspectosParaAdministrar() {
+  const [canales, campanas] = await Promise.all([
+    prisma.leadChannel.findMany({
+      select: { id: true, name: true, active: true, _count: { select: { leads: true } } },
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+    }),
+    prisma.leadCampaign.findMany({
+      select: { id: true, name: true, active: true, channelId: true, channel: { select: { name: true } }, _count: { select: { leads: true } } },
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+    }),
+  ]);
+  return {
+    canales: canales.map(({ _count, ...c }) => ({ ...c, usos: _count.leads })),
+    campanas: campanas.map(({ _count, channel, ...c }) => ({ ...c, canal: channel?.name ?? null, usos: _count.leads })),
+  };
 }
 
 /** A quién se le puede asignar un prospecto: vendedores y gerentes activos del país. */

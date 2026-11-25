@@ -3443,3 +3443,90 @@ valores, sin migración. `componentesFaltantesParaGanar` (`lib/domain/meddic.ts`
 
 **Costo de volver.** Agregar el campo al `select` y a la prueba de contrato, y su `Umbral` en la pestaña. Si vuelve el
 MEDDIC para ganar como requisito, además la llamada en `marcarGanada` y el umbral en `PanelMeddic`.
+
+## 68. Canales y campañas de prospectos se administran desde Configuración (25 de noviembre de 2026)
+
+**Qué se pidió.** Administrar los canales (agregar, eliminar) y las campañas (crear, eliminar) de Prospectos. §58 lo
+había dejado pendiente: «campañas editables desde Configuración (hoy catálogo sembrado)».
+
+**Decisión.**
+
+- **Dónde y quién.** Pestaña **Configuración › Prospectos**, con dos bloques, Canales y Campañas. La ve y la usa quien
+  tiene `GESTIONAR_PROSPECTOS` (Marketing, Gerencia, Dirección, Administración según la matriz); no se agregó permiso
+  nuevo. El dominio vuelve a comprobarlo: sin el permiso es `AUTORIZACION`.
+- **«Eliminar» es desactivar** (MD-05, como el resto de catálogos). La fila se queda atenuada con cuántos prospectos la
+  usan y se puede reactivar. Lo inactivo sale del alta, la edición y la importación CSV.
+- **Los filtros de Prospectos conservan los inactivos** (marcados «(inactivo)» / «(inactiva)»): desactivar una campaña
+  no vuelve imposible buscar sus prospectos.
+- **Un prospecto conserva al editarse el canal o la campaña inactivos que ya tenía**; elegir otro inactivo es
+  `VALIDACION`. Antes de §68 ese guardado fallaba aunque nadie tocara el campo (`catalogosValidos` con `vigentes`, y
+  `conservandoActual` agrega la opción al `<select>`).
+- **Renombrar** entra en el alcance, para corregir erratas sin desactivar y volver a crear. La campaña además cambia de
+  canal; el canal es opcional y, si se elige uno nuevo, debe estar activo. Desactivar un canal deja vivas sus campañas.
+- **Homónimo:** el nombre se guarda sin espacios sobrantes y se compara sin mayúsculas; el error nombra el existente. El
+  índice único resuelve la carrera y se reporta igual.
+- **Bitácora:** cada alta, renombre, cambio de canal y (des)activación escribe `EDITAR_CATALOGO` con entidad
+  `LeadChannel` o `LeadCampaign` en la misma transacción (INV-09), solo con lo que cambió; un guardado sin cambios no
+  escribe.
+
+**Cómo.** `lib/domain/leadCatalog.ts` (servicio y reglas puras con prueba), `catalogosDeProspectosParaAdministrar` y
+`canalesParaFiltrar`/`campanasParaFiltrar` en `lib/scope/leads.ts`, cuatro acciones en `configuracion/acciones.ts`,
+`components/admin/CatalogoDeProspectos.tsx`. Sin migración: las columnas `active` ya existían.
+
+**Costo de volver.** Quitar la pestaña y las acciones; los catálogos vuelven a ser del seed. Si el negocio quiere borrar
+de verdad los que nunca se usaron, es un `delete` condicionado a `usos = 0`, contra MD-05: pregunta para el negocio.
+
+## 69. Actividad del prospecto hecha con un clic, y la plantilla en Excel (25 de noviembre de 2026)
+
+**Qué se pidió.** En Prospectos: marcar como hecha una actividad sin tener que entrar a ella, y que la plantilla de
+importación pueda ser Excel.
+
+**Decisión.**
+
+- **El círculo de estado se pulsa** (solo en la ficha del prospecto; la pantalla de Actividades y las oportunidades
+  quedan como estaban, «de momento»). Pendiente → hecha; hecha → pendiente, para deshacer un clic sin abrir el panel. Lo
+  ve quien ya puede editar la actividad (quien gestiona o el asignado); para los demás sigue siendo informativo.
+  `marcarActividadDeProspecto` es la misma edición con `{ hecha }`: primer contacto, paso a Contactado y acumulados.
+- **Regla nueva: una actividad agendada para después que se marca hecha queda hecha ahora** (`realizadaEn` en
+  `lib/domain/agenda.ts`). Antes, la edición tomaba la hora agendada y dejaba la «última actividad» en el futuro. Aplica
+  a la edición de actividades de prospecto; la de oportunidades no se tocó.
+- **La plantilla es `.xlsx` por omisión** (`?formato=csv` sigue dando la de antes): hoja «Prospectos» con cabecera y
+  ejemplo, teléfono con formato de texto, y listas desplegables de País, Canal y Campaña hasta la fila 1000, armadas con
+  los catálogos activos al descargar (hoja oculta «Listas»).
+- **Importar acepta `.xlsx` y `.csv`.** Excel se lee como las mismas filas de texto que `parseCsv` (`leerXlsx`) y pasa
+  por la misma `validarFilas`: los números (teléfono, puntaje) sin notación científica, el correo que Excel vuelve enlace
+  como su texto, las filas vacías del final fuera. Un `.xlsx` ilegible es `VALIDACION` con el campo del archivo.
+- **Dependencia nueva: `exceljs`**, solo de servidor (`lib/domain/xlsx.ts`, el Route Handler y la acción).
+
+**Costo de volver.** Marcar: quitar `MarcarActividad` y la acción; `realizadaEn` puede quedarse. Excel: la ruta vuelve
+a CSV, el `accept` del panel también, y `exceljs` sale de `package.json`.
+
+## 70. Producción en la VPS de Avattar, con Supabase autoalojado (25 de noviembre de 2026)
+
+**Qué se pidió.** Publicar el CRM en la VPS de Avattar, como AVTR Tempo, en lugar de Vercel y del Supabase en la nube.
+
+**Decisión (B · todo en la VPS).**
+
+- **App:** imagen Docker standalone (`Dockerfile`, Node 22, `output: "standalone"` solo con `BUILD_STANDALONE=1`),
+  `compose.yaml` en el puerto 3132, en `/opt/avattar-crm`, detrás de Nginx Proxy Manager en `crm.avtr.solutions`.
+- **Supabase:** autoalojado en `/opt/supabase-crm`, contenedores `supabase-crm-*`, Envoy en 8002 y
+  `supabase-crm.avtr.solutions`. Postgres y pooler solo en `127.0.0.1`: la app llega por la red de Docker
+  (`supabase-crm-db:5432`), sin pooler. `deploy/supabase/instalar.sh` lo arma desde la carpeta del de Tempo (misma
+  versión oficial) con secretos nuevos y **llaves asimétricas ES256**, así que `getClaims` y el MCP siguen validando en
+  local. La app usa la llave publicable donde iba la anon y la secreta donde iba la service role.
+- **Entrar solo con Microsoft:** registro por correo, teléfono y anónimo apagados. El servidor OAuth 2.1 del MCP
+  (§61) va encendido con consentimiento en `/oauth/consent`. El perfil se liga por correo, así que los usuarios no
+  se migran: entran con Microsoft y se encuentran.
+- **Publicar:** `deploy/deploy.sh` (calcado del de Tempo) trae el commit, construye, **respalda la base si hay
+  migraciones pendientes**, las aplica con su anotación en `supabase_migrations.schema_migrations` (la crea si falta)
+  y regresa a la versión anterior si la app no queda sana. `.github/workflows/ci.yml` corre lint, tipos,
+  `pnpm test:unit` (sin integración ni el escenario §15, que leen la base real) y build; `deploy.yml` publica `main`
+  cuando CI pasa, con prueba de humo (`/login`, `/salud`, `POST /mcp` → 401).
+- **Catálogos y administradores:** servicio `herramientas` de `compose.yaml` (perfil, no arranca solo) para
+  `db:seed:catalogos` y la prueba de «al día».
+- **El Supabase en la nube de producción no se toca** hasta validar la VPS; apagarlo es otra decisión.
+
+**Cómo se opera:** `docs/OPERACION.md`.
+
+**Costo de volver.** La nube sigue intacta: apuntar las variables de la app a ella y publicar en otro lado. Los
+archivos de Docker no afectan `pnpm dev`.

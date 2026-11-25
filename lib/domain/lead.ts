@@ -5,6 +5,7 @@ import type { Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import type { LeadDetail } from "@/lib/scope/leads";
 import { iniciales } from "@/lib/etiquetas";
+import { realizadaEn } from "./agenda";
 import { transcripcionValida, type RegistroDeActividad, type EdicionDeActividad } from "./activity";
 import { convierteProspecto, decideComoVentas, gestionaProspecto } from "./leadAccess";
 import { crearOportunidad } from "./opportunity";
@@ -58,13 +59,20 @@ function validar(d: Partial<AltaDeProspecto>): Problema[] {
   return problemas;
 }
 
-async function catalogosValidos(d: { channelId?: string; campaignId?: string | null }): Promise<Problema[]> {
+/**
+ * Canal y campaña deben estar activos, salvo el que el prospecto ya tiene (§68):
+ * desactivar una campaña no obliga a cambiársela a cada prospecto que la trae.
+ */
+async function catalogosValidos(
+  d: { channelId?: string; campaignId?: string | null },
+  vigentes: { channelId?: string; campaignId?: string | null } = {},
+): Promise<Problema[]> {
   const problemas: Problema[] = [];
-  if (d.channelId !== undefined) {
+  if (d.channelId !== undefined && d.channelId !== vigentes.channelId) {
     const canal = await prisma.leadChannel.findFirst({ where: { id: d.channelId, active: true }, select: { id: true } });
     if (!canal) problemas.push({ campo: "channelId", mensaje: "Elige el canal." });
   }
-  if (d.campaignId) {
+  if (d.campaignId && d.campaignId !== vigentes.campaignId) {
     const campana = await prisma.leadCampaign.findFirst({ where: { id: d.campaignId, active: true }, select: { id: true } });
     if (!campana) problemas.push({ campo: "campaignId", mensaje: "Esa campaña no existe o está inactiva." });
   }
@@ -141,7 +149,8 @@ export async function editarProspecto(session: Session, lead: LeadDetail, cambio
     return falla("VALIDACION", { campo: "countryCode", mensaje: "El país no se cambia: decide alcance y vendedores. Descártalo y vuelve a darlo de alta." });
   }
 
-  const problemas = [...validar(cambios), ...(await catalogosValidos(cambios))];
+  const vigentes = { channelId: lead.channel.id, campaignId: lead.campaign?.id ?? null };
+  const problemas = [...validar(cambios), ...(await catalogosValidos(cambios, vigentes))];
   if (problemas.length > 0) return falla("VALIDACION", ...problemas);
 
   const datos: Prisma.LeadUncheckedUpdateInput = {};
@@ -567,10 +576,20 @@ export async function editarActividadDeProspecto(session: Session, lead: LeadDet
         ...(cambios.durationMin !== undefined ? { durationMin: cambios.durationMin } : {}),
         ...(cambios.userId ? { userId: cambios.userId } : {}),
         startsAt: cuando,
-        completedAt: hecha ? (actual.completedAt ?? cuando) : null,
+        // §69: si estaba agendada para después, queda hecha ahora.
+        completedAt: hecha ? (actual.completedAt ?? realizadaEn(cuando, new Date())) : null,
       },
     });
     await recalcularAgenda(tx, lead, session.userId);
   });
   return ok({ id: actual.id });
+}
+
+/**
+ * El clic en el círculo de estado · decisiones §69: marca o desmarca como hecha
+ * sin abrir el panel. Es la misma edición, con las mismas reglas: primer
+ * contacto, paso a Contactado y acumulados del prospecto.
+ */
+export async function marcarActividadDeProspecto(session: Session, lead: LeadDetail, activityId: string, hecha: boolean): Promise<ResultadoAccion<{ id: string }>> {
+  return editarActividadDeProspecto(session, lead, activityId, { hecha });
 }

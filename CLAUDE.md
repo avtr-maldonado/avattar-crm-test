@@ -123,7 +123,8 @@ lib/scope/          alcance por rol → INV-01. Toda consulta empieza aquí. Un 
                     usuariosParaCompartir) · organizations (todas las cuentas para todos → §29) ·
                     leads (§58: leadScope —vendedor los asignados **y desde Asignado** (§59), Marketing y Gerencia sus
                     países, Dirección y Administración todo, Preventa nada—, listLeads, getLeadDetail, auditoriaDeProspecto,
-                    catalogosDeProspectos, vendedoresParaAsignar, contarProspectosPendientes, correosConProspectoAbierto,
+                    catalogosDeProspectos (activos para alta; `*ParaFiltrar` con inactivos → §68),
+                    catalogosDeProspectosParaAdministrar (Configuración › Prospectos, con usos → §68), vendedoresParaAsignar, contarProspectosPendientes, correosConProspectoAbierto,
                     coincidenciasParaConvertir: la cuenta homónima, sus contactos y la persona por correo → §59)
 lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddic, stageGate,
                     riskFlags (banderas + evidencia con su número), folio, funnel (embudo y tasa de
@@ -147,7 +148,8 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     en tiempo, por vencer, vencido; venceEn → §58) · leadAccess (gestionaProspecto, decideComoVentas,
                     convierteProspecto → §58; etapasQueVe: el vendedor desde Asignado, lo aplican alcance, columnas y
                     filtro → §59) · leadMetrics (los cinco indicadores) · leadFolio (PRO-AAAA-NNNNN, contador
-                    propio) · csv (parseCsv, aCsv: RFC 4180 sin librería) · leadImport (validarFilas: la previsualización,
+                    propio) · csv (parseCsv, aCsv: RFC 4180 sin librería) · xlsx (§69: leerXlsx da las mismas filas de texto que parseCsv;
+                    plantillaXlsx con listas de país, canal y campaña activos; exceljs, solo servidor) · leadImport (validarFilas: la previsualización,
                     fila por fila, con cabeceras en español → §58),
                     agenda (estadoDeAgenda y agruparPorEstado: realizada, vencida por día, en progreso, por realizar → §42;
                     filtrarAgenda: estado, tipo y oportunidad recortan en memoria después del alcance → §55;
@@ -164,6 +166,8 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     insight (guardarRecomendacion: esquema, alcance, propietario o Gerencia, fuentes; fila nueva por guardado
                     y GUARDAR_RECOMENDACION → §61),
                     opportunity (cambiarFechaGanada: la única corrección de una cerrada, con bitácora → §55),
+                    leadCatalog (§68: canales y campañas; alta, renombre y desactivar con GESTIONAR_PROSPECTOS,
+                    homónimo sin mayúsculas, EDITAR_CATALOGO; conservandoActual para el `<select>` del prospecto),
                     lead (crear, editar, cambiarEtapa, asignar masivo, descartar con motivo, actividades del prospecto,
                     importar, convertir: cuenta y persona reutilizadas o creadas, oportunidad por crearOportunidad,
                     actividades re-apuntadas → §58),
@@ -244,7 +248,8 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     PastillaDeEtapa/PastillaDeSla/Puntaje · FiltrosDeProspectos (etapa, canal, campaña, vendedor, ingreso) ·
                     BuscadorDeProspectos (`q`) · NuevoProspecto · AsignarProspectos · DescartarProspecto · ConvertirProspecto
                     (§59: tres bloques en un envío —cuenta, contacto, oportunidad— prellenados con lo que el lector encontró;
-                    estadoDeConversion es su reductor puro: cambiar de cuenta reinicia al contacto) · ImportarProspectos (dos pasos) · PopupDeProspecto + DetalleDeProspecto (popup en la URL, `p=<id>`, tres
+                    estadoDeConversion es su reductor puro: cambiar de cuenta reinicia al contacto) · ImportarProspectos (dos pasos; `.xlsx` o `.csv` → §69) · MarcarActividad (el círculo de estado pulsable: hecha ↔ pendiente
+                    sin abrir el panel, solo para quien edita → §69) · PopupDeProspecto + DetalleDeProspecto (popup en la URL, `p=<id>`, tres
                     pestañas; la fila entera y la tarjeta lo abren) · EditarProspecto (dentro del popup, para quien gestiona) · AccionesDeProspecto ·
                     MenuDeAcciones · formato (DatosDeProspecto, formateadoresDe por zona)
                     actividades: VistaLista · VistaKanban (cuatro columnas de estado, sin arrastre) · VistaSemana (verde
@@ -295,7 +300,7 @@ components/{pipeline,oportunidad,contactos,productos,cotizacion,admin,objetivos,
                     100 % se evalúa en la hoja, nombra al vendedor y sus trimestres, marca la celda y apaga el
                     guardado → §54, regla pura en margen.ts · FilaDeLaHoja y AvisoDeLaHoja) · TiraDeTrimestres ·
                     TablaDeEquipo
-                    admin: MatrizDePermisos · FormularioDeUsuario (solo ofrece los roles y países que la sesión administra) ·
+                    admin: CatalogoDeProspectos (canales o campañas, panel por fila con useId → §68) · MatrizDePermisos · FormularioDeUsuario (solo ofrece los roles y países que la sesión administra) ·
                     FiltrosDeUsuarios (estado y rol en la URL → §55)
                     contactos: EditarOrganizacion (envía con useEnvioQueConserva: un error no borra lo tecleado → §48) ·
                     EditarPersona · AccesoDePersona (propietario y con quién se
@@ -323,7 +328,7 @@ app/(app)/          pantallas. Cada una trae sus Server Actions en un acciones.t
                     del grupo trae las globales: elegirOficinaAccion (cookie crm-oficina) y buscarGlobalAccion.
                     /configuracion es de todo rol y cada pestaña decide quién la ve; /admin redirige → §55.
                     /prospectos (VER_PROSPECTOS): page + acciones + datos.ts (aDatosDeProspecto, historiaDe) + loading;
-                    /prospectos/exportar y /prospectos/plantilla son Route Handlers que devuelven CSV → §58
+                    /prospectos/exportar devuelve CSV y /prospectos/plantilla Excel (`?formato=csv` la de antes) → §58, §69
 app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Route Handler, no acción),
                     oauth/consent (el consentimiento OAuth del MCP: cliente, alcances en español, Autorizar/Rechazar → §61)
 app/mcp/            POST: el servidor MCP (bearer → sesión → McpServer por request, sin estado); GET y DELETE 405 → §61
@@ -400,7 +405,9 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   con la cuenta y la persona que quien convierte eligió o completó en el panel —prellenadas con lo que existe
   (§59)—, re-apuntando las actividades; una cuenta nueva homónima se rechaza. **El vendedor ve sus prospectos
   desde Asignado** (`etapasQueVe`, §59). El SLA de primer contacto es de la política comercial
-  (`leadFirstContactSlaHours`) y su estado se calcula. Descartar exige motivo del catálogo. Convertido y
+  (`leadFirstContactSlaHours`) y su estado se calcula. Descartar exige motivo del catálogo. **Una actividad del prospecto se marca hecha con un clic, y si estaba agendada
+  para después queda hecha ahora** (`realizadaEn`, §69). **Canales y campañas los administra quien gestiona, en Configuración › Prospectos;
+  eliminar es desactivar**, y lo inactivo sigue en los filtros y en el prospecto que ya lo tenía (§68). Convertido y
   Descartado son terminales.
 - **El MCP corre con la identidad del token, no con RLS ni con service_role** (decisiones §61, módulo
   nuevo que no está en el spec): no hay políticas RLS (deny-all de respaldo), así que el bearer OAuth de
@@ -510,7 +517,7 @@ de estado, tipo, oportunidad y lapso; y Administración pasó a ser **Configurac
 **Prospectos** desde el 9-nov-2026 (§58): rol Marketing, pipeline propio de nueve etapas fijas, alcance por rol,
 lista con asignación masiva, kanban, detalle lateral, SLA de primer contacto, conversión que reutiliza cuenta y
 persona, importación y exportación CSV. Migraciones `rol_marketing`, `prospectos`,
-`transcripcion_de_actividad` (§60, 10-nov), `mcp_insights` (§61, 10-nov), `agente_de_analisis` (§62, 11-nov) y `analisis_a_demanda` (§63, 11-nov) aplicadas en desarrollo; en producción pendientes de aprobación.
+`transcripcion_de_actividad` (§60, 10-nov), `mcp_insights` (§61, 10-nov), `agente_de_analisis` (§62, 11-nov), `analisis_a_demanda` (§63, 11-nov) y `permisos_sin_uso` (§66, 23-nov) aplicadas en los dos ambientes; en producción el 23-nov-2026, con los catálogos de prospectos y la matriz de catorce permisos sembrados.
 **Servidor MCP remoto** desde el 10-nov-2026 (§61): OAuth 2.1 sobre Supabase Auth con consentimiento en el CRM,
 cuatro herramientas de lectura acotadas y `guardar_recomendacion` con fuentes verificadas; migración `mcp_insights`
 aplicada en desarrollo; el servidor OAuth de Supabase está encendido en desarrollo y **rechaza los alcances `crm:*`**:
@@ -543,17 +550,24 @@ pnpm db:seed                # escenario del prototipo aprobado → §15 (solo DE
 pnpm db:seed:catalogos --env <archivo> --admin "correo|Nombre|ROL|MX,CO"
                             # ambiente nuevo: catálogos + primeros administradores, sin negocio → §50
 pnpm test                   # unitarios de lib/domain + integración contra la base sembrada
+pnpm test:unit              # sin base: lo que corre CI (§70)
 pnpm test:e2e               # criterios de aceptación §14
 pnpm lint && pnpm typecheck
 pnpm react-doctor           # calidad de las pantallas · NO `pnpm doctor`, ese es de pnpm
 ```
 
+**Producción va a la VPS de Avattar desde el 25 de noviembre de 2026** (§70, `docs/OPERACION.md`): Docker
+(`Dockerfile`, `compose.yaml`, puerto 3132), Supabase autoalojado en `/opt/supabase-crm` (`supabase-crm-*`, Envoy 8002,
+llaves ES256), publicación con `deploy/deploy.sh` desde `.github/workflows/deploy.yml` cuando `ci.yml` pasa en `main`.
+CI corre `pnpm test:unit`, nunca contra una base. Lo de abajo sobre el proyecto PROD en la nube queda como respaldo hasta
+validar la VPS.
+
 **Dos ambientes desde el 12 de octubre de 2026** (§50): `cjwahoscedjnjgalmyzu` es desarrollo y lo
 lee `.env.local`; `luujtoutcpswhewsxmja` es producción y lo lee `.env.production.local`, que **no se
 versiona y no lo lee la aplicación local**. Producción ya tiene el esquema, los catálogos, dos
 administradores, el bucket y el acceso con Microsoft (mismo registro de Entra que desarrollo, con su
-propio callback), y va al día en migraciones (la décima, de datos, el 29-oct-2026); le falta el despliegue
-en Vercel y el dominio. Los dos comandos que escriben en una base reciben el
+propio callback), y va al día en migraciones (diecisiete; las siete de §58 a §66 el 23-nov-2026, con respaldo
+previo de la matriz de permisos fuera del repo); le falta el despliegue en Vercel, el dominio y el servidor OAuth. Los dos comandos que escriben en una base reciben el
 ambiente por `--env`, imprimen a qué host van antes de tocar nada y aceptan `--dry-run`. Nunca
 copiar las cadenas de producción a `.env.local`.
 

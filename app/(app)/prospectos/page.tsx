@@ -10,6 +10,7 @@ import { destinatariosValidos } from "@/lib/domain/opportunity";
 import { decideComoVentas, etapasQueVe, gestionaProspecto } from "@/lib/domain/leadAccess";
 import { indicadoresDeProspectos } from "@/lib/domain/leadMetrics";
 import { esTerminal, ETAPAS_ABIERTAS, ETAPAS_DE_PROSPECTO, ETIQUETA_DE_ETAPA, puedeTransitar } from "@/lib/domain/leadStages";
+import { conservandoActual } from "@/lib/domain/leadCatalog";
 import { buscarOrganizacionesAccion, personasDeOrganizacionAccion } from "@/app/(app)/oportunidades/acciones";
 import { relojDeAgenda } from "@/lib/domain/agenda";
 import { hrefDeProspectos, parseFiltrosDeProspectos, whereDeProspectos } from "@/lib/filters/leads";
@@ -37,6 +38,7 @@ import {
   crearProspectoAccion,
   descartarProspectoAccion,
   editarProspectoAccion,
+  marcarActividadDeProspectoAccion,
   guardarActividadDeProspectoAccion,
   importarProspectosAccion,
   previsualizarImportacionAccion,
@@ -189,8 +191,8 @@ export default async function ProspectosPage({ searchParams }: { searchParams: P
               conservar={conservar}
               catalogos={{
                 etapas: etapasVisibles.map((e) => ({ valor: e, etiqueta: ETIQUETA_DE_ETAPA[e] })),
-                canales: catalogos.canales.map((c) => ({ valor: c.id, etiqueta: c.name })),
-                campanas: catalogos.campanas.map((c) => ({ valor: c.id, etiqueta: c.name })),
+                canales: catalogos.canalesParaFiltrar.map((c) => ({ valor: c.id, etiqueta: c.name })),
+                campanas: catalogos.campanasParaFiltrar.map((c) => ({ valor: c.id, etiqueta: c.name })),
                 vendedores: puedeVerDeOtros ? vendedores.map((v) => ({ valor: v.id, etiqueta: v.name })) : [],
               }}
             />
@@ -328,7 +330,7 @@ function PanelDeDetalle({
       etapasPosibles={etapasPosibles}
       vendedores={vendedores}
       motivos={motivos}
-      composer={puedeActividades ? { tipos, usuarios: destinatarios, usuarioActual: session.userId, zonaEtiqueta, accion: guardarActividadDeProspectoAccion } : null}
+      composer={puedeActividades ? { tipos, usuarios: destinatarios, usuarioActual: session.userId, zonaEtiqueta, accion: guardarActividadDeProspectoAccion, marcar: marcarActividadDeProspectoAccion } : null}
       convertir={
         datos.puede.convertir && conversion ? (
           <ConvertirProspecto
@@ -364,7 +366,10 @@ function PanelDeDetalle({
               score: detalle.score,
               notes: detalle.notes,
             }}
-            catalogos={catalogos}
+            catalogos={{
+              canales: conservandoActual(catalogos.canales, detalle.channel),
+              campanas: conservandoActual(catalogos.campanas, detalle.campaign, "(inactiva)"),
+            }}
             accion={editarProspectoAccion}
           />
         ) : null

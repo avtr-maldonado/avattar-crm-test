@@ -19,7 +19,18 @@ import { FormularioDeUsuario } from "@/components/admin/FormularioDeUsuario";
 import { MatrizDePermisos } from "@/components/admin/MatrizDePermisos";
 import { FiltrosDeUsuarios as PastillasDeUsuarios } from "@/components/admin/FiltrosDeUsuarios";
 import { PERMISOS_CON_TOPE } from "@/lib/domain/permisos";
-import { cambiarPermisoAccion, crearUsuarioAccion, darAccesoAccion, editarUsuarioAccion } from "./acciones";
+import { CatalogoDeProspectos } from "@/components/admin/CatalogoDeProspectos";
+import { catalogosDeProspectosParaAdministrar } from "@/lib/scope/leads";
+import {
+  activarCampanaAccion,
+  activarCanalAccion,
+  cambiarPermisoAccion,
+  crearUsuarioAccion,
+  darAccesoAccion,
+  editarUsuarioAccion,
+  guardarCampanaAccion,
+  guardarCanalAccion,
+} from "./acciones";
 
 /**
  * P-11 · Configuración.
@@ -78,9 +89,12 @@ export default async function ConfiguracionPage({
   const puedeAdministrarUsuarios = can(session, "ADMINISTRAR_USUARIOS");
   const esAdministracion = session.role === "ADMINISTRADOR";
   const puedeVerPolitica = can(session, "EDITAR_POLITICA_COMERCIAL");
+  // §68 · canales y campañas los administra quien gestiona prospectos.
+  const puedeAdministrarProspectos = can(session, "GESTIONAR_PROSPECTOS");
 
   const pestanas: Pestana[] = [
     ...PESTANAS_DE_TODOS.map((p) => ({ ...p })),
+    ...(puedeAdministrarProspectos ? [{ clave: "prospectos", etiqueta: "Prospectos" }] : []),
     ...(puedeAdministrarUsuarios ? [{ clave: "usuarios", etiqueta: "Usuarios" }] : []),
     ...(esAdministracion ? [{ clave: "permisos", etiqueta: "Roles y permisos" }] : []),
     ...(puedeVerPolitica ? [{ clave: "politica", etiqueta: "Política comercial" }] : []),
@@ -112,6 +126,7 @@ export default async function ConfiguracionPage({
         <div className="mt-6">
           {activa === "pipelines" && <TabPipelines />}
           {activa === "catalogos" && <TabCatalogos />}
+          {activa === "prospectos" && <TabProspectos />}
           {activa === "permisos" && <TabPermisos session={session} />}
           {activa === "usuarios" && <TabUsuarios session={session} filtros={filtros} />}
           {activa === "politica" && <TabPolitica />}
@@ -326,6 +341,24 @@ function Catalogo({
         ))}
       </ul>
     </section>
+  );
+}
+
+// ─────────────────────────────────────────── Canales y campañas · §68
+
+async function TabProspectos() {
+  const { canales, campanas } = await catalogosDeProspectosParaAdministrar();
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <CatalogoDeProspectos tipo="canal" filas={canales} guardar={guardarCanalAccion} activar={activarCanalAccion} />
+      <CatalogoDeProspectos
+        tipo="campana"
+        filas={campanas}
+        canales={canales.map(({ id, name, active }) => ({ id, name, active }))}
+        guardar={guardarCampanaAccion}
+        activar={activarCampanaAccion}
+      />
+    </div>
   );
 }
 

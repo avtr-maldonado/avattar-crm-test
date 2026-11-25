@@ -12,12 +12,14 @@ import {
   crearProspecto,
   descartarProspecto,
   editarActividadDeProspecto,
+  marcarActividadDeProspecto,
   editarProspecto,
   importarProspectos,
   registrarActividadDeProspecto,
   type AltaDeProspecto,
 } from "@/lib/domain/lead";
 import { parseCsv } from "@/lib/domain/csv";
+import { esXlsx, leerXlsx } from "@/lib/domain/xlsx";
 import { validarFilas, type FilaValidada } from "@/lib/domain/leadImport";
 import { ETAPAS_DE_PROSPECTO } from "@/lib/domain/leadStages";
 import { getCommercialPolicy, getCountry } from "@/lib/policy";
@@ -219,17 +221,19 @@ const TAMANO_MAXIMO = 2 * 1024 * 1024;
 /** Paso uno: leer el archivo y decir fila por fila qué está bien. No escribe nada. */
 export async function previsualizarImportacionAccion(_previo: ResultadoDePrevisualizacion | null, form: FormData): Promise<ResultadoDePrevisualizacion> {
   const archivo = form.get("archivo");
-  if (!(archivo instanceof File) || archivo.size === 0) return falla("VALIDACION", { campo: "archivo", mensaje: "Elige un archivo CSV." });
+  if (!(archivo instanceof File) || archivo.size === 0) return falla("VALIDACION", { campo: "archivo", mensaje: "Elige un archivo Excel o CSV." });
   if (archivo.size > TAMANO_MAXIMO) return falla("VALIDACION", { campo: "archivo", mensaje: "El archivo pesa más de 2 MB." });
 
   const session = await requireSession();
   if (!can(session, "GESTIONAR_PROSPECTOS")) return falla("AUTORIZACION", "Importar prospectos es de Marketing o Gerencia.");
 
+  // §69: Excel o CSV llegan a las mismas filas de texto y pasan por la misma validación.
   let filas: string[][];
   try {
-    filas = parseCsv(await archivo.text());
-  } catch {
-    return falla("VALIDACION", { campo: "archivo", mensaje: "No se pudo leer el archivo como CSV." });
+    filas = esXlsx(archivo.name) ? await leerXlsx(await archivo.arrayBuffer()) : parseCsv(await archivo.text());
+  } catch (e) {
+    const mensaje = esXlsx(archivo.name) && e instanceof Error ? e.message : "No se pudo leer el archivo como CSV.";
+    return falla("VALIDACION", { campo: "archivo", mensaje });
   }
   if (filas.length < 2) return falla("VALIDACION", { campo: "archivo", mensaje: "El archivo no trae filas debajo de la cabecera." });
 
@@ -331,4 +335,19 @@ export async function guardarActividadDeProspectoAccion(_previo: ResultadoDeActi
   revalidatePath("/prospectos");
   revalidatePath("/actividades");
   return ok({ id: r.datos.id, siguienteEn: null, calendario: "NO_APLICA" });
+}
+
+const esquemaMarca = z.object({ leadId: z.string().min(1), activityId: z.string().min(1), hecha: z.boolean() });
+
+/** El clic en el círculo de estado: hecha o de vuelta a pendiente, sin abrir el panel · §69. */
+export async function marcarActividadDeProspectoAccion(leadId: string, activityId: string, hecha: boolean): Promise<ResultadoAccion<{ id: string }>> {
+  const datos = esquemaMarca.safeParse({ leadId, activityId, hecha });
+  if (!datos.success) return deZod(datos.error);
+  const { session, lead } = await cargar(datos.data.leadId);
+  if (!lead) return falla("AUTORIZACION", NO_ALCANZA);
+  const r = await marcarActividadDeProspecto(session, lead, datos.data.activityId, datos.data.hecha);
+  if (!r.ok) return r;
+  revalidatePath("/prospectos");
+  revalidatePath("/actividades");
+  return r;
 }

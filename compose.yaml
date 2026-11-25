@@ -1,0 +1,62 @@
+# Producción en la VPS (decisiones §70; docs/OPERACION.md): la app en el puerto 3132. HTTPS y el
+# dominio los pone Nginx Proxy Manager, que ya corre en la VPS y apunta a ese puerto.
+#
+#   docker compose up -d --build app
+#
+# Lee el `.env` de esta carpeta (forma en .env.example, nunca en git): las NEXT_PUBLIC_* se incrustan
+# al construir la imagen y el resto llega al contenedor al arrancar.
+#
+# La base es el Postgres del Supabase del CRM (/opt/supabase-crm), al que se llega por su red de
+# Docker y por nombre de contenedor: Postgres no se publica en el host, así que no choca con los otros
+# Supabase de la VPS. DATABASE_URL y DIRECT_URL apuntan a supabase-crm-db:5432.
+name: avattar-crm
+
+services:
+  app:
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?falta NEXT_PUBLIC_SUPABASE_URL en .env}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?falta NEXT_PUBLIC_SUPABASE_ANON_KEY en .env}
+    image: avattar-crm
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - '3132:3132'
+    networks: [default, supabase]
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3132/login').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # A mano, nunca arranca solo. Catálogos y administradores, y la prueba de «al día»:
+  #   docker compose run --rm herramientas pnpm db:seed:catalogos --env .env.produccion --dry-run --admin "…"
+  #   docker compose run --rm herramientas sh -c 'pnpm exec prisma migrate diff --from-url "$DIRECT_URL" --to-schema-datamodel prisma/schema.prisma --script'
+  herramientas:
+    profiles: [herramientas]
+    build:
+      context: .
+      target: herramientas
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?falta NEXT_PUBLIC_SUPABASE_URL en .env}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?falta NEXT_PUBLIC_SUPABASE_ANON_KEY en .env}
+    image: avattar-crm-herramientas
+    env_file: .env
+    # El seed exige su ambiente por archivo (--env): el mismo .env, de solo lectura.
+    volumes:
+      - ./.env:/app/.env.produccion:ro
+    networks: [supabase]
+
+networks:
+  supabase:
+    name: supabase-crm_default
+    external: true

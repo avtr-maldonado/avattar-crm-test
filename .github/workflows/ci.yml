@@ -1,0 +1,46 @@
+name: CI
+
+# Decisiones §70. Un push a una rama con PR abierto no lanza dos corridas: solo `main` por push, el
+# resto por PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Rellenos no secretos: las NEXT_PUBLIC_* se incrustan en el build y Prisma pide forma de URL. CI
+# nunca se conecta a una base: las pruebas de integración leen la base real de desarrollo y el
+# escenario §15 (prisma/seed/seed.test.ts) también, así que aquí corren las unitarias y las de
+# arquitectura (`pnpm test:unit`). Nunca pongas una cadena de conexión real en este repositorio.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:1/ci
+  DIRECT_URL: postgresql://ci:ci@127.0.0.1:1/ci
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Un push nuevo a la misma rama cancela la verificación anterior: no toca datos.
+    concurrency:
+      group: ci-verify-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+
+      # La versión de pnpm sale de `packageManager` en package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:unit
+      - run: pnpm build

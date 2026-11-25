@@ -6,6 +6,16 @@ const nextConfig: NextConfig = {
   // Sin esto, Next infiere la raíz del workspace desde un package-lock.json
   // suelto en el directorio del usuario y avisa en cada arranque.
   outputFileTracingRoot: path.join(__dirname),
+  // La imagen de Docker (decisiones §70) usa el servidor standalone. Solo al
+  // construirla: `pnpm dev` y el build local quedan como estaban.
+  ...(process.env.BUILD_STANDALONE === "1"
+    ? {
+        output: "standalone" as const,
+        // El motor de Prisma se carga por ruta, no por import, y el trazado de
+        // Next a veces lo deja fuera del standalone.
+        outputFileTracingIncludes: { "/**": ["./node_modules/.prisma/client/**/*"] },
+      }
+    : {}),
   experimental: {
     // Habilita `forbidden()` y `unauthorized()`, que devuelven 403 y 401 de
     // verdad y renderizan forbidden.tsx / unauthorized.tsx.

@@ -13,7 +13,7 @@ export type ResultadoDePrevisualizacion = ResultadoAccion<{ filas: FilaValidada[
 export type ResultadoDeImportacion = ResultadoAccion<{ creados: number; ids: string[] }>;
 
 /**
- * Importar prospectos desde CSV, en dos pasos · decisiones §58. Primero el
+ * Importar prospectos desde Excel o CSV (§69), en dos pasos · decisiones §58. Primero el
  * archivo se lee en el servidor y vuelve fila por fila con lo que está bien y
  * lo que no; después «Importar N válidos» crea solo esos. Lo que no pasa se ve
  * con su fila y su razón, para corregir el archivo y volver a subirlo.
@@ -95,9 +95,9 @@ export function ImportarProspectos({
         {!filas ? (
           <form id={idRevisar} action={revisar} className="flex flex-col gap-4">
             <label htmlFor={`${id}-archivo`} className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-md border border-dashed border-borde-fuerte px-6 py-10 text-center text-sm text-texto-cuerpo hover:bg-superficie-sutil">
-              <span className="font-medium text-texto-titulo">Elige el archivo CSV</span>
+              <span className="font-medium text-texto-titulo">Elige el archivo Excel o CSV</span>
               <span className="text-xs text-texto-tenue">Contacto, correo, teléfono, cargo, empresa, giro, país, canal, campaña, puntaje, notas</span>
-              <input id={`${id}-archivo`} name="archivo" type="file" accept=".csv,text/csv" required className="mt-2 text-xs" />
+              <input id={`${id}-archivo`} name="archivo" type="file" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required className="mt-2 text-xs" />
             </label>
             <AvisosDeAccion resultado={problemaDeArchivo && !problemaDeArchivo.ok ? problemaDeArchivo : null} />
           </form>

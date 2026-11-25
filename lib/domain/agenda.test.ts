@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agruparPorEstado, estadoDeAgenda, filtrarAgenda, semanaElegida, relojDeAgenda } from "./agenda";
+import { agruparPorEstado, estadoDeAgenda, filtrarAgenda, semanaElegida, realizadaEn, relojDeAgenda } from "./agenda";
 
 /**
  * El estado de una actividad en la agenda · decisiones §42.
@@ -125,5 +125,18 @@ describe("filtrarAgenda · los filtros de Actividades recortan en memoria, despu
   it("los filtros se combinan con Y", () => {
     expect(ids(filtrarAgenda(lista, { estados: ["vencida"], tipos: ["llamada"], oportunidades: ["op-1"] }, reloj))).toEqual(["a"]);
     expect(ids(filtrarAgenda(lista, { estados: ["realizada"], tipos: ["llamada"], oportunidades: [] }, reloj))).toEqual([]);
+  });
+});
+
+describe("realizadaEn · §69", () => {
+  const ahora = new Date("2026-11-25T18:00:00Z");
+
+  it("una actividad agendada en el pasado se da por hecha a su hora", () => {
+    const agendada = new Date("2026-11-24T16:00:00Z");
+    expect(realizadaEn(agendada, ahora)).toEqual(agendada);
+  });
+
+  it("una agendada en el futuro que se marca hoy queda hecha ahora, no en el futuro", () => {
+    expect(realizadaEn(new Date("2026-11-27T16:00:00Z"), ahora)).toEqual(ahora);
   });
 });

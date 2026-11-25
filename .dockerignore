@@ -1,0 +1,17 @@
+# La imagen se construye desde el repo, nunca con secretos dentro (decisiones §70).
+.env
+.env.*
+!.env.example
+node_modules
+.next
+.git
+.github
+.claude
+.agents
+.codebase-memory
+docs
+tests
+test-results
+playwright-report
+*.tsbuildinfo
+*.log
