@@ -73,11 +73,14 @@ Después, a mano:
    proxy_buffer_size 128k;
    proxy_buffers 4 256k;
    proxy_busy_buffers_size 256k;
+   large_client_header_buffers 4 32k;
    ```
 
-   Sin esto, `/auth/callback` da **502** (`upstream sent too big header` en el registro del proxy):
-   las cookies de sesión de Supabase que se fijan al entrar no caben en el búfer por omisión de
-   Nginx. Se pone en la interfaz, no en el `.conf`: el proxy regenera sus archivos y lo pisaría.
+   Las cookies de sesión de Supabase (token ES256 más los de Microsoft, en varios trozos) no caben
+   en los búferes por omisión de Nginx. Sin las tres primeras líneas, `/auth/callback` da **502**
+   (`upstream sent too big header`: la respuesta que fija las cookies). Sin la última, toda página
+   después de entrar da **400** con `Sent-to` vacío en el registro de acceso (la petición que las
+   lleva; Nginx contesta sin llegar a la app). Se pone en la interfaz, no en el `.conf`: el proxy regenera sus archivos y lo pisaría.
 5. `docker compose up -d` en `/opt/supabase-crm/docker`.
 
 Revertir mientras no hay datos: `docker compose down -v` en esa carpeta y borrarla. No toca los otros

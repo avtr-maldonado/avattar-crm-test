@@ -50,7 +50,8 @@ const TIPOS_PERMITIDOS = new Set([
   "text/csv",
 ]);
 
-const TAMANO_MAXIMO = 25 * 1024 * 1024;
+/** El tope de un documento. `next.config.ts` deja pasar envíos un poco más grandes (§70; lo vigila tests/arquitectura/limites.test.ts). */
+export const TAMANO_MAXIMO = 25 * 1024 * 1024;
 
 /**
  * Sube un documento y lo liga a la oportunidad.

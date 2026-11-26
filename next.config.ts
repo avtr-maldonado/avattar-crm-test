@@ -25,6 +25,12 @@ const nextConfig: NextConfig = {
     // «no tienes acceso» respondería 200, y una prueba que verifique el código
     // de estado —o un cliente de API— no notaría la diferencia.
     authInterrupts: true,
+    // Un documento viaja en el FormData de una Server Action (lib/domain/document.ts, tope de
+    // 25 MB). Por omisión Next corta las acciones en 1 MB y lo que pasa por el middleware en 10 MB:
+    // todo documento de más de 1 MB fallaba. 26 MB = el archivo más el resto del formulario (§70;
+    // lo vigila tests/arquitectura/limites.test.ts).
+    serverActions: { bodySizeLimit: "26mb" },
+    middlewareClientMaxBodySize: "26mb",
   },
 };
 

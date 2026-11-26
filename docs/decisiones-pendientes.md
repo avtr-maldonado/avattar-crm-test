@@ -3538,6 +3538,12 @@ encabezados de Nginx; se agrandan en el proxy de `crm.avtr.solutions` (OPERACION
 arma para sí misma (callback, salida, metadatos del MCP) salen de `origenPublico` (`lib/origen.ts`): `APP_URL` si está, el
 origen del request si no (`pnpm dev`). Nunca de `Host` ni `X-Forwarded-Host`, que manda el cliente.
 
+**Documentos de más de 1 MB (26-nov).** Al revisar la subida antes de usarla en producción: el documento viaja en el
+FormData de una Server Action, y Next corta por omisión las acciones en 1 MB y el middleware en 10 MB, muy por debajo
+de los 25 MB que acepta `subirDocumento`. No era de la VPS: pasaba igual en `pnpm dev`. `next.config.ts` fija los dos en
+26 MB y `tests/arquitectura/limites.test.ts` los compara con el tope del dominio. Los demás tramos sobran: Nginx Proxy
+Manager 2000 MB, Storage 50 MB, bucket sin límite propio.
+
 **Cómo se opera:** `docs/OPERACION.md`.
 
 **Costo de volver.** La nube sigue intacta: apuntar las variables de la app a ella y publicar en otro lado. Los
