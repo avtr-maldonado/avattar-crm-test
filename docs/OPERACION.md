@@ -66,7 +66,18 @@ Después, a mano:
    `https://supabase-crm.avtr.solutions/auth/v1/callback`.
 3. DNS (Hostinger): registros A `crm` y `supabase-crm` a `[IP_VPS]`.
 4. Nginx Proxy Manager: `supabase-crm.avtr.solutions` → `172.16.0.1:8002` con **Websockets** y
-   certificado; `crm.avtr.solutions` → `172.16.0.1:3132` con certificado.
+   certificado; `crm.avtr.solutions` → `172.16.0.1:3132` con certificado y, en *Advanced*, búferes
+   grandes para los encabezados:
+
+   ```nginx
+   proxy_buffer_size 128k;
+   proxy_buffers 4 256k;
+   proxy_busy_buffers_size 256k;
+   ```
+
+   Sin esto, `/auth/callback` da **502** (`upstream sent too big header` en el registro del proxy):
+   las cookies de sesión de Supabase que se fijan al entrar no caben en el búfer por omisión de
+   Nginx. Se pone en la interfaz, no en el `.conf`: el proxy regenera sus archivos y lo pisaría.
 5. `docker compose up -d` en `/opt/supabase-crm/docker`.
 
 Revertir mientras no hay datos: `docker compose down -v` en esa carpeta y borrarla. No toca los otros
@@ -76,6 +87,7 @@ Supabase.
 
 | En `/opt/avattar-crm/.env` | Sale de `/opt/supabase-crm/docker/.env` |
 |---|---|
+| `APP_URL` | `https://crm.avtr.solutions`, fijo: sin ella, el login redirige a `https://0.0.0.0:3132` (el host interno que ve el servidor detrás del proxy) |
 | `NEXT_PUBLIC_SUPABASE_URL` | `SUPABASE_PUBLIC_URL` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `SUPABASE_PUBLISHABLE_KEY` (la llave nueva; supabase-js la acepta donde iba la anon) |
 | `SUPABASE_SERVICE_ROLE_KEY` | `SUPABASE_SECRET_KEY` |

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { vincularEntraObjectId } from "@/lib/auth/session";
 import { resumenDeError } from "@/lib/domain/salud";
+import { origenPublico } from "@/lib/origen";
 
 /**
  * Callback de Entra ID.
@@ -21,7 +22,9 @@ import { resumenDeError } from "@/lib/domain/salud";
  * se manda a `/login` con la causa concreta, que la pantalla de login muestra.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // §70: detrás del proxy, request.url trae el host interno del contenedor.
+  const origin = origenPublico(request);
   const code = searchParams.get("code");
   const destino = searchParams.get("destino") ?? "/oportunidades";
   const errorDelProveedor = searchParams.get("error_description");

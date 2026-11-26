@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { origenPublico } from "@/lib/origen";
 
 /**
  * Cerrar sesión.
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
   await supabase.auth.signOut();
 
   // 303: el navegador sigue la redirección con GET aunque llegó por POST.
-  return NextResponse.redirect(new URL("/login?salida=1", request.url), { status: 303 });
+  return NextResponse.redirect(new URL("/login?salida=1", origenPublico(request)), { status: 303 });
 }
 
 export function GET() {

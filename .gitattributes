@@ -1,0 +1,5 @@
+# Los scripts corren en Linux (la VPS, CI): siempre con LF, aunque se editen en Windows (§70).
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

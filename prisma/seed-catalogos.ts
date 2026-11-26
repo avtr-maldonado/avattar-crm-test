@@ -33,6 +33,9 @@ import { existsSync } from "node:fs";
 
 const args = process.argv.slice(2);
 const forzar = args.includes("--force");
+// Lee, valida y dice qué haría, sin escribir nada. Hasta el 26-nov-2026 la bandera se ignoraba y el
+// «ensayo» escribía (§70): no volver a aceptar una bandera sin implementarla.
+const ensayo = args.includes("--dry-run");
 
 function valorDe(bandera: string): string | undefined {
   const i = args.indexOf(bandera);
@@ -84,7 +87,7 @@ function destinoDe(cadena: string) {
 
 // ──────────────────────────────────────────────────────── Los administradores
 
-const ROLES = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA"] as const;
+const ROLES = ["VENDEDOR", "GERENTE_PAIS", "DIRECCION", "ADMINISTRADOR", "PREVENTA", "MARKETING"] as const;
 const PAISES_VALIDOS = ["MX", "CO", "CL"] as const;
 
 type Admin = {
@@ -139,7 +142,8 @@ async function main() {
 
   console.log(`Ambiente : ${archivo}`);
   console.log(`Destino  : ${destinoDe(url!)}`);
-  console.log(`Siembra  : catálogos${admins.length > 0 ? ` + ${admins.length} usuario(s)` : " (sin usuarios)"}\n`);
+  console.log(`Siembra  : catálogos${admins.length > 0 ? ` + ${admins.length} usuario(s)` : " (sin usuarios)"}`);
+  console.log(`Modo     : ${ensayo ? "ENSAYO · no escribe nada" : "escribe"}\n`);
 
   // La importación va aquí, después de cargar el ambiente: el cliente de
   // Prisma lee la URL al construirse, y arriba todavía no estaba la correcta.
@@ -168,6 +172,15 @@ async function main() {
     }
     if (usuarios > 0) {
       console.log(`  aviso: la base ya tiene ${usuarios} usuario(s); los de --admin se actualizan, no se duplican\n`);
+    }
+
+    if (ensayo) {
+      console.log("  catálogos, política comercial, matriz de permisos y pipelines: se reescribirían con los del código");
+      for (const a of admins) {
+        console.log(`  ${a.email} · ${a.name} · ${a.role} · ${a.countryCodes.join("/")} · se crearía o actualizaría`);
+      }
+      console.log("\nEnsayo: no se escribió nada.");
+      return;
     }
 
     await sembrarCatalogos(prisma);

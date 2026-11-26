@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Session } from "@/lib/auth/permissions";
 import { sesionDesdeClaims } from "@/lib/auth/perfil";
+import { origenPublico } from "@/lib/origen";
 
 /**
  * El bearer del servidor MCP · decisiones §61.
@@ -82,11 +83,11 @@ export function permiteAlcance(sesion: Pick<SesionMcp, "scopes">, alcance: Alcan
   return sesion.scopes.length === 0 || sesion.scopes.includes(alcance);
 }
 
-/** El origen público del servidor: `MCP_RESOURCE_URL` si está, si no el del request. */
+/** El origen público del servidor: `MCP_RESOURCE_URL` si está; si no, `APP_URL` o el del request (§70). */
 export function origenDe(request: Request): string {
   const fijo = process.env.MCP_RESOURCE_URL?.trim();
   if (fijo) return fijo.replace(/\/+$/, "");
-  return new URL(request.url).origin;
+  return origenPublico(request);
 }
 
 export const RUTA_DE_METADATOS = "/.well-known/oauth-protected-resource";

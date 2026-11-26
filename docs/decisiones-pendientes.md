@@ -3526,6 +3526,18 @@ a CSV, el `accept` del panel también, y `exceljs` sale de `package.json`.
   `db:seed:catalogos` y la prueba de «al día».
 - **El Supabase en la nube de producción no se toca** hasta validar la VPS; apagarlo es otra decisión.
 
+**Hallazgo al publicar (26-nov):** `db:seed:catalogos` aceptaba `--dry-run` sin implementarlo: el «ensayo» escribía.
+Pasó dos veces —en el Supabase de producción en la nube el 23-nov y en la VPS el 26-nov— y en ambas la corrida real
+escribió lo mismo un minuto después, así que el estado final no cambió. Desde hoy el ensayo lee, valida, dice qué haría
+y sale sin escribir (probado en la VPS con un administrador ficticio que no llegó a la base). De paso, `--admin` acepta
+`MARKETING`, que faltaba desde §58.
+
+**Dos ajustes del primer ingreso (26-nov).** (1) El callback daba **502**: las cookies de sesión no cabían en el búfer de
+encabezados de Nginx; se agrandan en el proxy de `crm.avtr.solutions` (OPERACION.md §2.1). (2) Después redirigía a
+`https://0.0.0.0:3132`: detrás del proxy, el servidor standalone ve `request.url` con su host interno. Las URLs que la app
+arma para sí misma (callback, salida, metadatos del MCP) salen de `origenPublico` (`lib/origen.ts`): `APP_URL` si está, el
+origen del request si no (`pnpm dev`). Nunca de `Host` ni `X-Forwarded-Host`, que manda el cliente.
+
 **Cómo se opera:** `docs/OPERACION.md`.
 
 **Costo de volver.** La nube sigue intacta: apuntar las variables de la app a ella y publicar en otro lado. Los
