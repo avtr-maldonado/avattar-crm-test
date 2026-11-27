@@ -166,6 +166,7 @@ lib/domain/         reglas de negocio. Puras, con tests: quote, milestone, meddi
                     insight (guardarRecomendacion: esquema, alcance, propietario o Gerencia, fuentes; fila nueva por guardado
                     y GUARDAR_RECOMENDACION → §61),
                     opportunity (cambiarFechaGanada: la única corrección de una cerrada, con bitácora → §55),
+                    leadScoring (§71: validarRubrica, puntajeDe, sePuedeCalificar; puro) ·
                     leadCatalog (§68: canales y campañas; alta, renombre y desactivar con GESTIONAR_PROSPECTOS,
                     homónimo sin mayúsculas, EDITAR_CATALOGO; conservandoActual para el `<select>` del prospecto),
                     lead (crear, editar, cambiarEtapa, asignar masivo, descartar con motivo, actividades del prospecto,
@@ -333,6 +334,8 @@ app/(auth)/         login, callback de Entra ID, sin-acceso, signout (POST; Rout
                     oauth/consent (el consentimiento OAuth del MCP: cliente, alcances en español, Autorizar/Rechazar → §61)
 app/mcp/            POST: el servidor MCP (bearer → sesión → McpServer por request, sin estado); GET y DELETE 405 → §61
 app/.well-known/    oauth-protected-resource (y /mcp): metadatos RFC 9728, públicos y con CORS → §61
+app/manifest.ts     la PWA (§72): manifiesto standalone con los íconos de public/pwa/; app/icon.png, apple-icon.png y
+                    favicon.ico por convención; el middleware no intercepta /manifest.webmanifest; sin service worker
 app/salud/          GET público de diagnóstico: ¿base alcanzable? ¿qué variables existen? (lib/domain/salud)
 app/error.tsx       lo que ve el usuario ante una excepción no atrapada: en español y con el digest
 middleware.ts       refresca la sesión de Supabase en cada request. NO autoriza. Deja pasar sin cookie /mcp, /.well-known/
@@ -405,7 +408,9 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
   con la cuenta y la persona que quien convierte eligió o completó en el panel —prellenadas con lo que existe
   (§59)—, re-apuntando las actividades; una cuenta nueva homónima se rechaza. **El vendedor ve sus prospectos
   desde Asignado** (`etapasQueVe`, §59). El SLA de primer contacto es de la política comercial
-  (`leadFirstContactSlaHours`) y su estado se calcula. Descartar exige motivo del catálogo. **Una actividad del prospecto se marca hecha con un clic, y si estaba agendada
+  (`leadFirstContactSlaHours`) y su estado se calcula. Descartar exige motivo del catálogo. **El puntaje sale de una rúbrica** (§71): checklist con pesos en
+  Configuración (los activos suman 100), se califica en En validación o Contactado, solo informa, y un puntaje dado no se
+  mueve al cambiar la rúbrica (`LeadScoreItem` guarda nombre y peso). **Una actividad del prospecto se marca hecha con un clic, y si estaba agendada
   para después queda hecha ahora** (`realizadaEn`, §69). **Canales y campañas los administra quien gestiona, en Configuración › Prospectos;
   eliminar es desactivar**, y lo inactivo sigue en los filtros y en el prospecto que ya lo tenía (§68). Convertido y
   Descartado son terminales.

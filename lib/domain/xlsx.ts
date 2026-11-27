@@ -81,7 +81,6 @@ export async function plantillaXlsx(catalogos: { canales: { name: string }[]; ca
     pais: "MX",
     canal: catalogos.canales[0]?.name ?? "",
     campana: catalogos.campanas[0]?.name ?? "",
-    puntaje: "82",
     notas: "Pidió una demo del CRM",
   };
   hoja.addRow(CABECERAS_DE_IMPORTACION.map((c) => ejemplo[c]));

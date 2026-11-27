@@ -3,6 +3,7 @@ import { falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { auditedTransaction } from "@/lib/audit";
 import { can, type Session } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
+import { validarRubrica } from "./leadScoring";
 
 /**
  * Canales y campañas de prospectos administrables · decisiones §68.
@@ -211,6 +212,56 @@ export async function editarCampana(
     return ok(null);
   } catch (e) {
     if (esDuplicado(e)) return duplicado(String(despues.name));
+    throw e;
+  }
+}
+
+// ───────────────────────────────────────────────────── Rúbrica de calificación · §71
+
+export type FilaDeRubrica = { id?: string; name: string; weight: number; active: boolean };
+
+/**
+ * Guarda la rúbrica como hoja completa: renombres, pesos, altas y bajas en un viaje, porque la suma
+ * de 100 solo se cumple al final (un peso suelto no podría cambiarse sin romperla). La hoja trae
+ * todos los criterios que existen; si falta uno, alguien más la cambió mientras se editaba y se
+ * responde CONFLICTO en vez de pisar. Eliminar es desactivar (MD-05). Sin cambios no escribe.
+ */
+export async function guardarRubrica(session: Session, filas: FilaDeRubrica[]): Promise<ResultadoAccion<null>> {
+  if (!can(session, "GESTIONAR_PROSPECTOS")) return falla("AUTORIZACION", "Editar la rúbrica es de quien gestiona prospectos.");
+  const hoja = filas.map((f) => ({ ...f, name: normalizarNombre(f.name) }));
+  const problemas = validarRubrica(hoja);
+  if (problemas.length > 0) return falla("VALIDACION", ...problemas);
+
+  const existentes = await prisma.leadScoringCriterion.findMany({ select: { id: true, name: true, weight: true, active: true, position: true } });
+  const enHoja = new Set(hoja.flatMap((f) => (f.id ? [f.id] : [])));
+  if (existentes.some((e) => !enHoja.has(e.id)) || [...enHoja].some((id) => !existentes.some((e) => e.id === id))) {
+    return falla("CONFLICTO", "La rúbrica cambió mientras la editabas. Vuelve a abrirla.");
+  }
+
+  const antes = existentes
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map(({ name, weight, active }) => ({ name, weight, active }));
+  const despues = hoja.map(({ name, weight, active }) => ({ name, weight, active }));
+  const igual = hoja.every((f, i) => {
+    const e = existentes.find((x) => x.id === f.id);
+    return e && e.name === f.name && e.weight === f.weight && e.active === f.active && e.position === i + 1;
+  });
+  if (igual) return ok(null);
+
+  try {
+    await auditedTransaction(async (tx, audit) => {
+      for (const [i, f] of hoja.entries()) {
+        const datos = { name: f.name, weight: Math.round(f.weight), active: f.active, position: i + 1 };
+        if (f.id) await tx.leadScoringCriterion.update({ where: { id: f.id }, data: datos });
+        else await tx.leadScoringCriterion.create({ data: datos });
+      }
+      await audit({ entity: "LeadScoringCriterion", entityId: "rubrica", action: "EDITAR_CATALOGO", byUserId: session.userId, before: antes, after: despues });
+    });
+    return ok(null);
+  } catch (e) {
+    // Dos criterios intercambiando nombre chocan con el índice único a mitad del viaje.
+    if (esDuplicado(e)) return falla("VALIDACION", { campo: "name", mensaje: "Dos criterios no pueden intercambiar nombre en un mismo guardado; hazlo en dos." });
     throw e;
   }
 }

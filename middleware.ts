@@ -84,6 +84,8 @@ export const config = {
     // `__nextjs` van las herramientas de desarrollo. Ninguno autoriza nada, y
     // cada uno pagaba un viaje al servidor de autenticación
     // (docs/latencia-dev.md, 4b).
-    "/((?!_next/|__nextjs|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    // El manifiesto tampoco (§72): el navegador lo pide sin cookies, y mandarlo a /login vuelve la
+    // app no instalable sin ningún error a la vista.
+    "/((?!_next/|__nextjs|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

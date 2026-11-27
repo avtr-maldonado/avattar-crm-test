@@ -87,7 +87,7 @@ describe("importar · previsualizar con un archivo y luego crear las válidas", 
 });
 
 describe("importar · Excel (§69)", () => {
-  it("lee un .xlsx con teléfono y puntaje guardados como número", async () => {
+  it("lee un .xlsx con teléfono guardado como número; el puntaje del archivo se ignora (§71)", async () => {
     const activo = await prisma.leadChannel.findFirstOrThrow({ where: { active: true }, select: { name: true } });
     const libro = new ExcelJS.Workbook();
     const hoja = libro.addWorksheet("Prospectos");
@@ -100,7 +100,9 @@ describe("importar · Excel (§69)", () => {
     if (!vista.ok) return;
     expect(vista.datos.filas).toHaveLength(1);
     expect(vista.datos.filas[0]!.problemas).toEqual([]);
-    expect(vista.datos.filas[0]!.datos).toMatchObject({ phone: "525598765432", score: 70 });
+    expect(vista.datos.filas[0]!.datos).toMatchObject({ phone: "525598765432" });
+    // §71: el puntaje del archivo se ignora; sale de la rúbrica.
+    expect(vista.datos.filas[0]!.datos).not.toHaveProperty("score");
   });
 
   it("un .xlsx que no es Excel se rechaza con el campo del archivo", async () => {

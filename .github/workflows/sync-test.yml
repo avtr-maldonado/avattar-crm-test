@@ -1,0 +1,40 @@
+name: Sync Develop to Test Repository
+
+# Copia `develop` al repo personal avtr-maldonado/avattar-crm-test, que Vercel publica como el
+# ambiente de pruebas (la organización no puede publicar gratis en Vercel). Se empuja a `main` del
+# repo de pruebas porque esa es la rama que Vercel despliega.
+#
+# Este archivo tiene que existir en `develop`: en un push, GitHub corre el flujo tal como está en la
+# rama que recibió el push.
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+# Dos commits seguidos no compiten por empujar: gana el último.
+concurrency:
+  group: sync-test
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Sync develop to test repository
+        env:
+          PERSONAL_GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          git remote add personal https://x-access-token:${PERSONAL_GITHUB_TOKEN}@github.com/avtr-maldonado/avattar-crm-test.git
+
+          git push personal HEAD:main --force

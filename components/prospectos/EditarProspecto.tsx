@@ -17,7 +17,6 @@ export type ProspectoEditable = {
   companyIndustry: string | null;
   channelId: string;
   campaignId: string | null;
-  score: number | null;
   notes: string | null;
 };
 
@@ -111,7 +110,7 @@ export function EditarProspecto({
               <Entrada id={campo("companyIndustry")} name="companyIndustry" defaultValue={prospecto.companyIndustry ?? ""} autoComplete="off" />
             </Campo>
           </div>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Campo etiqueta="Canal" htmlFor={campo("channelId")} problema={problemas.problema("channelId")}>
               <Seleccion id={campo("channelId")} name="channelId" defaultValue={prospecto.channelId} problema={problemas.problema("channelId")}>
                 {catalogos.canales.map((c) => (
@@ -130,9 +129,6 @@ export function EditarProspecto({
                   </option>
                 ))}
               </Seleccion>
-            </Campo>
-            <Campo etiqueta="Puntaje" htmlFor={campo("score")} problema={problemas.problema("score")}>
-              <Entrada id={campo("score")} name="score" type="number" min={0} max={100} defaultValue={prospecto.score ?? ""} className="tabular" problema={problemas.problema("score")} />
             </Campo>
           </div>
           <Campo etiqueta="Notas" htmlFor={campo("notes")}>

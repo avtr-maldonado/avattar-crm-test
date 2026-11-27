@@ -19,7 +19,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   if (request.nextUrl.searchParams.get("formato") === "csv") {
     const filas = [
       CABECERAS_DE_IMPORTACION.map((c) => ETIQUETA_DE_CABECERA[c]),
-      ["Laura García", "laura.garcia@novatek.com", "+52 55 9876 5432", "Gerente de TI", "Novatek S.A.", "Tecnología", "MX", canales[0]?.name ?? "", campanas[0]?.name ?? "", "82", "Pidió una demo del CRM"],
+      ["Laura García", "laura.garcia@novatek.com", "+52 55 9876 5432", "Gerente de TI", "Novatek S.A.", "Tecnología", "MX", canales[0]?.name ?? "", campanas[0]?.name ?? "", "Pidió una demo del CRM"],
     ];
     return new NextResponse(BOM + aCsv(filas), {
       headers: {

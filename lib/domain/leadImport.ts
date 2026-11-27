@@ -9,7 +9,8 @@ import type { AltaDeProspecto } from "./lead";
  * de la fila y no solo el primero. Nada se escribe aquí; eso es
  * `importarProspectos`, con las filas que salieron limpias.
  */
-export const CABECERAS_DE_IMPORTACION = ["contacto", "correo", "telefono", "cargo", "empresa", "giro", "pais", "canal", "campana", "puntaje", "notas"] as const;
+// Sin «puntaje» desde §71: sale de la rúbrica. Un archivo viejo que la traiga la ve ignorada.
+export const CABECERAS_DE_IMPORTACION = ["contacto", "correo", "telefono", "cargo", "empresa", "giro", "pais", "canal", "campana", "notas"] as const;
 export type CabeceraDeImportacion = (typeof CABECERAS_DE_IMPORTACION)[number];
 
 /** Lo que la plantilla muestra en la primera fila. */
@@ -23,7 +24,6 @@ export const ETIQUETA_DE_CABECERA: Record<CabeceraDeImportacion, string> = {
   pais: "País",
   canal: "Canal",
   campana: "Campaña",
-  puntaje: "Puntaje",
   notas: "Notas",
 };
 
@@ -102,10 +102,6 @@ export function validarFilas(filas: readonly (readonly string[])[], ctx: Context
     else if (correo && vistos.has(correo)) problemas.push(`El correo ${correo} está repetido en el archivo.`);
     if (correo) vistos.add(correo);
 
-    const puntajeTexto = v("puntaje");
-    const puntaje = puntajeTexto === "" ? null : Number(puntajeTexto);
-    if (puntaje !== null && (!Number.isInteger(puntaje) || puntaje < 0 || puntaje > 100)) problemas.push(`El puntaje «${puntajeTexto}» debe ir de 0 a 100.`);
-
     const resumen = [contacto || "(sin contacto)", empresa || "(sin empresa)"].join(" · ");
     if (problemas.length > 0 || !pais || !canal) return { fila: k + 2, resumen, problemas };
 
@@ -123,7 +119,6 @@ export function validarFilas(filas: readonly (readonly string[])[], ctx: Context
         countryCode: pais,
         channelId: canal.id,
         campaignId: campana?.id ?? null,
-        score: puntaje,
         notes: v("notas") || null,
       },
     };

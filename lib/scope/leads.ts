@@ -83,6 +83,10 @@ const leadDetailSelect = {
   organization: { select: { id: true, name: true } },
   person: { select: { id: true, name: true } },
   opportunity: { select: { id: true, folio: true, name: true } },
+  // La calificación con la rúbrica (§71): lo marcado, con el nombre y el peso de ese momento.
+  scoredAt: true,
+  scoredBy: { select: { name: true } },
+  scoreItems: { select: { criterionId: true, name: true, weight: true, met: true }, orderBy: { weight: "desc" } },
   transitions: {
     select: { id: true, fromStage: true, toStage: true, atDate: true, byUser: { select: { name: true } } },
     orderBy: { atDate: "desc" },
@@ -133,8 +137,8 @@ export async function catalogosDeProspectos() {
     prisma.leadDiscardReason.findMany({ where: { active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   return {
-    canales: canalesTodos.filter((c) => c.active).map(({ id, name }) => ({ id, name })),
-    campanas: campanasTodas.filter((c) => c.active).map(({ id, name, channelId }) => ({ id, name, channelId })),
+    canales: canalesTodos.flatMap(({ id, name, active }) => (active ? [{ id, name }] : [])),
+    campanas: campanasTodas.flatMap(({ id, name, channelId, active }) => (active ? [{ id, name, channelId }] : [])),
     canalesParaFiltrar: canalesTodos.map(({ id, name, active }) => ({ id, name: active ? name : `${name} (inactivo)` })),
     campanasParaFiltrar: campanasTodas.map(({ id, name, active }) => ({ id, name: active ? name : `${name} (inactiva)` })),
     motivosDeDescarte,
@@ -157,6 +161,24 @@ export async function catalogosDeProspectosParaAdministrar() {
     canales: canales.map(({ _count, ...c }) => ({ ...c, usos: _count.leads })),
     campanas: campanas.map(({ _count, channel, ...c }) => ({ ...c, canal: channel?.name ?? null, usos: _count.leads })),
   };
+}
+
+/** La rúbrica con la que se califica hoy (§71): los criterios activos, en su orden. */
+export async function rubricaVigente() {
+  return prisma.leadScoringCriterion.findMany({
+    where: { active: true },
+    select: { id: true, name: true, weight: true },
+    orderBy: [{ position: "asc" }, { name: "asc" }],
+  });
+}
+
+/** Configuración › Prospectos (§71): toda la rúbrica, activos e inactivos, con cuántas calificaciones lo usan. */
+export async function rubricaParaAdministrar() {
+  const criterios = await prisma.leadScoringCriterion.findMany({
+    select: { id: true, name: true, weight: true, active: true, position: true, _count: { select: { items: true } } },
+    orderBy: [{ active: "desc" }, { position: "asc" }, { name: "asc" }],
+  });
+  return criterios.map(({ _count, ...c }) => ({ ...c, usos: _count.items }));
 }
 
 /** A quién se le puede asignar un prospecto: vendedores y gerentes activos del país. */

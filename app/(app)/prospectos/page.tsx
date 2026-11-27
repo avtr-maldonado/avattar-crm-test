@@ -3,7 +3,7 @@ import type { CountryCode, LeadStage } from "@/lib/dto";
 import { oficinaActiva, requireSession } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { getCountry } from "@/lib/policy";
-import { auditoriaDeProspecto, catalogosDeProspectos, coincidenciasParaConvertir, getLeadDetail, listLeads, vendedoresParaAsignar, type CoincidenciasDeConversion, type LeadDetail } from "@/lib/scope/leads";
+import { rubricaVigente, auditoriaDeProspecto, catalogosDeProspectos, coincidenciasParaConvertir, getLeadDetail, listLeads, vendedoresParaAsignar, type CoincidenciasDeConversion, type LeadDetail } from "@/lib/scope/leads";
 import { catalogosParaAlta, tiposDeActividad } from "@/lib/scope/configuracion";
 import { listPipelines, pipelinesParaAlta } from "@/lib/scope/pipelines";
 import { destinatariosValidos } from "@/lib/domain/opportunity";
@@ -11,6 +11,8 @@ import { decideComoVentas, etapasQueVe, gestionaProspecto } from "@/lib/domain/l
 import { indicadoresDeProspectos } from "@/lib/domain/leadMetrics";
 import { esTerminal, ETAPAS_ABIERTAS, ETAPAS_DE_PROSPECTO, ETIQUETA_DE_ETAPA, puedeTransitar } from "@/lib/domain/leadStages";
 import { conservandoActual } from "@/lib/domain/leadCatalog";
+import { sePuedeCalificar } from "@/lib/domain/leadScoring";
+import { CalificacionDeProspecto } from "@/components/prospectos/CalificacionDeProspecto";
 import { buscarOrganizacionesAccion, personasDeOrganizacionAccion } from "@/app/(app)/oportunidades/acciones";
 import { relojDeAgenda } from "@/lib/domain/agenda";
 import { hrefDeProspectos, parseFiltrosDeProspectos, whereDeProspectos } from "@/lib/filters/leads";
@@ -29,7 +31,7 @@ import { ImportarProspectos } from "@/components/prospectos/ImportarProspectos";
 import { PopupDeProspecto } from "@/components/prospectos/PopupDeProspecto";
 import { EditarProspecto } from "@/components/prospectos/EditarProspecto";
 import { TablaDeProspectos } from "@/components/prospectos/TablaDeProspectos";
-import type { DatosDeProspecto } from "@/components/prospectos/formato";
+import { formateadoresDe, type DatosDeProspecto } from "@/components/prospectos/formato";
 import { aDatosDeProspecto, historiaDe } from "./datos";
 import {
   asignarProspectosAccion,
@@ -38,6 +40,7 @@ import {
   crearProspectoAccion,
   descartarProspectoAccion,
   editarProspectoAccion,
+  calificarProspectoAccion,
   marcarActividadDeProspectoAccion,
   guardarActividadDeProspectoAccion,
   importarProspectosAccion,
@@ -65,7 +68,7 @@ const ALCANCE = [
   { valor: "mios" as const, etiqueta: "Solo los míos" },
 ];
 
-const PESTANAS_DE_DETALLE: readonly PestanaDeDetalle[] = ["actividades", "informacion", "historia"];
+const PESTANAS_DE_DETALLE: readonly PestanaDeDetalle[] = ["actividades", "calificacion", "informacion", "historia"];
 
 export default async function ProspectosPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const [session, sp] = await Promise.all([requireSession(), searchParams]);
@@ -104,10 +107,11 @@ export default async function ProspectosPage({ searchParams }: { searchParams: P
   // Lo que el panel de convertir necesita arranca aquí (§59): qué existe ya de la
   // empresa y la persona del prospecto, y los roles del comité para la nueva.
   const convierte = detalle !== null && datosDelDetalle?.puede.convertir === true;
-  const [auditoria, coincidencias, catalogosDeAlta] = await Promise.all([
+  const [auditoria, coincidencias, catalogosDeAlta, rubrica] = await Promise.all([
     detalle ? auditoriaDeProspecto(detalle.id) : Promise.resolve([]),
     convierte ? coincidenciasParaConvertir(session, detalle) : Promise.resolve(null),
     convierte ? catalogosParaAlta() : Promise.resolve(null),
+    detalle && pestana === "calificacion" ? rubricaVigente() : Promise.resolve([]),
   ]);
   const filas = filtrados.map((l) => aDatosDeProspecto(l, ctx));
   const indicadores = indicadoresDeProspectos(todos, ahora);
@@ -249,6 +253,7 @@ export default async function ProspectosPage({ searchParams }: { searchParams: P
               puedeElegirPropietario={can(session, "VER_OPORTUNIDADES_OFICINA")}
               abrirConvertir={url.get("accion") === "convertir"}
               conversion={coincidencias && catalogosDeAlta ? { coincidencias, rolesDeComite: catalogosDeAlta.rolesComite } : null}
+              rubrica={rubrica}
             />
           )}
         </div>
@@ -278,6 +283,7 @@ function PanelDeDetalle({
   puedeElegirPropietario,
   abrirConvertir,
   conversion,
+  rubrica,
 }: {
   detalle: LeadDetail;
   datos: DatosDeProspecto;
@@ -299,6 +305,8 @@ function PanelDeDetalle({
   abrirConvertir: boolean;
   /** Lo que el panel de convertir necesita para arrancar; `null` si esta sesión no convierte. */
   conversion: { coincidencias: CoincidenciasDeConversion; rolesDeComite: { id: string; name: string }[] } | null;
+  /** La rúbrica vigente; vacía si la pestaña abierta no es la de calificación. */
+  rubrica: { id: string; name: string; weight: number }[];
 }) {
   const actor = { gestiona: session.gestiona, esAsignado: detalle.assignedToId === session.userId };
   const etapasPosibles = ETAPAS_DE_PROSPECTO.filter((e) => puedeTransitar(detalle.stage, e, actor, detalle.assignedToId !== null).ok);
@@ -330,6 +338,19 @@ function PanelDeDetalle({
       etapasPosibles={etapasPosibles}
       vendedores={vendedores}
       motivos={motivos}
+      calificacion={
+        <CalificacionDeProspecto
+          leadId={detalle.id}
+          editable={session.gestiona && sePuedeCalificar(detalle.stage)}
+          criterios={rubrica}
+          guardada={
+            detalle.scoredAt && detalle.score !== null
+              ? { score: detalle.score, quien: detalle.scoredBy?.name ?? null, cuando: formateadoresDe(zona).fechaLarga.format(detalle.scoredAt), items: detalle.scoreItems }
+              : null
+          }
+          accion={calificarProspectoAccion}
+        />
+      }
       composer={puedeActividades ? { tipos, usuarios: destinatarios, usuarioActual: session.userId, zonaEtiqueta, accion: guardarActividadDeProspectoAccion, marcar: marcarActividadDeProspectoAccion } : null}
       convertir={
         datos.puede.convertir && conversion ? (
@@ -363,7 +384,6 @@ function PanelDeDetalle({
               companyIndustry: detalle.companyIndustry,
               channelId: detalle.channel.id,
               campaignId: detalle.campaign?.id ?? null,
-              score: detalle.score,
               notes: detalle.notes,
             }}
             catalogos={{

@@ -6,7 +6,7 @@ import { deZod, falla, ok, type ResultadoAccion } from "@/lib/acciones";
 import { invalidarPermisosEnCache, requireSession } from "@/lib/auth/session";
 import { crearUsuario, darAcceso, editarUsuario } from "@/lib/domain/usuario";
 import { cambiarPermiso } from "@/lib/domain/permisos";
-import { crearCampana, crearCanal, editarCampana, editarCanal } from "@/lib/domain/leadCatalog";
+import { crearCampana, crearCanal, editarCampana, editarCanal, guardarRubrica } from "@/lib/domain/leadCatalog";
 import { getUsuario } from "@/lib/scope/usuarios";
 
 /**
@@ -204,6 +204,32 @@ export async function activarCampanaAccion(id: string, active: boolean): Promise
   const datos = esquemaActivo.safeParse({ id, active });
   if (!datos.success) return deZod(datos.error);
   const r = await editarCampana(await requireSession(), datos.data.id, { active: datos.data.active });
+  if (r.ok) revalidarCatalogos();
+  return r;
+}
+
+// ─────────────────────────────────────── Rúbrica de calificación de prospectos · §71
+
+const esquemaRubrica = z.array(
+  z.object({
+    id: z.string().min(1).optional(),
+    name: z.string(),
+    weight: z.number(),
+    active: z.boolean(),
+  }),
+);
+
+/** La hoja completa de la rúbrica llega como JSON en `rubrica`: la suma de 100 se valida junta. */
+export async function guardarRubricaAccion(_previo: ResultadoAccion<unknown> | null, form: FormData): Promise<ResultadoAccion<unknown>> {
+  let crudo: unknown;
+  try {
+    crudo = JSON.parse(String(form.get("rubrica") ?? "[]"));
+  } catch {
+    return falla("VALIDACION", "La rúbrica llegó dañada. Vuelve a abrirla.");
+  }
+  const datos = esquemaRubrica.safeParse(crudo);
+  if (!datos.success) return deZod(datos.error);
+  const r = await guardarRubrica(await requireSession(), datos.data);
   if (r.ok) revalidarCatalogos();
   return r;
 }

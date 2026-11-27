@@ -3548,3 +3548,54 @@ Manager 2000 MB, Storage 50 MB, bucket sin límite propio.
 
 **Costo de volver.** La nube sigue intacta: apuntar las variables de la app a ella y publicar en otro lado. Los
 archivos de Docker no afectan `pnpm dev`.
+
+## 71. El puntaje de un prospecto sale de una rúbrica (27 de noviembre de 2026)
+
+**Qué se pidió.** Que el puntaje se asigne en En validación o Contactado con un checklist, para que salga de algo
+concreto y no sea un número arbitrario.
+
+**Decisión** (diseño: `docs/superpowers/specs/2026-11-27-rubrica-de-prospectos-design.md`).
+
+- **Checklist de sí o no con peso por criterio**; el puntaje es la suma de los pesos marcados.
+- **Criterios y pesos en Configuración › Prospectos**, editables como hoja completa: los activos **suman siempre 100**
+  (INV-05: ningún peso en el código). Eliminar es desactivar (MD-05). Lo administra `GESTIONAR_PROSPECTOS`.
+- **Se califica en En validación y Contactado**, desde la pestaña «Calificación» del detalle, por quien gestiona el
+  prospecto. Calificar otra vez reemplaza; `CALIFICAR_PROSPECTO` en la bitácora con el puntaje antes y después.
+- **Solo informa**: no abre ni cierra ninguna etapa.
+- **Un puntaje dado no se mueve** al cambiar la rúbrica: cada criterio se guarda con el nombre y el peso de ese
+  momento (`LeadScoreItem`).
+- **Sale el puntaje tecleado**: del alta, de la edición, de la plantilla y de la importación (una columna «Puntaje»
+  en un archivo viejo se ignora).
+
+**Supuestos para corregir si no aplican:** el vendedor asignado no califica; los puntajes tecleados antes de §71 se
+quedan sin detalle por criterio.
+
+**Migración:** `20261127100000_rubrica_de_prospectos` (aplicada en DEV; en la VPS la aplica la próxima publicación,
+con respaldo previo, §70).
+
+**Costo de volver.** Devolver el campo «Puntaje» a los formularios y a la importación; las tablas de la rúbrica
+pueden quedarse.
+
+## 72. El CRM se instala como app en el teléfono (27 de noviembre de 2026)
+
+**Qué se pidió.** Que el CRM se pueda usar como PWA en dispositivos móviles, con el ícono de la app (PNG de 1024 sin
+esquinas redondeadas).
+
+**Decisión.**
+
+- **Manifiesto** (`app/manifest.ts`, servido en `/manifest.webmanifest`): «CRM Avattar» / «CRM», abre en `/` en modo
+  `standalone`, tema y fondo `#0E1D35` (el del ícono, para que el arranque no destelle).
+- **Íconos desde `public/marca/icono-app.png`**: «any» 192 y 512 **con esquinas redondeadas** y fondo transparente
+  (escritorio y lanzadores que no recortan); «maskable» 512 a sangre completa (Android pone su máscara; el arte ya cabe en
+  la zona segura del 80 %); `app/apple-icon.png` 180 opaco y cuadrado (iOS redondea solo y no acepta transparencia);
+  favicon redondeado (`app/icon.png`, `app/favicon.ico`; antes daba 404).
+- **Metadatos**: `appleWebApp` (título «CRM», barra de estado negra), `themeColor` y `viewport`.
+- **El middleware no intercepta `/manifest.webmanifest`**: el navegador lo pide sin cookies y una redirección a /login
+  vuelve la app no instalable sin error visible. Lo vigila `tests/arquitectura/pwa.test.ts`.
+- **Sin service worker**: ni Chrome ni Safari lo exigen para instalar, y una caché en un CRM muestra datos viejos. Modo
+  sin conexión o notificaciones push serían otra decisión.
+
+**Fuera de alcance:** que cada pantalla sea cómoda en un teléfono. El menú lateral ya cede a `NavegacionAngosta` bajo
+`lg`, pero tablas, kanban y paneles se diseñaron para escritorio.
+
+**Costo de volver.** Borrar `app/manifest.ts` y los íconos; nada depende de ellos.

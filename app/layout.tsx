@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
 
@@ -19,6 +19,18 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "CRM Avattar",
   description: "CRM comercial de Avattar IT Solutions · México, Colombia, Chile",
+  // §72 · instalable en el teléfono. El manifiesto (app/manifest.ts) y los íconos (app/icon.png,
+  // app/apple-icon.png, app/favicon.ico) los enlaza Next por convención de archivo.
+  applicationName: "CRM Avattar",
+  appleWebApp: { capable: true, title: "CRM", statusBarStyle: "black" },
+  formatDetection: { telephone: false },
+};
+
+/** La barra del navegador y la de estado toman el fondo del ícono (§72). */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#0E1D35",
 };
 
 export default function RootLayout({

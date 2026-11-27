@@ -29,7 +29,7 @@ type Resultado = ResultadoAccion<{ id: string; folio: string }>;
 
 /**
  * Alta de un prospecto · decisiones §58. Contacto y empresa a mano, canal y
- * campaña del catálogo, país entre los de la sesión, puntaje y notas, y el
+ * campaña del catálogo, país entre los de la sesión y notas (el puntaje sale de la rúbrica, §71), y el
  * vendedor si ya se sabe (con él nace Asignado). Se envía desde `onSubmit`
  * para que un rechazo no borre lo tecleado.
  */
@@ -146,10 +146,7 @@ export function NuevoProspecto({
             </Campo>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-[8rem_minmax(0,1fr)]">
-            <Campo etiqueta="Puntaje" htmlFor={campo("score")} problema={problemas.problema("score")}>
-              <Entrada id={campo("score")} name="score" type="number" min={0} max={100} placeholder="0–100" className="tabular" problema={problemas.problema("score")} />
-            </Campo>
+          <div className="grid grid-cols-1 gap-5">
             <Campo etiqueta="Vendedor" htmlFor={campo("assignedToId")} problema={problemas.problema("assignedToId")}>
               <Seleccion id={campo("assignedToId")} name="assignedToId" defaultValue="" problema={problemas.problema("assignedToId")}>
                 <option value="">Sin asignar</option>

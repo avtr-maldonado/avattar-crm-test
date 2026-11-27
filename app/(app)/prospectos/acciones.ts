@@ -13,6 +13,7 @@ import {
   descartarProspecto,
   editarActividadDeProspecto,
   marcarActividadDeProspecto,
+  calificarProspecto,
   editarProspecto,
   importarProspectos,
   registrarActividadDeProspecto,
@@ -52,12 +53,6 @@ const esquemaAlta = z.object({
   countryCode: z.enum(PAISES, { message: "Elige el país." }),
   channelId: z.string().trim().min(1, "Elige el canal."),
   campaignId: opcional,
-  score: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v ? Number(v) : null))
-    .refine((v) => v === null || (Number.isInteger(v) && v >= 0 && v <= 100), "El puntaje va de 0 a 100."),
   notes: opcional,
   assignedToId: opcional,
 });
@@ -259,7 +254,6 @@ const esquemaFilas = z.array(
     countryCode: z.enum(PAISES),
     channelId: z.string().min(1),
     campaignId: z.string().nullable().optional(),
-    score: z.number().int().min(0).max(100).nullable().optional(),
     notes: z.string().nullable().optional(),
   }),
 );
@@ -349,5 +343,19 @@ export async function marcarActividadDeProspectoAccion(leadId: string, activityI
   if (!r.ok) return r;
   revalidatePath("/prospectos");
   revalidatePath("/actividades");
+  return r;
+}
+
+const esquemaCalificacion = z.object({ leadId: z.string().min(1) });
+
+/** Califica con la rúbrica (§71): los criterios marcados llegan repetidos como `criterio`. */
+export async function calificarProspectoAccion(_previo: ResultadoAccion<{ score: number }> | null, form: FormData): Promise<ResultadoAccion<{ score: number }>> {
+  const datos = esquemaCalificacion.safeParse({ leadId: form.get("leadId") });
+  if (!datos.success) return deZod(datos.error);
+  const { session, lead } = await cargar(datos.data.leadId);
+  if (!lead) return falla("AUTORIZACION", NO_ALCANZA);
+  const marcados = form.getAll("criterio").flatMap((v) => (typeof v === "string" && v ? [v] : []));
+  const r = await calificarProspecto(session, lead, marcados);
+  if (r.ok) revalidatePath("/prospectos");
   return r;
 }

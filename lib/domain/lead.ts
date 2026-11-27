@@ -12,6 +12,7 @@ import { crearOportunidad } from "./opportunity";
 import { nextFolioDeProspecto } from "./leadFolio";
 import { venceEn } from "./leadSla";
 import { esTerminal, ETIQUETA_DE_ETAPA, puedeTransitar } from "./leadStages";
+import { puntajeDe, sePuedeCalificar } from "./leadScoring";
 
 /**
  * Prospectos · decisiones §58. Los servicios que mutan un prospecto.
@@ -35,7 +36,6 @@ export type AltaDeProspecto = {
   countryCode: CountryCode;
   channelId: string;
   campaignId?: string | null;
-  score?: number | null;
   notes?: string | null;
   assignedToId?: string | null;
 };
@@ -55,7 +55,6 @@ function validar(d: Partial<AltaDeProspecto>): Problema[] {
   if (d.contactName !== undefined && (d.contactName?.trim().length ?? 0) < 2) problemas.push({ campo: "contactName", mensaje: "Escribe el nombre del contacto." });
   if (d.companyName !== undefined && (d.companyName?.trim().length ?? 0) < 2) problemas.push({ campo: "companyName", mensaje: "Escribe la empresa." });
   if (limpiar(d.email) && !FORMA_DE_CORREO.test(d.email!.trim())) problemas.push({ campo: "email", mensaje: "Ese correo no tiene forma de correo." });
-  if (d.score != null && (!Number.isInteger(d.score) || d.score < 0 || d.score > 100)) problemas.push({ campo: "score", mensaje: "El puntaje va de 0 a 100." });
   return problemas;
 }
 
@@ -123,7 +122,6 @@ export async function crearProspecto(
         channelId: input.channelId,
         campaignId: input.campaignId || null,
         stage: etapa,
-        score: input.score ?? null,
         notes: limpiar(input.notes),
         assignedToId: vendedor?.id ?? null,
         createdById: session.userId,
@@ -162,7 +160,6 @@ export async function editarProspecto(session: Session, lead: LeadDetail, cambio
   if (cambios.companyIndustry !== undefined) datos.companyIndustry = limpiar(cambios.companyIndustry);
   if (cambios.channelId !== undefined) datos.channelId = cambios.channelId;
   if (cambios.campaignId !== undefined) datos.campaignId = cambios.campaignId || null;
-  if (cambios.score !== undefined) datos.score = cambios.score ?? null;
   if (cambios.notes !== undefined) datos.notes = limpiar(cambios.notes);
   if (Object.keys(datos).length === 0) return ok(null);
 
@@ -294,7 +291,6 @@ export async function importarProspectos(
           channelId: f.channelId,
           campaignId: f.campaignId || null,
           stage: "NUEVO",
-          score: f.score ?? null,
           notes: limpiar(f.notes),
           createdById: session.userId,
           createdAt: ahora,
@@ -592,4 +588,38 @@ export async function editarActividadDeProspecto(session: Session, lead: LeadDet
  */
 export async function marcarActividadDeProspecto(session: Session, lead: LeadDetail, activityId: string, hecha: boolean): Promise<ResultadoAccion<{ id: string }>> {
   return editarActividadDeProspecto(session, lead, activityId, { hecha });
+}
+
+/**
+ * Califica con la rúbrica · decisiones §71. Solo quien gestiona, y solo en En validación o
+ * Contactado. Se guarda cada criterio activo con su nombre y su peso de hoy y si se marcó; el
+ * puntaje es la suma de lo marcado. Calificar otra vez reemplaza. Solo informa: no mueve la etapa.
+ */
+export async function calificarProspecto(session: Session, lead: LeadDetail, marcados: string[]): Promise<ResultadoAccion<{ score: number }>> {
+  if (!gestionaProspecto(session, lead)) return falla("AUTORIZACION", SIN_GESTION);
+  if (!sePuedeCalificar(lead.stage)) {
+    return falla("VALIDACION", { campo: "stage", mensaje: `Se califica en En validación o Contactado; este prospecto está en ${ETIQUETA_DE_ETAPA[lead.stage]}.` });
+  }
+  const rubrica = await prisma.leadScoringCriterion.findMany({ where: { active: true }, select: { id: true, name: true, weight: true }, orderBy: { position: "asc" } });
+  const elegidos = new Set(marcados);
+  if ([...elegidos].some((id) => !rubrica.some((c) => c.id === id))) {
+    return falla("VALIDACION", { campo: "criterios", mensaje: "Un criterio marcado ya no está en la rúbrica. Vuelve a abrir la calificación." });
+  }
+
+  const items = rubrica.map((c) => ({ criterionId: c.id, name: c.name, weight: c.weight, met: elegidos.has(c.id) }));
+  const score = puntajeDe(items);
+  await auditedTransaction(async (tx, audit) => {
+    await tx.leadScoreItem.deleteMany({ where: { leadId: lead.id } });
+    await tx.leadScoreItem.createMany({ data: items.map((i) => ({ ...i, leadId: lead.id })) });
+    await tx.lead.update({ where: { id: lead.id }, data: { score, scoredAt: new Date(), scoredById: session.userId } });
+    await audit({
+      entity: "Lead",
+      entityId: lead.id,
+      action: "CALIFICAR_PROSPECTO",
+      byUserId: session.userId,
+      before: { score: lead.score },
+      after: { score, cumple: items.flatMap((i) => (i.met ? [i.name] : [])) },
+    });
+  });
+  return ok({ score });
 }

@@ -200,6 +200,7 @@ model User {
   savedViews           SavedView[]
   assignedLeads        Lead[]                      @relation("LeadAssignee")
   createdLeads         Lead[]                      @relation("LeadCreator")
+  scoredLeads          Lead[]                      @relation("LeadScorer")
   leadTransitions      LeadStageTransition[]
   /// §61 · recomendaciones y llamadas que hizo desde su cliente de IA (MCP).
   insights             OpportunityInsight[]
@@ -816,8 +817,11 @@ model Lead {
   channelId       String      @map("channel_id")
   campaignId      String?     @map("campaign_id")
   stage           LeadStage   @default(NUEVO)
-  /// 0–100, lo pone Marketing al calificar.
+  /// 0–100. Desde §71 sale de la rúbrica (LeadScoreItem), no se teclea: suma de los pesos marcados.
   score           Int?
+  /// Cuándo y quién calificó con la rúbrica (§71). Nulos si nunca se calificó.
+  scoredAt        DateTime?   @map("scored_at")
+  scoredById      String?     @map("scored_by_id")
   notes           String?
 
   assignedToId String? @map("assigned_to_id")
@@ -845,6 +849,7 @@ model Lead {
   campaign      LeadCampaign?      @relation(fields: [campaignId], references: [id])
   assignedTo    User?              @relation("LeadAssignee", fields: [assignedToId], references: [id])
   createdBy     User               @relation("LeadCreator", fields: [createdById], references: [id])
+  scoredBy      User?              @relation("LeadScorer", fields: [scoredById], references: [id])
   discardReason LeadDiscardReason? @relation(fields: [discardReasonId], references: [id])
   organization  Organization?      @relation(fields: [organizationId], references: [id])
   person        Person?            @relation(fields: [personId], references: [id])
@@ -852,12 +857,44 @@ model Lead {
 
   activities  Activity[]
   transitions LeadStageTransition[]
+  scoreItems  LeadScoreItem[]
 
   @@index([countryCode, stage])
   @@index([assignedToId, stage])
   @@index([email])
   @@index([campaignId])
   @@map("leads")
+}
+
+/// Criterio de la rúbrica de calificación de prospectos (§71). Los pesos de los activos suman 100;
+/// eliminar es desactivar (MD-05): las calificaciones viejas lo siguen nombrando.
+model LeadScoringCriterion {
+  id       String          @id @default(cuid())
+  name     String          @unique
+  weight   Int
+  position Int             @default(0)
+  active   Boolean         @default(true)
+  items    LeadScoreItem[]
+
+  @@map("lead_scoring_criteria")
+}
+
+/// Cómo se calificó un prospecto, criterio por criterio, con el nombre y el peso que el criterio
+/// tenía en ese momento (§71): cambiar la rúbrica no mueve puntajes ya dados. Calificar otra vez
+/// reemplaza las filas.
+model LeadScoreItem {
+  id          String  @id @default(cuid())
+  leadId      String  @map("lead_id")
+  criterionId String  @map("criterion_id")
+  name        String
+  weight      Int
+  met         Boolean
+
+  lead      Lead                 @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  criterion LeadScoringCriterion @relation(fields: [criterionId], references: [id])
+
+  @@index([leadId])
+  @@map("lead_score_items")
 }
 
 /// Historial de etapas del prospecto, incluidos retrocesos y reasignaciones.

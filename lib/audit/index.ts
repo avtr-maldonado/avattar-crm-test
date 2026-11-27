@@ -78,6 +78,8 @@ export type AuditAction =
   | "DESCARTAR_PROSPECTO"
   | "CONVERTIR_PROSPECTO"
   | "IMPORTAR_PROSPECTOS"
+  /** Calificado con la rúbrica (§71): el puntaje antes y después. */
+  | "CALIFICAR_PROSPECTO"
   /** Un cliente de IA guardó una recomendación por el MCP (decisiones §61). Entidad `Opportunity`. */
   | "GUARDAR_RECOMENDACION"
   // §62 · la ficha que escribe el agente de análisis.

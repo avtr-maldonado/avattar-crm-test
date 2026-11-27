@@ -20,7 +20,8 @@ import { MatrizDePermisos } from "@/components/admin/MatrizDePermisos";
 import { FiltrosDeUsuarios as PastillasDeUsuarios } from "@/components/admin/FiltrosDeUsuarios";
 import { PERMISOS_CON_TOPE } from "@/lib/domain/permisos";
 import { CatalogoDeProspectos } from "@/components/admin/CatalogoDeProspectos";
-import { catalogosDeProspectosParaAdministrar } from "@/lib/scope/leads";
+import { catalogosDeProspectosParaAdministrar, rubricaParaAdministrar } from "@/lib/scope/leads";
+import { RubricaDeCalificacion } from "@/components/admin/RubricaDeCalificacion";
 import {
   activarCampanaAccion,
   activarCanalAccion,
@@ -30,6 +31,7 @@ import {
   editarUsuarioAccion,
   guardarCampanaAccion,
   guardarCanalAccion,
+  guardarRubricaAccion,
 } from "./acciones";
 
 /**
@@ -347,7 +349,7 @@ function Catalogo({
 // ─────────────────────────────────────────── Canales y campañas · §68
 
 async function TabProspectos() {
-  const { canales, campanas } = await catalogosDeProspectosParaAdministrar();
+  const [{ canales, campanas }, rubrica] = await Promise.all([catalogosDeProspectosParaAdministrar(), rubricaParaAdministrar()]);
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <CatalogoDeProspectos tipo="canal" filas={canales} guardar={guardarCanalAccion} activar={activarCanalAccion} />
@@ -358,6 +360,7 @@ async function TabProspectos() {
         guardar={guardarCampanaAccion}
         activar={activarCampanaAccion}
       />
+      <RubricaDeCalificacion criterios={rubrica} guardar={guardarRubricaAccion} />
     </div>
   );
 }

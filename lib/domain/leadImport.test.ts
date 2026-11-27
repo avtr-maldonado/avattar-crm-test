@@ -19,14 +19,14 @@ const fila = (v: Partial<Record<(typeof CABECERAS_DE_IMPORTACION)[number], strin
 
 describe("validarFilas", () => {
   it("una fila completa queda lista, con el canal y la campaña resueltos por nombre sin distinguir mayúsculas", () => {
-    const r = validarFilas([cab, fila({ contacto: "Laura García", correo: "laura@novatek.com", empresa: "Novatek", pais: "MX", canal: "web", campana: "demo crm q4", puntaje: "82" })], ctx);
+    const r = validarFilas([cab, fila({ contacto: "Laura García", correo: "laura@novatek.com", empresa: "Novatek", pais: "MX", canal: "web", campana: "demo crm q4" })], ctx);
     expect(r).toHaveLength(1);
     expect(r[0]!.problemas).toEqual([]);
-    expect(r[0]!.datos).toMatchObject({ contactName: "Laura García", email: "laura@novatek.com", companyName: "Novatek", countryCode: "MX", channelId: "c-web", campaignId: "k-demo", score: 82 });
+    expect(r[0]!.datos).toMatchObject({ contactName: "Laura García", email: "laura@novatek.com", companyName: "Novatek", countryCode: "MX", channelId: "c-web", campaignId: "k-demo" });
   });
 
   it("dice qué falta en cada fila, todo junto", () => {
-    const r = validarFilas([cab, fila({ contacto: "A", empresa: "", pais: "CO", canal: "Fax", campana: "Nada", correo: "no-es", puntaje: "200" })], ctx);
+    const r = validarFilas([cab, fila({ contacto: "A", empresa: "", pais: "CO", canal: "Fax", campana: "Nada", correo: "no-es" })], ctx);
     expect(r[0]!.datos).toBeUndefined();
     expect(r[0]!.problemas.join(" ")).toMatch(/nombre/);
     expect(r[0]!.problemas.join(" ")).toMatch(/empresa/);
@@ -34,7 +34,13 @@ describe("validarFilas", () => {
     expect(r[0]!.problemas.join(" ")).toMatch(/canal/i);
     expect(r[0]!.problemas.join(" ")).toMatch(/campaña/i);
     expect(r[0]!.problemas.join(" ")).toMatch(/correo/);
-    expect(r[0]!.problemas.join(" ")).toMatch(/puntaje/);
+  });
+
+  it("una columna «Puntaje» de un archivo viejo se ignora: el puntaje sale de la rúbrica (§71)", () => {
+    const conPuntaje = [...cab, "Puntaje"];
+    const r = validarFilas([conPuntaje, [...fila({ contacto: "Laura García", empresa: "Novatek", pais: "MX", canal: "web" }), "200"]], ctx);
+    expect(r[0]!.problemas).toEqual([]);
+    expect(r[0]!.datos).not.toHaveProperty("score");
   });
 
   it("marca duplicados: contra lo abierto en la base y dentro del archivo", () => {

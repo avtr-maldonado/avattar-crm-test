@@ -15,10 +15,11 @@ import type { MotivoDeDescarte } from "./DescartarProspecto";
 import { PastillaDeEtapa, PastillaDeSla, Puntaje } from "./PastillaDeEtapa";
 import { formateadoresDe, type DatosDeProspecto } from "./formato";
 
-export type PestanaDeDetalle = "actividades" | "informacion" | "historia";
+export type PestanaDeDetalle = "actividades" | "calificacion" | "informacion" | "historia";
 
 const PESTANAS = [
   { valor: "actividades", etiqueta: "Actividades" },
+  { valor: "calificacion", etiqueta: "Calificación" },
   { valor: "informacion", etiqueta: "Información" },
   { valor: "historia", etiqueta: "Historia" },
 ] as const;
@@ -61,6 +62,7 @@ export function DetalleDeProspecto({
   vendedores,
   motivos,
   composer,
+  calificacion,
   convertir,
   editar,
   acciones,
@@ -87,6 +89,8 @@ export function DetalleDeProspecto({
   motivos: MotivoDeDescarte[];
   /** Lo que el composer necesita; `null` cuando la sesión no registra actividades aquí. */
   composer: { tipos: TipoDeActividad[]; usuarios: { id: string; name: string }[]; usuarioActual: string; zonaEtiqueta: string; accion: AccionDeActividad; marcar: AccionDeMarcar } | null;
+  /** La rúbrica: checklist donde se puede calificar, lectura en lo demás (§71). */
+  calificacion: React.ReactNode;
   /** El botón y el panel de convertir, cuando esta sesión puede (§58). */
   convertir?: React.ReactNode;
   /** El botón y el panel de editar los datos, para quien gestiona. */
@@ -195,6 +199,8 @@ export function DetalleDeProspecto({
             )}
           </div>
         )}
+
+        {pestana === "calificacion" && calificacion}
 
         {pestana === "informacion" && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
