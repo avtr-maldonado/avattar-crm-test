@@ -264,7 +264,7 @@ export default async function ObjetivosPage({
                 puedeFijar ? (
                   <a
                     href={href({ vista: "objetivos" })}
-                    className="rounded-sm bg-acento px-3.5 py-2 text-sm font-semibold text-white"
+                    className="rounded-sm bg-acento px-3.5 py-2 text-sm font-semibold text-acento-texto"
                   >
                     Ir a Objetivos
                   </a>
@@ -298,7 +298,7 @@ export default async function ObjetivosPage({
             </div>
 
             {desalineados > 0 && (
-              <p className="mt-4 rounded-sm border border-borde-fuerte bg-superficie-tinte px-4 py-2.5 text-xs text-navy-700">
+              <p className="mt-4 rounded-sm border border-borde-fuerte bg-superficie-tinte px-4 py-2.5 text-xs text-texto-cuerpo">
                 {desalineados === 1
                   ? "Una persona tiene una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres."
                   : `${desalineados} personas tienen una cuota anual fijada antes de la cuadrícula que no coincide con la suma de sus trimestres.`}{" "}

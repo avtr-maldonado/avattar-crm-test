@@ -73,7 +73,7 @@ export function Desplegable({
           "flex items-center gap-1.5 rounded-pill border px-3 py-1.5 text-xs",
           "transition-colors duration-rapido ease-estandar",
           activo
-            ? "border-acento bg-superficie-tinte text-blue-700"
+            ? "border-acento bg-superficie-tinte text-texto-enlace"
             : "border-borde bg-superficie-pagina text-texto-tenue hover:bg-superficie-sutil",
           abierto && "bg-superficie-sutil",
         )}

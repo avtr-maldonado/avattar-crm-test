@@ -67,7 +67,7 @@ export function Campo({
                 tenue: "text-texto-tenue",
                 exito: "text-exito",
                 acento: "text-acento",
-                alerta: "text-navy-500",
+                alerta: "text-texto-suave",
               }[tonoAnotacion],
             )}
           >
@@ -88,7 +88,7 @@ export function Campo({
 
 const CONTROL =
   "w-full rounded-sm border bg-superficie-pagina px-3 py-2 text-sm text-texto-cuerpo " +
-  "outline-none transition-colors duration-rapido ease-estandar placeholder:text-gray-40 " +
+  "outline-none transition-colors duration-rapido ease-estandar placeholder:text-texto-marcador " +
   "focus:border-acento focus:shadow-ring disabled:bg-superficie-sutil disabled:text-texto-tenue";
 
 function borde(malo?: string) {
@@ -318,7 +318,7 @@ export function AvisosDeAccion({ resultado }: { resultado: ResultadoAccion<unkno
       )}
     >
       {compuerta && (
-        <p className="mb-1.5 text-eyebrow font-semibold uppercase tracking-[var(--ls-eyebrow)] text-navy-500">
+        <p className="mb-1.5 text-eyebrow font-semibold uppercase tracking-[var(--ls-eyebrow)] text-texto-suave">
           Falta para entrar a esa etapa
         </p>
       )}

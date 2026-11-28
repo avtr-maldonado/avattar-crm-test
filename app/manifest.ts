@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { FONDO_OSCURO } from "@/lib/marca";
 
 /**
  * El manifiesto de la app instalable · decisiones §72. Next lo sirve en `/manifest.webmanifest` y lo
@@ -11,7 +12,7 @@ import type { MetadataRoute } from "next";
  * Sin service worker a propósito: ni Chrome ni Safari lo exigen para instalar, y una caché en un CRM
  * muestra datos viejos.
  */
-const FONDO = "#0E1D35";
+const FONDO = FONDO_OSCURO;
 
 export default function manifest(): MetadataRoute.Manifest {
   return {

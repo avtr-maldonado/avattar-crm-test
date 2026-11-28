@@ -5,6 +5,7 @@ import { clsx } from "clsx";
 import type { CountryCode, Role } from "@/lib/dto";
 import { ETIQUETA_ROL, NOMBRE_PAIS } from "@/lib/etiquetas";
 import { Boton } from "./primitivas";
+import { SelectorDeTema } from "./SelectorDeTema";
 
 /**
  * Lo que la barra superior sabe de quien está operando. Llega desde la sesión,
@@ -146,6 +147,12 @@ export function MenuDeUsuario({ usuario }: { usuario: UsuarioDeBarra }) {
               {usuario.paises.map((p) => NOMBRE_PAIS[p]).join(", ")}
             </dd>
           </dl>
+
+          {/* §76 · la única preferencia del menú: cómo se ve la app en este navegador. */}
+          <div className="mx-4 mt-4 border-t border-borde pt-3">
+            <p className="mb-2 text-xs text-texto-tenue">Tema</p>
+            <SelectorDeTema />
+          </div>
 
           <form method="post" action="/auth/signout" className="mt-4 border-t border-borde p-3">
             <Boton type="submit" variante="secundario" className="w-full">

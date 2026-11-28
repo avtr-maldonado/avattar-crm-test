@@ -134,7 +134,7 @@ export function CambioDeEtapa({
           const estilo = clsx(
             "relative flex h-10 flex-1 items-center justify-center transition-colors duration-rapido ease-estandar",
             i > 0 && "-ml-[12px]",
-            cerrada ? "bg-gray-20" : alcanzada ? "bg-acento" : "bg-gray-10",
+            cerrada ? "bg-borde" : alcanzada ? "bg-acento" : "bg-superficie-apagada",
             esActual && !cerrada && "bg-acento-activo",
             puedeMover && !cerrada && !esActual && "hover:brightness-95",
             "focus-within:z-10 focus-within:shadow-ring",
@@ -173,7 +173,7 @@ export function CambioDeEtapa({
           role="alert"
           className="mt-3 rounded-sm border border-borde-fuerte bg-superficie-tinte px-4 py-3"
         >
-          <p className="text-eyebrow font-semibold uppercase tracking-[var(--ls-eyebrow)] text-navy-500">
+          <p className="text-eyebrow font-semibold uppercase tracking-[var(--ls-eyebrow)] text-texto-suave">
             Falta para entrar a {destino.name}
           </p>
           <ul className="mt-2 flex list-disc flex-col gap-1 pl-4 text-sm text-texto-cuerpo">

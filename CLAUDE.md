@@ -453,9 +453,14 @@ puntaje MEDDIC y cuadre de hitos son funciones puras con tests unitarios.
 Tokens del manual de normas gráficas de Avattar, en `docs/CRM-AVTR-SPEC.md` §13. Se copian
 textualmente; no se sustituyen por la paleta por omisión de ninguna librería.
 
-- Azul `#62A8E5` domina, navy `#375172` acompaña. Magenta, lima y coral solo como estado o acento
+- **Los valores de color son los de AVATTAR v4** (§74): azul `#5DA7E6` domina, marino `#365072` acompaña,
+  fondo oscuro `#0E1D35` (barra lateral, inicio de sesión, PWA). Las copias en hex (gráficas, manifiesto) las amarra
+  `tests/arquitectura/marca.test.ts` a `globals.css`. Magenta, lima y coral solo como estado o acento
   puntual, nunca como superficie.
 - Montserrat para cuerpo y títulos, Clash Display para títulos cortos.
+- **Modo oscuro** (§76, paleta de §77): `<html data-tema>` desde la cookie `crm-tema`; los alias semánticos se redefinen con la paleta
+  de cinco niveles (fondo `#0B192B`, encabezado `.barra-superior`, tarjetas, columnas, tarjetas de `.tablero-kanban`). **Un color en una pantalla va por alias (`texto-*`, `superficie-*`, `borde`), nunca por la escala**
+  (`navy-*`, `gray-*`): la escala no cambia de tema. La barra lateral y el inicio de sesión son oscuros en los dos temas.
 - Todas las cifras en columna con `font-variant-numeric: tabular-nums`.
 - Los colores que se usan con opacidad (`bg-exito/10`, `border-coral/40`) están definidos en
   `tailwind.config.ts` con canales RGB y `<alpha-value>` (`--status-success-rgb`…). Un color

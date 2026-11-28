@@ -45,7 +45,7 @@ export function StatTile({
     neutro: "text-texto-titulo",
     acento: "text-acento",
     exito: "text-exito",
-    alerta: "text-navy-500",
+    alerta: "text-texto-suave",
     peligro: "text-coral",
   }[tono];
 
@@ -168,9 +168,9 @@ export function Pastilla({
         "inline-flex items-center rounded-pill px-2 py-0.5 text-xs font-medium",
         {
           neutro: "bg-superficie-sutil text-texto-tenue",
-          acento: "bg-superficie-tinte text-blue-700",
+          acento: "bg-superficie-tinte text-texto-enlace",
           exito: "bg-exito/10 text-exito",
-          alerta: "bg-lima/25 text-navy-700",
+          alerta: "bg-lima/25 text-texto-cuerpo",
           peligro: "bg-coral/10 text-coral",
         }[tono],
       )}

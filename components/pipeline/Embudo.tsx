@@ -183,7 +183,7 @@ function ColaDeRiesgo({ riesgos }: { riesgos: RiesgoVisible[] }) {
                   <p
                     className={clsx(
                       "truncate text-xs",
-                      r.tono === "peligro" ? "text-coral" : "text-navy-500",
+                      r.tono === "peligro" ? "text-coral" : "text-texto-suave",
                     )}
                   >
                     {r.motivo}

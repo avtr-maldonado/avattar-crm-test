@@ -155,7 +155,7 @@ export function SelectorDeVarios({
         onKeyDown={alTeclado}
         className={clsx(
           "w-full rounded-sm border bg-superficie-pagina px-3 py-2 text-sm text-texto-cuerpo",
-          "outline-none transition-colors duration-rapido ease-estandar placeholder:text-gray-40",
+          "outline-none transition-colors duration-rapido ease-estandar placeholder:text-texto-marcador",
           "focus:border-acento focus:shadow-ring disabled:bg-superficie-sutil disabled:text-texto-tenue",
           problema ? "border-peligro" : "border-borde",
         )}

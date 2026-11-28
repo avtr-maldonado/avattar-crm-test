@@ -143,7 +143,7 @@ function SenalDeRiesgo({ banderas }: { banderas: RiskFlag[] }) {
       role="img"
       aria-label={`En riesgo: ${cuales}`}
       title={cuales}
-      className={clsx("mt-px shrink-0", grave ? "text-coral" : "text-navy-500")}
+      className={clsx("mt-px shrink-0", grave ? "text-coral" : "text-texto-suave")}
     >
       <Icono nombre="riesgo" className="size-4" />
     </span>

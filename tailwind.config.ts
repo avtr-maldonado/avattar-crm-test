@@ -69,12 +69,16 @@ const config: Config = {
           titulo: "var(--text-heading)",
           cuerpo: "var(--text-body)",
           tenue: "var(--text-muted)",
+          suave: "var(--text-subtle)",
+          enlace: "var(--text-link)",
+          marcador: "var(--text-placeholder)",
         },
         superficie: {
           pagina: "var(--surface-page)",
           sutil: "var(--surface-subtle)",
           tarjeta: "var(--surface-card)",
           tinte: "var(--surface-tint)",
+          apagada: "var(--surface-muted)",
         },
         borde: {
           DEFAULT: "var(--border)",

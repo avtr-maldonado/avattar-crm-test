@@ -46,7 +46,7 @@ export function BarraDeHerramientas({
           className={clsx(
             "relative flex size-9 items-center justify-center rounded-sm border transition-colors duration-rapido ease-estandar focus:shadow-ring focus:outline-none",
             mostrarFiltros
-              ? "border-acento bg-superficie-tinte text-blue-700"
+              ? "border-acento bg-superficie-tinte text-texto-enlace"
               : "border-borde bg-superficie-pagina text-texto-tenue hover:bg-superficie-sutil hover:text-texto-cuerpo",
           )}
         >

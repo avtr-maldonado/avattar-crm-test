@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { CountryCode } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { COOKIE_MENU, COOKIE_OFICINA, MENU_COLAPSADO } from "@/lib/preferencias";
+import { COOKIE_MENU, COOKIE_OFICINA, COOKIE_TEMA, MENU_COLAPSADO, temaDe, type Tema } from "@/lib/preferencias";
 import { createClient } from "@/lib/supabase/server";
 import { sesionDesdeClaims } from "./perfil";
 import type { Session } from "./permissions";
@@ -35,6 +35,11 @@ export const oficinaActiva = cache(async (session: Session): Promise<CountryCode
 /** Si el menú lateral se dejó contraído. Se lee en el servidor para pintarlo sin parpadeo. */
 export async function menuColapsado(): Promise<boolean> {
   return (await cookies()).get(COOKIE_MENU)?.value === MENU_COLAPSADO;
+}
+
+/** El tema que eligió quien usa este navegador (§76); el layout raíz lo pinta en `<html data-tema>`. */
+export async function temaPreferido(): Promise<Tema> {
+  return temaDe((await cookies()).get(COOKIE_TEMA)?.value);
 }
 
 /**

@@ -41,7 +41,7 @@ export function VistaKanban({
   const grupos = agruparPorEstado(actividades, reloj);
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="tablero-kanban grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       {COLUMNAS.map((estado) => {
         const lista = grupos[estado];
         return (

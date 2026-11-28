@@ -10,23 +10,23 @@
 
 :root {
   /* Marca — el azul domina, el navy lo acompaña */
-  --avattar-blue: #62a8e5;    /* Pantone 292 U · primario */
-  --avattar-navy: #375172;    /* Pantone 295 U · secundario */
-  --avattar-magenta: #c724b1; /* complementario, uso mínimo */
+  --avattar-blue: #5da7e6;    /* azul · AVATTAR v4 (§74); antes #62a8e5, Pantone 292 U del manual 2024 */
+  --avattar-navy: #365072;    /* marino · AVATTAR v4 (§74) */
+  --avattar-magenta: #cc27b0; /* complementario, uso mínimo */
   --avattar-lime: #d0df00;    /* complementario, uso mínimo */
-  --avattar-coral: #ff585d;   /* complementario, uso mínimo */
+  --avattar-coral: #ff595a;   /* complementario, uso mínimo */
 
   /* Rampa azul */
-  --blue-50: #eff6fd;  --blue-100: #dbebfa; --blue-200: #bdd9f3;
-  --blue-300: #93c1ea; --blue-400: #62a8e5; --blue-500: #4790d4;
+  --blue-50: #eaf1f9;  --blue-100: #dbebfa; --blue-200: #bdd9f3;
+  --blue-300: #93c1ea; --blue-400: #5da7e6; --blue-500: #4790d4;
   --blue-600: #3577bd; --blue-700: #2c609a; --blue-800: #29517d;
   --blue-900: #274568;
 
   /* Rampa navy */
-  --navy-50: #f2f5f8;  --navy-100: #e2e9f0; --navy-200: #c6d3e0;
+  --navy-50: #f4f7fb;  --navy-100: #e2e9f0; --navy-200: #c6d3e0;
   --navy-300: #9fb2c8; --navy-400: #6f8aab; --navy-500: #4f6b8d;
-  --navy-600: #375172; --navy-700: #30455f; --navy-800: #263749;
-  --navy-900: #0e1726; --navy-950: #08101c;
+  --navy-600: #365072; --navy-700: #30455f; --navy-800: #263749;
+  --navy-900: #0e1d35; --navy-950: #08101c;
 
   /* Neutros */
   --gray-05: #f7f8fa; --gray-10: #eceef1; --gray-20: #d9dde2;
@@ -36,24 +36,28 @@
   /* Estado. NO usar como color decorativo: si algo es rojo, requiere atención */
   --status-success: #2f9e6d;
   --status-warning: #d0df00;
-  --status-danger: #ff585d;
-  --status-info: #62a8e5;
+  --status-danger: #ff595a;
+  --status-info: #5da7e6;
 
   /* Canales RGB de los colores que se usan con opacidad (`bg-exito/10`,
      `border-coral/40`). Tailwind solo compone alfa sobre canales con
      `<alpha-value>`; sobre un var() con hex descarta la clase en silencio.
      Mismos valores que los hex de arriba: si cambia uno, cambian los dos. */
-  --avattar-coral-rgb: 255 88 93;
+  --avattar-coral-rgb: 255 89 90;
   --avattar-lime-rgb: 208 223 0;
   --status-success-rgb: 47 158 109;
   --navy-800-rgb: 38 55 73;
   --navy-950-rgb: 8 16 28;
-  --accent-rgb: 98 168 229;
+  --accent-rgb: 93 167 230;
 
   /* Alias semánticos — los componentes usan estos, no los hex */
   --text-heading: var(--navy-600);
   --text-body: var(--navy-700);
   --text-muted: var(--gray-50);
+  --text-subtle: var(--navy-500);
+  --text-link: var(--blue-700);
+  --text-placeholder: var(--gray-40);
+  --surface-muted: var(--gray-10);
   --surface-page: #fff;
   --surface-subtle: var(--navy-50);
   --surface-card: #fff;
@@ -81,15 +85,81 @@
   --radius-xs: 4px; --radius-sm: 8px; --radius-md: 12px;
   --radius-lg: 18px; --radius-pill: 999px;
 
-  --shadow-xs: 0 1px 2px rgba(14, 23, 38, 0.06);
-  --shadow-sm: 0 2px 8px rgba(14, 23, 38, 0.06);
-  --shadow-md: 0 8px 24px rgba(14, 23, 38, 0.08);
-  --ring: 0 0 0 3px rgba(98, 168, 229, 0.45);
+  --shadow-xs: 0 1px 2px rgba(14, 29, 53, 0.06);
+  --shadow-sm: 0 2px 8px rgba(14, 29, 53, 0.06);
+  --shadow-md: 0 8px 24px rgba(14, 29, 53, 0.08);
+  --ring: 0 0 0 3px rgba(93, 167, 230, 0.45);
 
   --ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
   --dur-fast: 120ms;
   --dur-base: 220ms;
 }
+
+/* ── Tema oscuro · decisiones §76, valores de §77 ──────────────────────────────
+   Los tokens oscuros (paleta de §77, sobre la base de v4) sobre los mismos alias semánticos: lo que usa
+   `texto-*`, `superficie-*` y `borde` cambia solo. «Sistema» repite el bloque
+   dentro de la media query (no se combina con un selector);
+   tests/arquitectura/tema.test.ts exige que digan lo mismo. */
+:root[data-tema="oscuro"] {
+  color-scheme: dark;
+  --text-heading: #ffffff;
+  --text-body: #ffffff;
+  --text-muted: #a9bed4;
+  --text-subtle: #a9bed4;
+  --text-link: #7fb9eb;
+  --text-placeholder: #a9bed4;
+  --surface-muted: #193654;
+  --surface-page: #0b192b;
+  --surface-subtle: #193654;
+  --surface-card: #142d49;
+  --surface-tint: #24406e;
+  --border: #2c4c6d;
+  --border-strong: #3d6496;
+  --on-accent: #0e1d35;
+  --status-success: #7be0c3;
+  --status-success-rgb: 123 224 195;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-tema="sistema"] {
+    color-scheme: dark;
+    --text-heading: #ffffff;
+    --text-body: #ffffff;
+    --text-muted: #a9bed4;
+    --text-subtle: #a9bed4;
+    --text-link: #7fb9eb;
+    --text-placeholder: #a9bed4;
+    --surface-muted: #193654;
+    --surface-page: #0b192b;
+    --surface-subtle: #193654;
+    --surface-card: #142d49;
+    --surface-tint: #24406e;
+    --border: #2c4c6d;
+    --border-strong: #3d6496;
+    --on-accent: #0e1d35;
+    --status-success: #7be0c3;
+    --status-success-rgb: 123 224 195;
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Recharts pinta ejes y rejilla por atributo con la paleta clara; el CSS manda sobre el atributo. */
+:root[data-tema="oscuro"] .recharts-cartesian-axis-tick-value,
+:root[data-tema="oscuro"] .recharts-legend-item-text { fill: var(--text-muted); color: var(--text-muted); }
+:root[data-tema="oscuro"] .recharts-cartesian-grid line { stroke: var(--border); }
+:root[data-tema="oscuro"] .recharts-label { fill: var(--text-body); }
+@media (prefers-color-scheme: dark) {
+  :root[data-tema="sistema"] .recharts-cartesian-axis-tick-value,
+  :root[data-tema="sistema"] .recharts-legend-item-text { fill: var(--text-muted); color: var(--text-muted); }
+  :root[data-tema="sistema"] .recharts-cartesian-grid line { stroke: var(--border); }
+  :root[data-tema="sistema"] .recharts-label { fill: var(--text-body); }
+}
+
 
 @layer base {
   body {
@@ -150,4 +220,17 @@
   background: transparent;
   overflow: visible;
   color: inherit;
+}
+
+/* ── Niveles del tema oscuro · decisiones §77 ─────────────────────────────────
+   Paleta pedida para el modo oscuro (fuera de v4 por decisión explícita): fondo #0b192b,
+   encabezado #10233d, tarjetas y KPI #142d49, columnas #193654, tarjetas de Kanban #203e60.
+   Los tres primeros salen de los alias de arriba; el encabezado (`.barra-superior`) y las
+   tarjetas de los tres tableros (`.tablero-kanban`) toman aquí su propio nivel.
+   La barra lateral usa la escala `navy-*` y no cambia. tests/arquitectura/tema.test.ts. */
+:root[data-tema="oscuro"] .barra-superior { --surface-page: #10233d; }
+:root[data-tema="oscuro"] .tablero-kanban { --surface-card: #203e60; }
+@media (prefers-color-scheme: dark) {
+  :root[data-tema="sistema"] .barra-superior { --surface-page: #10233d; }
+  :root[data-tema="sistema"] .tablero-kanban { --surface-card: #203e60; }
 }

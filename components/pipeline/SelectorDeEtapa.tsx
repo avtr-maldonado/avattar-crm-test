@@ -66,7 +66,7 @@ export function SelectorDeEtapa({
                 // El galón: recortado en punta a la derecha y con muesca a la
                 // izquierda, salvo en los extremos, que quedan rectos.
                 i > 0 && "-ml-[10px]",
-                alcanzada ? "bg-acento" : "bg-gray-10 hover:bg-gray-20",
+                alcanzada ? "bg-acento" : "bg-superficie-apagada hover:bg-borde",
                 esLaElegida && "bg-acento-activo",
                 "focus-within:z-10 focus-within:shadow-ring",
               )}
@@ -116,7 +116,7 @@ export function SelectorDeEtapa({
                 Decírselo ANTES de enviar. Que el servidor rechace es correcto,
                 pero enterarse al momento de guardar es enterarse tarde.
               */}
-              <span className="font-medium text-navy-500">
+              <span className="font-medium text-texto-suave">
                 {elegida.requisitos === 1 ? "1 requisito de entrada" : `${elegida.requisitos} requisitos de entrada`}
               </span>
             </>

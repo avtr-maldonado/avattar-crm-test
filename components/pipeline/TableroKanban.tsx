@@ -154,7 +154,7 @@ export function TableroKanban({
         el mismo: son los mismos `section` con los mismos eventos.
       */}
       <div
-        className="grid gap-3 pb-4 lg:grid-cols-[repeat(var(--etapas),minmax(0,1fr))] xl:gap-4"
+        className="tablero-kanban grid gap-3 pb-4 lg:grid-cols-[repeat(var(--etapas),minmax(0,1fr))] xl:gap-4"
         style={{ "--etapas": columnas.length } as React.CSSProperties}
       >
         {columnas.map((c) => (

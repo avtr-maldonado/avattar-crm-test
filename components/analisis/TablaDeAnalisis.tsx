@@ -108,7 +108,7 @@ const COLOR = {
   exito: "text-exito",
   peligro: "text-coral",
   acento: "text-acento",
-  alerta: "text-navy-500",
+  alerta: "text-texto-suave",
 };
 
 function Celda({ celda, derecha, sangria = false }: { celda: CeldaDeAnalisis; derecha: boolean; sangria?: boolean }) {

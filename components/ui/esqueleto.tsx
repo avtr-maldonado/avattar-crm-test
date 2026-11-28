@@ -32,7 +32,7 @@ export function Esqueleto({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className={clsx("block animate-pulse rounded-xs bg-gray-10", className)}
+      className={clsx("block animate-pulse rounded-xs bg-superficie-apagada", className)}
     />
   );
 }

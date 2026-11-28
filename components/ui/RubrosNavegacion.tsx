@@ -59,19 +59,19 @@ export function RubrosNavegacion({
               aria-current={activo ? "page" : undefined}
               title={colapsado ? r.etiqueta : undefined}
               className={clsx(
-                "group relative flex items-center rounded-sm text-sm",
+                "group relative flex items-center rounded-sm text-[0.9375rem]",
                 "transition-colors duration-rapido ease-estandar",
-                colapsado ? "justify-center py-2.5" : "gap-2.5 py-2 pl-2.5 pr-2",
+                colapsado ? "mx-auto size-11 justify-center" : "gap-3 py-2.5 pl-3 pr-2.5",
                 activo
-                  ? "bg-navy-800 font-semibold text-white"
-                  : "text-navy-200 hover:bg-navy-800/60 hover:text-white",
+                  ? "bg-blue-900 font-bold text-white"
+                  : "text-navy-100 hover:bg-navy-800/70 hover:text-white",
               )}
             >
               <Icono
                 nombre={r.icono}
                 className={clsx(
-                  "size-5 transition-colors duration-rapido",
-                  activo ? "text-acento" : "text-navy-400 group-hover:text-navy-200",
+                  "size-5 shrink-0 transition-colors duration-rapido",
+                  activo ? "text-acento" : "text-navy-300 group-hover:text-navy-100",
                 )}
               />
 
@@ -80,24 +80,21 @@ export function RubrosNavegacion({
               {r.contador && (
                 <ContadorRubro
                   valor={r.contador}
+                  comoPunto={colapsado}
                   className={clsx(
-                    "tabular rounded-pill font-semibold",
                     colapsado
-                      ? // Insignia en la esquina del icono, sólida y con un anillo del
-                        // color de la barra para que se lea encima del trazo.
-                        "absolute right-0.5 top-0.5 h-[1.125rem] min-w-[1.125rem] px-1 text-center text-[10px] leading-[1.125rem] ring-2 ring-navy-900"
-                      : "ml-auto px-1.5 py-0.5 text-xs leading-none",
+                      ? // Contraída (§75): un punto en la esquina, el número en aria-label.
+                        "absolute right-1 top-1 size-2.5 rounded-pill ring-2 ring-navy-900"
+                      : "tabular ml-auto min-w-[2.5rem] rounded-pill px-2 py-1 text-center text-xs font-semibold leading-none",
                     r.urgente
                       ? colapsado
-                        ? "bg-coral text-white"
+                        ? "bg-coral"
                         : "bg-coral/20 text-coral"
                       : colapsado
-                        ? activo
-                          ? "bg-acento text-navy-900"
-                          : "bg-navy-700 text-navy-100"
+                        ? "bg-acento"
                         : activo
-                          ? "bg-acento/20 text-blue-200"
-                          : "bg-navy-800 text-navy-300",
+                          ? "bg-acento text-navy-900"
+                          : "bg-blue-900 text-white",
                   )}
                 />
               )}

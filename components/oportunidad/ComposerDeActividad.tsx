@@ -373,7 +373,7 @@ export function ComposerDeActividad({
               className={clsx(
                 "w-full rounded-sm border bg-superficie-pagina px-3 py-2.5 text-base font-medium",
                 "text-texto-titulo outline-none transition-colors duration-rapido ease-estandar",
-                "placeholder:font-normal placeholder:text-gray-40 focus:border-acento focus:shadow-ring",
+                "placeholder:font-normal placeholder:text-texto-marcador focus:border-acento focus:shadow-ring",
                 problemas.problema("subject") ? "border-peligro" : "border-borde",
               )}
             />

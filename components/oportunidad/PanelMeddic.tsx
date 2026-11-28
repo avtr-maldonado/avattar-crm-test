@@ -173,7 +173,7 @@ export function PanelMeddic({
           <p
             className={clsx(
               "tabular mt-0.5 text-h3 font-semibold leading-none",
-              { peligro: "text-coral", alerta: "text-navy-500", exito: "text-exito" }[
+              { peligro: "text-coral", alerta: "text-texto-suave", exito: "text-exito" }[
                 tonoDelPuntaje(puntaje)
               ],
             )}
@@ -187,7 +187,7 @@ export function PanelMeddic({
           <Umbral etiqueta="Compromiso" minimo={minimos.compromiso} puntaje={puntaje} />
         </dl>
         {sinEvidencia > 0 ? (
-          <p className="ml-auto flex items-center gap-1.5 text-xs font-medium text-navy-700">
+          <p className="ml-auto flex items-center gap-1.5 text-xs font-medium text-texto-cuerpo">
             <Icono nombre="riesgo" className="size-4" />
             {sinEvidencia} {sinEvidencia === 1 ? "calificado sin evidencia" : "calificados sin evidencia"}
           </p>

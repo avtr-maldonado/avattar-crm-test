@@ -20,19 +20,23 @@ import { Suspense, use } from "react";
 export function ContadorRubro({
   valor,
   className,
+  comoPunto = false,
 }: {
   valor: Promise<number>;
   className: string;
+  /** Con el menú contraído (§75): un punto en vez del número; el número va en `aria-label` y `title`. */
+  comoPunto?: boolean;
 }) {
   return (
     <Suspense fallback={null}>
-      <Numero valor={valor} className={className} />
+      <Numero valor={valor} className={className} comoPunto={comoPunto} />
     </Suspense>
   );
 }
 
-function Numero({ valor, className }: { valor: Promise<number>; className: string }) {
+function Numero({ valor, className, comoPunto }: { valor: Promise<number>; className: string; comoPunto: boolean }) {
   const n = use(valor);
   if (n <= 0) return null;
+  if (comoPunto) return <span className={className} role="img" aria-label={`${n} pendientes`} title={`${n} pendientes`} />;
   return <span className={className}>{n}</span>;
 }

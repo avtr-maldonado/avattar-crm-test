@@ -156,7 +156,7 @@ export function PanelHitos({
         </p>
 
         {/* La barra de distribución: cuánto del neto está repartido. */}
-        <div className="mt-3 h-2 overflow-hidden rounded-pill bg-gray-10">
+        <div className="mt-3 h-2 overflow-hidden rounded-pill bg-superficie-apagada">
           <div
             className={clsx("h-full rounded-pill", cuadre.cuadra ? "bg-exito" : "bg-acento")}
             style={{ width: `${Math.min(100, Math.max(0, cuadre.porcentaje))}%` }}

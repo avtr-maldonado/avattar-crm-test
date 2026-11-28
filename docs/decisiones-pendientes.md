@@ -3599,3 +3599,84 @@ esquinas redondeadas).
 `lg`, pero tablas, kanban y paneles se diseñaron para escritorio.
 
 **Costo de volver.** Borrar `app/manifest.ts` y los íconos; nada depende de ellos.
+
+## 73. La pantalla de inicio de sesión con la marca Avattar (27 de noviembre de 2026)
+
+**Qué se pidió.** Rediseñar `/login` según una imagen de referencia, con el logo y los colores de la marca.
+
+**Decisión.** Fondo sólido `#0E1D35` (el del ícono y del tema de la PWA, §72), sin ondas;
+tarjeta blanca de 26 rem con el logo AVATTAR azul arriba (220 px), el ícono de la app junto al nombre «CRM Avattar», el botón marino
+«Entrar con Microsoft», un separador con escudo y el recuadro «¿No tienes acceso? Solicita tu acceso a Administración.»; «Work smart.» azul y chico en su
+franja al pie, con ondas claras a la izquierda que no lo tocan. Logos originales de marca-avattar en `public/marca/`
+(`avattar-azul.png`, `work-smart-azul.png`, reducidos a tamaño web). El comportamiento no cambia: redirección a
+Microsoft, errores del callback y aviso de sesión cerrada. Revisado en Edge a 1440 y a 390 px de ancho.
+
+**Pendiente:** el título en la referencia usa Clash Display; la app sigue en Montserrat porque la fuente solo puede vivir
+en repositorios privados de Avattar, y el CRM se copia también a un repo personal para Vercel.
+
+## 74. Los colores de la app son los de AVATTAR v4 (27 de noviembre de 2026)
+
+**Qué se pidió.** Revisar que las pantallas respeten los colores de la marca.
+
+**Hallazgo.** Los tokens salían del manual 2024 (§13 del spec); la regla de marca dice que manda el sistema de diseño
+AVATTAR v4. Mismos colores con valores distintos, y algunas reglas de v4 que la app no sigue.
+
+**Decisión (opción A: solo valores).** `globals.css` toma los de v4: azul `#5DA7E6` (antes `#62A8E5`), marino `#365072`,
+fucsia `#CC27B0`, coral `#FF595A`, fondo oscuro `#0E1D35` (antes `#0E1726`; barra lateral y navegación), `panel`
+`#F4F7FB` y `banda` `#EAF1F9` como superficies suaves; canales RGB, anillo de foco y sombras derivados con ellos. La paleta
+de Análisis y el inicio de sesión dejan de llevar hex propios; el manifiesto y el `themeColor` leen `FONDO_OSCURO` de
+`lib/marca.ts`. `tests/arquitectura/marca.test.ts` fija los valores de v4 y amarra cada copia en hex a su token.
+
+**Fuera, por decisión (opción B, para después):** texto en `tinta` `#2D2A26`; grises cálidos (`tinta-suave`, `linea`);
+sin sombras; `exito` y `alerta` de v4; el lima de los estados (v4 no lo tiene; el dorado `#CDDE00` es solo de íconos);
+«Work smart.» en las pantallas internas; Clash Display (pendiente: confirmar que el repo personal de Vercel es privado).
+
+## 75. La barra lateral con la marca Avattar (27 de noviembre de 2026)
+
+**Qué se pidió.** Rediseñar el menú lateral según una imagen de referencia (expandido y contraído).
+
+**Decisión.** Encabezado con el ícono de la app enmarcado, «CRM Avattar» y «Avattar IT Solutions», y el botón para
+contraer; secciones con su título en mayúsculas espaciadas; rubros más altos, el activo con fondo `blue-900`, texto en
+negritas e ícono azul; contadores en pastilla (azul en el activo, `blue-900` en los demás, coral si el pendiente tiene
+reloj). Al pie, **«Alcance» es el selector de oficina** (MX · CO · CL, la activa en azul): sale de la barra superior,
+que lo conserva solo bajo `lg`, donde esta barra no se muestra; con una sola oficina no se pinta. Debajo, avatar con
+iniciales, nombre, rol y el botón de cerrar sesión (POST a `/auth/signout`). Contraída: solo iconos, líneas cortas entre
+secciones, el activo en un cuadro, los contadores como punto (el número en `aria-label`) y el avatar. Revisado en Edge.
+
+**Diferencias con la referencia, a propósito:** el nombre es «CRM Avattar» (§73), no «Avattar CRM»; el avatar lleva
+iniciales en lugar de un ícono genérico; el contador de un pendiente con reloj sigue en coral.
+
+## 76. Modo oscuro, elegido desde el menú de usuario (27 de noviembre de 2026)
+
+**Qué se pidió.** Un modo oscuro que se pueda elegir desde las opciones del usuario.
+
+**Decisión.** «Tema» en el menú de usuario con **Claro · Oscuro · Sistema** (este sigue al sistema operativo). Por
+omisión, Claro. Se guarda en la cookie `crm-tema` (`lib/preferencias.ts`: `COOKIE_TEMA`, `TEMAS`, `temaDe`) y el layout raíz
+pinta `<html data-tema>` desde el servidor, sin destello; elegir cambia el atributo al instante y escribe la cookie, sin
+viaje al servidor (`components/ui/SelectorDeTema.tsx`).
+
+**Colores: el tema oscuro de AVATTAR v4**, sobre los mismos alias semánticos (`texto-*`, `superficie-*`, `borde`): página
+`#0E1D35`, tarjetas `#162A4A`, sutil `#1B3358`, tinte `#24406E`, texto `#EEF3FA`, tenue `#9DB0C9`, bordes `#3B557A` y
+`#3D6496`, éxito `#7BE0C3`, texto sobre acento `#0E1D35`, sombras más profundas y `color-scheme: dark`. Recharts se
+ajusta por CSS (ejes, rejilla y leyendas). Cuatro alias nuevos para lo que antes usaba la escala cruda: `texto-suave`,
+`texto-enlace`, `texto-marcador` y `superficie-apagada` (en claro valen lo mismo que antes); 31 usos crudos pasaron a
+semánticos en 18 archivos. La barra lateral lleva borde derecho para separarse del fondo. El inicio de sesión no cambia.
+
+**Regla para lo que sigue:** un color nuevo en una pantalla va por alias semántico, no por la escala (`navy-*`, `gray-*`):
+la escala no cambia de tema. `tests/arquitectura/tema.test.ts` exige que el oscuro redefina cada alias y que «Sistema» diga
+lo mismo que «Oscuro».
+
+## 77. La paleta del modo oscuro: cinco niveles de luminosidad (27 de noviembre de 2026)
+
+**Qué se pidió.** Primero renovar los tonos del Pipeline en oscuro con una paleta dada; después, aplicarla a toda la app
+en modo oscuro. Sin tocar la barra lateral, los componentes ni las medidas.
+
+**Decisión.** Fuera de v4 por petición explícita, el tema oscuro (§76) toma: fondo `#0B192B`, encabezado `#10233D`,
+tarjetas y KPI `#142D49`, columnas y superficies sutiles `#193654`, tarjetas de Kanban `#203E60`, bordes `#2C4C6D`, texto
+`#FFFFFF`, secundario `#A9BED4`, enlace `#7FB9EB`; acento `#5DA7E6` y los colores de estado sin cambio. Los alias
+semánticos llevan esos valores; el encabezado (`.barra-superior` en `BarraSuperior`) y las tarjetas de los tres tableros
+(`.tablero-kanban` en `TableroKanban`, `KanbanDeProspectos` y `VistaKanban`) toman su propio nivel. La barra lateral usa la
+escala `navy-*` (`#0E1D35`) y no cambia; el inicio de sesión tampoco. La primera versión, solo para /oportunidades
+(contenedor `.vista-pipeline`), se retiró. `tests/arquitectura/tema.test.ts` fija los niveles en «Oscuro» y en «Sistema».
+
+**Pendiente:** el control «Kanban · Tabla…» seleccionado conserva su estilo general, no azul.

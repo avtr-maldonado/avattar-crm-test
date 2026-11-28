@@ -39,7 +39,7 @@ export function BuscadorDeProspectos({ activos, conservar }: { activos: FiltrosD
         onChange={(e) => setTexto(e.target.value)}
         placeholder="Buscar prospecto, empresa, correo o teléfono"
         autoComplete="off"
-        className="w-full rounded-sm border border-borde bg-superficie-pagina py-2 pl-3 pr-9 text-sm text-texto-cuerpo outline-none transition-colors duration-rapido placeholder:text-gray-40 focus:border-acento focus:shadow-ring"
+        className="w-full rounded-sm border border-borde bg-superficie-pagina py-2 pl-3 pr-9 text-sm text-texto-cuerpo outline-none transition-colors duration-rapido placeholder:text-texto-marcador focus:border-acento focus:shadow-ring"
       />
       <button type="submit" aria-label="Buscar" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1.5 text-texto-tenue hover:text-texto-cuerpo focus:shadow-ring focus:outline-none">
         <Icono nombre="lupa" className="size-4" />

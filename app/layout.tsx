@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
+import { FONDO_OSCURO } from "@/lib/marca";
+import { temaPreferido } from "@/lib/auth/session";
 
 /**
  * §13.2 · Montserrat para cuerpo y títulos.
@@ -30,14 +32,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0E1D35",
+  themeColor: FONDO_OSCURO,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // §76 · el tema llega pintado desde el servidor: sin destello claro al cargar en oscuro.
+  const tema = await temaPreferido();
   return (
-    <html lang="es-MX" className={montserrat.variable}>
+    <html lang="es-MX" className={montserrat.variable} data-tema={tema}>
       <body className="font-sans antialiased">{children}</body>
     </html>
   );

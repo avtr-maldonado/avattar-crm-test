@@ -28,7 +28,7 @@ export function BarraSuperior({
   usuario: UsuarioDeBarra;
 }) {
   return (
-    <header className="sticky top-0 z-10 flex items-center gap-6 border-b border-borde bg-superficie-pagina px-8 py-4">
+    <header className="barra-superior sticky top-0 z-10 flex items-center gap-6 border-b border-borde bg-superficie-pagina px-8 py-4">
       <div className="min-w-0">
         <h1 className="truncate text-lg font-semibold text-texto-titulo">{titulo}</h1>
         {subtitulo && (
@@ -38,7 +38,10 @@ export function BarraSuperior({
 
       <div className="ml-auto flex items-center gap-4">
         <BuscadorGlobal />
-        <SelectorDePais />
+        {/* En pantallas anchas la oficina se elige en la barra lateral (§75). */}
+        <div className="lg:hidden">
+          <SelectorDePais />
+        </div>
 
         {/* Quién opera y con qué alcance; al pulsarlo se abre la ficha con el
             correo, el alcance completo y el cierre de sesión. */}

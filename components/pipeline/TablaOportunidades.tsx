@@ -88,7 +88,7 @@ export function TablaOportunidades({
                       o.meddicScore >= 70
                         ? "text-exito"
                         : o.meddicScore >= 50
-                          ? "text-navy-500"
+                          ? "text-texto-suave"
                           : "text-coral"
                     }
                   >
